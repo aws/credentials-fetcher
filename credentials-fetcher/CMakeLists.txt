@@ -9,9 +9,8 @@ add_subdirectory (logging)
 add_subdirectory (timer)
 add_subdirectory (daemon)
 
-# TBD: change ~/ to /usr/bin
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/daemon/build/src/credentials-fetcherd DESTINATION "~/")
-
 project(credentials-fetcher)
+
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/daemon/credentials-fetcherd DESTINATION "/usr/bin")
 
 cmake_minimum_required (VERSION 2.8)
