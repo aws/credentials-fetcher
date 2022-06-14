@@ -11,6 +11,11 @@ add_subdirectory (daemon)
 
 project(credentials-fetcher)
 
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/daemon/credentials-fetcherd DESTINATION "/usr/bin")
+install(FILES ${CMAKE_BINARY_DIR}/daemon/credentials-fetcherd
+        DESTINATION "/usr/sbin"
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+)
+install(FILES ${CMAKE_BINARY_DIR}/scripts/systemd/credentials-fetcher.service
+        DESTINATION "/etc/systemd/system/")
 
 cmake_minimum_required (VERSION 2.8)

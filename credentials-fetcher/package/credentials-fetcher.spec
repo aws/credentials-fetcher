@@ -30,7 +30,8 @@ The same method can be used to refresh other types of security tokens.
 cd %{_builddir}/credentials-fetcher-0.0.1/daemon/ && ctest3
 
 %files
-%{_bindir}/credentials-fetcherd
+%{_sbindir}/credentials-fetcherd
+%{_sysconfdir}/systemd/system/credentials-fetcher.service
 %license LICENSE
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
 %doc CONTRIBUTING.md NOTICE README.md

@@ -23,4 +23,4 @@ rpmbuild -ba credentials-fetcher.spec
 # Query the binary rpm
 # TBD: The binary is a place-holder at this time.
 # $ rpm -qlp /home/samiull/rpmbuild/RPMS/x86_64/credentials-fetcher-0.0.1-1.amzn2int.x86_64.rpm
-# /usr/bin/credentials-fetcherd
+# /usr/sbin/credentials-fetcherd
