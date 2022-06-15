@@ -1,15 +1,19 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(credentials-fetcherd)
+project(daemon)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 
-file(GLOB daemon_sources "src/*.cpp")
+set(dir "${CMAKE_CURRENT_SOURCE_DIR}")
 
-add_executable(credentials-fetcherd ${daemon_sources})
-target_link_libraries(credentials-fetcherd PUBLIC systemd)
+list(
+  APPEND sources
+  "${dir}/src/daemon.cpp"
+)
+
+set(sources "${sources}" PARENT_SCOPE)
 
 cmake_minimum_required (VERSION 2.8)
 
-enable_testing ()
+enable_testing()
 add_subdirectory (tests)

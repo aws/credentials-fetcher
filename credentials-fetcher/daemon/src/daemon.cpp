@@ -2,8 +2,12 @@
 
 Daemon cf_daemon;
 
-int main(void)
+int main(int argc, const char *argv[])
 {
+    parse_options(argc,argv,cf_daemon);
+
+    parse_config_file(cf_daemon.config_file,cf_daemon);
+
     /*
      * This is a 'new-style daemon', fork() and other book-keeping is not required.
      * https://www.freedesktop.org/software/systemd/man/cf_daemon.html#New-Style%20Daemons
@@ -15,7 +19,6 @@ int main(void)
     bool watchdog = sd_watchdog_enabled(0, &cf_daemon.watchdog_interval_usecs) > 0;
     if (watchdog) {
         fprintf(stderr, SD_NOTICE "watchdog enabled with interval value = %ld", cf_daemon.watchdog_interval_usecs);
-        printf("Watchdog is enabled with %lu us\n", cf_daemon.watchdog_interval_usecs);
     } else {
         fprintf(stderr, SD_ERR "ERROR Cannot setup watchdog, interval value = %ld", cf_daemon.watchdog_interval_usecs);
         /* TBD: Use exit code scheme as defined in the LSB recommendations for SysV init scripts */

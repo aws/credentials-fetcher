@@ -1,0 +1,4 @@
+{
+    "krb_files_dir": "/usr/share/credentials-fetcher/krbdir",
+    "logging_dir": "/var/log/credentials-fetcher/logs"
+}
