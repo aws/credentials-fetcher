@@ -8,6 +8,7 @@ URL:            tbd-project.com
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  cmake3 make
+Provides:       libcf-config.so
 
 %description
 This daemon creates and refreshes kerberos tickets, these tickets can be
@@ -34,14 +35,18 @@ cd %{_builddir}/credentials-fetcher-0.0.1/daemon/ && ctest3
 %{_sysconfdir}/systemd/system/credentials-fetcher.service
 %license LICENSE
 %config /etc/credentials-fetcher/config.json
+%{_sysconfdir}/credentials-fetcher/env-file
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
 %doc CONTRIBUTING.md NOTICE README.md
 %{_localstatedir}/log/credentials-fetcher/.ignore
 %{_datadir}/credentials-fetcher/.ignore
 %{_sysconfdir}/credentials-fetcher/.ignore
-# TBD: Fill above files later
+/usr/lib64/credentials-fetcher/libcf-config.so
+%attr(0755, -, -) /usr/lib64/credentials-fetcher/libcf-config.so
 
 %changelog
+* Thu Jun 16 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
+- Compile subdirectory into a shared library
 * Wed Jun 15 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Add daemon infra
 * Wed Jun 8 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1

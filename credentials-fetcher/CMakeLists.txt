@@ -9,9 +9,10 @@ add_subdirectory(logging)
 add_subdirectory(timer)
 add_subdirectory(daemon)
 
-# TBD: remove references to cpp and h files
-# TBD: see if STATIC can be replaced with SHARED
-add_library(cf-config STATIC config/src/config.cpp common/daemon.h)
+set(config-dir-sources)
+add_subdirectory(config)
+
+add_library(cf-config SHARED "${config-dir-sources}" common)
 target_include_directories(cf-config PUBLIC common)
 
 add_executable(credentials-fetcherd ${sources})
@@ -35,5 +36,11 @@ file(TOUCH "${CMAKE_BINARY_DIR}/.ignore")
 install(FILES ${CMAKE_BINARY_DIR}/.ignore DESTINATION "/etc/credentials-fetcher/")
 install(FILES ${CMAKE_BINARY_DIR}/.ignore DESTINATION "/var/log/credentials-fetcher/")
 install(FILES ${CMAKE_BINARY_DIR}/.ignore DESTINATION "/usr/share/credentials-fetcher/")
+install(FILES ${CMAKE_BINARY_DIR}/libcf-config.so
+        DESTINATION "/usr/lib64/credentials-fetcher/"
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+                    GROUP_EXECUTE GROUP_READ)
+file(WRITE "${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file"  "LD_LIBRARY_PATH=/usr/lib64/credentials-fetcher:$LD_LIBRARY_PATH")
+install(FILES ${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file DESTINATION "/etc/credentials-fetcher")
 
 cmake_minimum_required(VERSION 2.8)
