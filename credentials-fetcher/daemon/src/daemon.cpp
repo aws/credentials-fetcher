@@ -8,6 +8,8 @@ int main(int argc, const char *argv[])
 
     parse_config_file(cf_daemon.config_file,cf_daemon);
 
+    initialize_krb();
+
     /*
      * This is a 'new-style daemon', fork() and other book-keeping is not required.
      * https://www.freedesktop.org/software/systemd/man/cf_daemon.html#New-Style%20Daemons

@@ -7,6 +7,8 @@
 #include <boost/program_options.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <ldap.h>
+#include <krb5/krb5.h>
 
 #ifndef _daemon_h_
 #define _daemon_h_
@@ -29,5 +31,6 @@ class Daemon {
 /* TBD: Move to class and methods */
 void parse_options(int argc, const char *argv[], Daemon cf_daemon);
 void parse_config_file(std::string config_file, Daemon cf_daemon);
+void initialize_krb();
 
 #endif // _daemon_h_
