@@ -7,13 +7,8 @@ add_subdirectory(auth)
 add_subdirectory(cache)
 add_subdirectory(logging)
 add_subdirectory(timer)
-add_subdirectory(daemon)
-
-set(config-dir-sources)
 add_subdirectory(config)
-
-add_library(cf-config SHARED "${config-dir-sources}" common)
-target_include_directories(cf-config PUBLIC common)
+add_subdirectory(daemon)
 
 add_library(cf-sources SHARED "${sources}" common)
 target_include_directories(cf-sources PUBLIC common)
@@ -21,12 +16,7 @@ target_include_directories(cf-sources PUBLIC common)
 add_executable(credentials-fetcherd ${sources})
 target_include_directories(credentials-fetcherd PUBLIC common)
 
-target_link_libraries(credentials-fetcherd PUBLIC systemd)
-target_link_libraries(credentials-fetcherd PUBLIC boost_program_options)
-target_link_libraries(credentials-fetcherd PUBLIC ldap)
-target_link_libraries(credentials-fetcherd PUBLIC krb5)
-target_link_libraries(credentials-fetcherd PUBLIC cf-config)
-target_link_libraries(credentials-fetcherd PUBLIC cf-sources)
+target_link_libraries(credentials-fetcherd PUBLIC systemd boost_program_options ldap krb5 cf-sources)
 
 project(credentials-fetcher)
 
@@ -42,10 +32,6 @@ file(TOUCH "${CMAKE_BINARY_DIR}/.ignore")
 install(FILES ${CMAKE_BINARY_DIR}/.ignore DESTINATION "/etc/credentials-fetcher/")
 install(FILES ${CMAKE_BINARY_DIR}/.ignore DESTINATION "/var/log/credentials-fetcher/")
 install(FILES ${CMAKE_BINARY_DIR}/.ignore DESTINATION "/usr/share/credentials-fetcher/")
-install(FILES ${CMAKE_BINARY_DIR}/libcf-config.so
-        DESTINATION "/usr/lib64/credentials-fetcher/"
-        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
-                    GROUP_EXECUTE GROUP_READ)
 install(FILES ${CMAKE_BINARY_DIR}/libcf-sources.so
         DESTINATION "/usr/lib64/credentials-fetcher/"
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ

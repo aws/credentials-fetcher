@@ -4,12 +4,9 @@ project(daemon)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 
-set(dir "${CMAKE_CURRENT_SOURCE_DIR}")
+FILE(GLOB SRC_FILES src/daemon.cpp)
 
-list(
-  APPEND sources
-  "${dir}/src/daemon.cpp"
-)
+list(APPEND sources ${SRC_FILES})
 
 set(sources "${sources}" PARENT_SCOPE)
 

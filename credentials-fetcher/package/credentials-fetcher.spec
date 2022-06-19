@@ -8,7 +8,6 @@ URL:            tbd-project.com
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  cmake3 make
-Provides:       libcf-config.so
 Provides:       libcf-sources.so
 
 %description
@@ -42,14 +41,12 @@ cd %{_builddir}/credentials-fetcher-0.0.1/daemon/ && ctest3
 %{_localstatedir}/log/credentials-fetcher/.ignore
 %{_datadir}/credentials-fetcher/.ignore
 %{_sysconfdir}/credentials-fetcher/.ignore
-/usr/lib64/credentials-fetcher/libcf-config.so
-%attr(0755, -, -) /usr/lib64/credentials-fetcher/libcf-config.so
 /usr/lib64/credentials-fetcher/libcf-sources.so
 %attr(0755, -, -) /usr/lib64/credentials-fetcher/libcf-sources.so
 
 %changelog
-* Thu Jun 16 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.1
-- Compile kerberos subdirectory into a shared library
+* Thu Jun 18 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.1
+- Refactor cmake for all the directories
 * Thu Jun 16 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Compile subdirectory into a shared library
 * Wed Jun 15 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1

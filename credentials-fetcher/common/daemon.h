@@ -32,5 +32,9 @@ class Daemon {
 void parse_options(int argc, const char *argv[], Daemon cf_daemon);
 void parse_config_file(std::string config_file, Daemon cf_daemon);
 void initialize_krb();
+void initialize_api();
+void initialize_cache();
+void initialize_timer();
+void initialize_logging();
 
 #endif // _daemon_h_

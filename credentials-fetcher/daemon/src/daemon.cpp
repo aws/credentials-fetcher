@@ -10,6 +10,14 @@ int main(int argc, const char *argv[])
 
     initialize_krb();
 
+    initialize_api();
+
+    initialize_cache();
+
+    initialize_timer();
+
+    initialize_logging();
+
     /*
      * This is a 'new-style daemon', fork() and other book-keeping is not required.
      * https://www.freedesktop.org/software/systemd/man/cf_daemon.html#New-Style%20Daemons
@@ -31,7 +39,7 @@ int main(int argc, const char *argv[])
     sd_notify(0, "READY=1");
     int i = 0;
     while(true) {
-        usleep(cf_daemon.watchdog_interval_usecs / 2); /* TBD: Replace this later */
+        usleep(cf_daemon.watchdog_interval_usecs / 2); *//* TBD: Replace this later */
         /* Tells the service manager to update the watchdog timestamp */
         sd_notify(0, "WATCHDOG=1");
 
