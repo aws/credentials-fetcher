@@ -39,7 +39,7 @@ int main(int argc, const char *argv[])
     sd_notify(0, "READY=1");
     int i = 0;
     while(true) {
-        usleep(cf_daemon.watchdog_interval_usecs / 2); *//* TBD: Replace this later */
+        usleep(cf_daemon.watchdog_interval_usecs / 2); /* TBD: Replace this later */
         /* Tells the service manager to update the watchdog timestamp */
         sd_notify(0, "WATCHDOG=1");
 
