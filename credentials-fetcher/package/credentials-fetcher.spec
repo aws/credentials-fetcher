@@ -45,7 +45,7 @@ cd %{_builddir}/credentials-fetcher-0.0.1/daemon/ && ctest3
 %attr(0755, -, -) /usr/lib64/credentials-fetcher/libcf-sources.so
 
 %changelog
-* Thu Jun 18 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.1
+* Sat Jun 18 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.1
 - Refactor cmake for all the directories
 * Thu Jun 16 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Compile subdirectory into a shared library
