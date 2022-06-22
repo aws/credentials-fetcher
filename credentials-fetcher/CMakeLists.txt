@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 project(credentials-fetcher)
 
+set(CMAKE_CXX_FLAGS "-std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
+
 set(config)
 add_subdirectory(config)
 set(auth)
@@ -9,14 +12,14 @@ set(cache)
 add_subdirectory(cache)
 set(timer)
 add_subdirectory(timer)
-set(logging)
-add_subdirectory(logging)
+set(logger)
+add_subdirectory(logger)
 set(api)
 add_subdirectory(api)
 set(daemon)
 add_subdirectory(daemon)
 
-set(sources ${auth} ${daemon} ${config} ${cache} ${timer} ${logging} ${api})
+set(sources ${auth} ${daemon} ${config} ${cache} ${timer} ${logger} ${api})
 
 add_library(cf-sources SHARED "${sources}" common)
 target_include_directories(cf-sources PUBLIC common)

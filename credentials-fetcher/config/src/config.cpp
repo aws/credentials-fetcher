@@ -4,7 +4,7 @@
  * This function has options used to invoke the daemon such as
  * credentials-fetcherd --configfile path-to-file
  */
-void parse_options(int argc, const char *argv[], Daemon cf_daemon)
+void parse_options(int argc, const char *argv[], creds_fetcher::Daemon cf_daemon)
 {
     namespace po = boost::program_options;
 
@@ -43,7 +43,7 @@ void parse_options(int argc, const char *argv[], Daemon cf_daemon)
  * This function parses the daemon config file.
  * The config file is in json format.
  */
-void parse_config_file(std::string config_file, Daemon cf_daemon)
+void parse_config_file(std::string config_file, creds_fetcher::Daemon cf_daemon)
 {
     if (config_file.empty()) {
         fprintf(stderr, SD_CRIT "config file is empty");
