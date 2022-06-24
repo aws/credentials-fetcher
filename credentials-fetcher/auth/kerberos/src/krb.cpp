@@ -14,6 +14,7 @@
 
 #include "base64.h"
 #include "daemon.h"
+using namespace std;
 
 // https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/a9019740-3d73-46ef-a9ae-3ea8eb86ac2e
 typedef struct blob_t_ {
@@ -28,6 +29,43 @@ typedef struct blob_t_ {
     uint8_t buf[1024];
     /* TBD:: Add remaining fields here */
 } blob_t;
+
+
+
+/*
+ * This function generate the kerberos tickets for the host machine.
+ * It uses system keytab to generate th ticket
+ */
+
+void generate_host_machine_krb_ticket()
+{
+    char hostname[1024];
+    string defaultprincipal;
+
+    //get host name information
+    gethostname(hostname,1024);
+
+    string hostnamestr(hostname);
+
+   string::size_type pos=hostnamestr.find('.');
+   //get the name of the domain
+    if(pos!=std::string::npos)
+    {
+      string domainname=hostnamestr.substr(pos+1,hostnamestr.length());
+      string machinename=hostnamestr.substr(0,pos);
+
+        if(domainname.empty()){
+            // TBD: log error
+            printf("No domain name available through gethostbyname().\n");
+        }
+      defaultprincipal=machinename+"$@"+domainname;
+      for(auto&c:defaultprincipal)c=toupper(c);
+    }
+    //generate kerberos ticket for the host machine
+    string cmd="kinit -k '"+defaultprincipal+"'";
+    system(cmd.c_str());
+}
+
 
 /*
  * This function fetches the gmsa password.
