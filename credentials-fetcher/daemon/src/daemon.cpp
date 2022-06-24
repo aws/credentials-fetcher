@@ -8,8 +8,6 @@ int main(int argc, const char *argv[])
 
     parse_config_file(cf_daemon.config_file,cf_daemon);
 
-    initialize_krb();
-
     initialize_api();
 
     initialize_cache();
