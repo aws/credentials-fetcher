@@ -12,9 +12,11 @@
 
 #include <boost/algorithm/string.hpp>
 
-#include "base64.h"
 #include "daemon.h"
 using namespace std;
+
+/* TBD:: Add wrapper around base64.h for C++ to C linkage */
+extern "C" unsigned char * base64_decode(const unsigned char *, size_t, size_t *);
 
 // https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/a9019740-3d73-46ef-a9ae-3ea8eb86ac2e
 typedef struct blob_t_ {
@@ -83,7 +85,7 @@ void get_krb_ticket(const char *ldap_uri_arg, const char *gmsa_account_name_arg)
     std::string gmsa_arg(gmsa_account_name_arg);
     std::vector<std::string> results;
 
-    boost::split(results, ldapuri, [](char c){return c == '.';});
+    boost::split(results, ldap_uri, [](char c){return c == '.';});
     std::string domain;
     for (auto it = results.begin(); it != results.end(); it++) {
         domain += "DC=" + *it + ",";
@@ -122,9 +124,10 @@ void get_krb_ticket(const char *ldap_uri_arg, const char *gmsa_account_name_arg)
     }
 
     size_t out_len;
+    size_t len = password.length();
+    const unsigned char *password_str = (const unsigned char *)password.c_str();
     unsigned char *blob_dest
-        = base64_decode((const unsigned char *)password.c_str(),
-                password.length(), &out_len);
+        = base64_decode(password_str, len, &out_len);
 
     blob_t *blob = ((blob_t *)blob_dest);
 
