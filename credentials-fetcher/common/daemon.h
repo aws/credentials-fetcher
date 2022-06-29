@@ -10,6 +10,7 @@
 #include <ldap.h>
 #include <krb5/krb5.h>
 #include "cf-logger.h"
+#include "../auth/kerberos/src/cf-krb.h"
 
 #ifndef _daemon_h_
 #define _daemon_h_

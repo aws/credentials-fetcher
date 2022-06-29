@@ -13,7 +13,6 @@
 #include <boost/algorithm/string.hpp>
 
 #include "daemon.h"
-using namespace std;
 
 /* TBD:: Add wrapper around base64.h for C++ to C linkage */
 extern "C" unsigned char * base64_decode(const unsigned char *, size_t, size_t *);
@@ -35,37 +34,43 @@ typedef struct blob_t_ {
 
 
 /*
- * This function generate the kerberos tickets for the host machine.
- * It uses system keytab to generate th ticket
+ * This function generate the kerberos ticket for the host machine.
+ * It uses system keytab to generate the ticket.
  */
 
-void generate_host_machine_krb_ticket()
+void generate_host_machine_krb_ticket(const char* krb_ccname)
 {
     char hostname[1024];
-    string defaultprincipal;
+    std::string defaultprincipal;
 
     //get host name information
     gethostname(hostname,1024);
 
-    string hostnamestr(hostname);
+    std::string hostnamestr(hostname);
 
-   string::size_type pos=hostnamestr.find('.');
+   std::string::size_type pos=hostnamestr.find('.');
    //get the name of the domain
-    if(pos!=std::string::npos)
+    if (pos !=std::string::npos)
     {
-      string domainname=hostnamestr.substr(pos+1,hostnamestr.length());
-      string machinename=hostnamestr.substr(0,pos);
+      std::string domainname=hostnamestr.substr(pos+1,hostnamestr.length());
+      std::string machinename=hostnamestr.substr(0,pos);
 
         if(domainname.empty()){
-            // TBD: log error
+            // TBD: throw error since the machine is not domain joined it might not be able to retrieve kerberos tickets
             printf("No domain name available through gethostbyname().\n");
         }
-      defaultprincipal=machinename+"$@"+domainname;
-      for(auto&c:defaultprincipal)c=toupper(c);
+      defaultprincipal = machinename + "$@" + domainname;
+      for (auto&c : defaultprincipal)c = toupper(c);
     }
+    // set krb cache location krb5ccname
+    if ((krb_ccname != NULL) && (krb_ccname[0] == '\0')) {
+        std::string set_Krb5ccname_cmd = "export KRB5CCNAME=" + std::string(krb_ccname);
+        system(set_Krb5ccname_cmd.c_str());
+    }
+
     //generate kerberos ticket for the host machine
-    string cmd="kinit -k '"+defaultprincipal+"'";
-    system(cmd.c_str());
+    std::string kinit_cmd = "kinit -k '" + defaultprincipal + "'";
+    system(kinit_cmd.c_str());
 }
 
 
@@ -142,8 +147,17 @@ void get_krb_ticket(const char *ldap_uri_arg, const char *gmsa_account_name_arg)
     }
 
 #if 0
-   /* TBD: Exec the shell cmd below to get the krb ticket, this works manually */
-    system("cat outfile | iconv -t utf-8 | kinit -V 'webapp01$'@CONTOSO.COM");
+   std::string defaultprincipal = gmsa_account_name_arg + "$@" + ldap_uri_arg;
+   for (auto&c : defaultprincipal)c = toupper(c);
+   std::string kinit_cmd = "cat outfile | iconv -t utf-8 | kinit -V '" + defaultprincipal + "'";
+   FILE *fp = popen(cmd.c_str(), "r");
+     std::string out;
+     char data[80];
+     while (fgets(data, 80, fp) != NULL) {
+           out += std::string(data);
+     }
+     fclose(fp);
+
 #endif
 
     return;
