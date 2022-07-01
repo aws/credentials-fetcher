@@ -2,5 +2,5 @@
 
 void initialize_api()
 {
-    printf("initialize api method invocation successful");
+    std::cout << "initialize api method invocation successful" << std::endl;
 }

@@ -12,9 +12,11 @@ int main(int argc, const char *argv[])
 
     initialize_api();
 
-    initialize_cache();
+    // handle kerberos tickets
+    // TBD: remove hard coded values and get info from the configuration
+    //std::thread(krb_ticket_handler,cf_daemon.krb_ticket_handle_interval, "contoso.com", "webapp04$","").detach();
 
-    initialize_timer();
+    initialize_cache();
 
     cf_daemon.cf_logger.set_log_level(LOG_NOTICE);
 
@@ -50,6 +52,7 @@ int main(int argc, const char *argv[])
         cf_daemon.cf_logger.logger(LOG_NOTICE, "log count %d", i); // TBD: Remove later
         ++i;
     }
+
 
     return EXIT_SUCCESS;
 }

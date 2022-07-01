@@ -9,8 +9,10 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <ldap.h>
 #include <krb5/krb5.h>
+#include <thread>
 #include "cf-logger.h"
 #include "../auth/kerberos/src/cf-krb.h"
+#include "../timer/src/cf-timer.h"
 
 #ifndef _daemon_h_
 #define _daemon_h_
@@ -30,6 +32,7 @@ namespace creds_fetcher {
                         std::string krb_files_dir;
                         std::string logging_dir;
                         CF_logger cf_logger;
+                        uint64_t krb_ticket_handle_interval = 10;
         };
 }
 
@@ -39,6 +42,5 @@ void parse_config_file(std::string config_file, creds_fetcher::Daemon cf_daemon)
 void initialize_krb();
 void initialize_api();
 void initialize_cache();
-void initialize_timer();
 
 #endif // _daemon_h_

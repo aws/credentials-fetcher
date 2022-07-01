@@ -2,5 +2,5 @@
 
 void initialize_cache()
 {
-    printf("initialize cache method invocation successful");
+    std::cout << "initialize cache method invocation successful" << std::endl;
 }

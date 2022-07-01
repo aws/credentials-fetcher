@@ -162,3 +162,31 @@ void get_krb_ticket(const char *ldap_uri_arg, const char *gmsa_account_name_arg)
 
     return;
 }
+
+
+/*
+ * This function does the ticket re-creation.
+ * TBD:: update the in memory db about the status of the ticket.
+ */
+void krb_ticket_creation(const char *ldap_uri_arg, const char *gmsa_account_name_arg, const char* krb_ccname)
+{
+    //TBD: uncomment ticket generation once the implementation is done
+    generate_host_machine_krb_ticket("");
+    //get_krb_ticket(ldap_uri_arg, gmsa_account_name_arg);
+}
+
+/*
+ * This function does the ticket renewal.
+ * TBD:: update the in memory db about the status of the ticket.
+ */
+void krb_ticket_renewal(const char *defaultprincipal, const char* krb_ccname)
+{
+      // set krb cache location krb5ccname
+      if ((krb_ccname != NULL) && (krb_ccname[0] == '\0')) {
+          std::string set_Krb5ccname_cmd = "export KRB5CCNAME=" + std::string(krb_ccname);
+          system(set_Krb5ccname_cmd.c_str());
+      }
+
+      std::string krb_ticket_refresh = "kinit -R " + std::string(defaultprincipal);
+      system(krb_ticket_refresh.c_str());
+}
