@@ -5,7 +5,7 @@ void krb_ticket_handler(unsigned int interval, const char *ldap_uri_arg, const c
 {
     while (true)
     {
-       auto x = std::chrono::steady_clock::now() + std::chrono::seconds(interval);
+       auto x = std::chrono::steady_clock::now() + std::chrono::minutes(interval);
        // TBD: check cache to see if the ticket need re-creation or renewal
        // TBD: get multiple service accounts and loop through each of them to re-create/renew tickets
        if(true)

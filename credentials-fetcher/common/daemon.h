@@ -10,9 +10,13 @@
 #include <ldap.h>
 #include <krb5/krb5.h>
 #include <thread>
+#include <sqlite3.h>
+#include <list>
 #include "cf-logger.h"
+#include "krb-ticket-info.h"
 #include "../auth/kerberos/src/cf-krb.h"
 #include "../timer/src/cf-timer.h"
+#include "../cache/src/cf-cache.h"
 
 #ifndef _daemon_h_
 #define _daemon_h_
@@ -32,6 +36,7 @@ namespace creds_fetcher {
                         std::string krb_files_dir;
                         std::string logging_dir;
                         CF_logger cf_logger;
+                        CF_cache cf_cache;
                         uint64_t krb_ticket_handle_interval = 10;
         };
 }
@@ -41,6 +46,5 @@ void parse_options(int argc, const char *argv[], creds_fetcher::Daemon cf_daemon
 void parse_config_file(std::string config_file, creds_fetcher::Daemon cf_daemon);
 void initialize_krb();
 void initialize_api();
-void initialize_cache();
 
 #endif // _daemon_h_

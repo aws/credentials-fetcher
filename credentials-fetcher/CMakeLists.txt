@@ -27,7 +27,7 @@ target_include_directories(cf-sources PUBLIC common)
 add_executable(credentials-fetcherd ${sources})
 target_include_directories(credentials-fetcherd PUBLIC common)
 
-target_link_libraries(credentials-fetcherd PUBLIC systemd boost_program_options ldap krb5 cf-sources)
+target_link_libraries(credentials-fetcherd PUBLIC systemd boost_program_options ldap krb5 sqlite3 cf-sources)
 
 project(credentials-fetcher)
 

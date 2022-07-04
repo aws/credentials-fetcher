@@ -16,7 +16,7 @@ int main(int argc, const char *argv[])
     // TBD: remove hard coded values and get info from the configuration
     //std::thread(krb_ticket_handler,cf_daemon.krb_ticket_handle_interval, "contoso.com", "webapp04$","").detach();
 
-    initialize_cache();
+    initialize_cache(cf_daemon.cf_cache);
 
     cf_daemon.cf_logger.set_log_level(LOG_NOTICE);
 
