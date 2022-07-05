@@ -5,7 +5,6 @@
 #include <systemd/sd-daemon.h>
 #include <unistd.h>
 #include <boost/program_options.hpp>
-#include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <ldap.h>
 #include <krb5/krb5.h>
