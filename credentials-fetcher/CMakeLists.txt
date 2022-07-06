@@ -1,8 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(credentials-fetcher)
 
-set(CMAKE_CXX_FLAGS "-std=c++11")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -pthread")
+set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall -Werror -pthread")
 
 set(config)
 add_subdirectory(config)
@@ -22,14 +21,18 @@ add_subdirectory(daemon)
 set(sources ${auth} ${daemon} ${config} ${cache} ${timer} ${logger} ${api})
 
 add_library(cf-sources SHARED "${sources}" common)
-target_include_directories(cf-sources PUBLIC common)
+target_include_directories(cf-sources
+        PUBLIC
+        common /usr/include/glib-2.0
+        /usr/lib/x86_64-linux-gnu/glib-2.0/include
+        /usr/lib64/glib-2.0/include)
+
+project(credentials-fetcher)
 
 add_executable(credentials-fetcherd ${sources})
 target_include_directories(credentials-fetcherd PUBLIC common)
 
-target_link_libraries(credentials-fetcherd PUBLIC systemd boost_program_options ldap krb5 sqlite3 cf-sources)
-
-project(credentials-fetcher)
+target_link_libraries(credentials-fetcherd PUBLIC systemd boost_program_options ldap krb5 sqlite3 cf-sources glib-2.0)
 
 install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
         DESTINATION "/usr/sbin"

@@ -28,22 +28,26 @@ namespace creds_fetcher {
         class Daemon {
                 /* TBD:: Fill this later */
 
-                public:
+                public: /* Add get methods */
                         uint64_t watchdog_interval_usecs = 0;
                         boost::program_options::variables_map vm;
                         std::string config_file;
                         std::string krb_files_dir;
                         std::string logging_dir;
+                        std::string domain_name;
+                        std::string gmsa_account_name;
                         CF_logger cf_logger;
                         CF_cache cf_cache;
                         uint64_t krb_ticket_handle_interval = 10;
         };
 }
 
+#define DEFAULT_CONFIG_FILE_LOCATION "/etc/credentials-fetcher/config.json"
+
 /* TBD: Move to class and methods */
-void parse_options(int argc, const char *argv[], creds_fetcher::Daemon cf_daemon);
-void parse_config_file(std::string config_file, creds_fetcher::Daemon cf_daemon);
-void initialize_krb();
+int parse_options(int argc, const char *argv[], creds_fetcher::Daemon &cf_daemon);
+int parse_config_file(creds_fetcher::Daemon &cf_daemon);
 void initialize_api();
+
 
 #endif // _daemon_h_

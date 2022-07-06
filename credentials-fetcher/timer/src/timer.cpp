@@ -1,27 +1,23 @@
 #include "daemon.h"
 #include <chrono>
 
-void krb_ticket_handler(unsigned int interval, const char *ldap_uri_arg, const char *gmsa_account_name_arg, const char* krb_ccname)
+void krb_ticket_handler( unsigned int interval, std::string domain_name,
+                         std::string gmsa_account_name, const char* krb_ccname,
+                         creds_fetcher::Daemon& cf_daemon )
 {
-    while (true)
+    while ( true )
     {
-       auto x = std::chrono::steady_clock::now() + std::chrono::minutes(interval);
-       // TBD: check cache to see if the ticket need re-creation or renewal
-       // TBD: get multiple service accounts and loop through each of them to re-create/renew tickets
-       if(true)
-       {
-           krb_ticket_creation(ldap_uri_arg, gmsa_account_name_arg, krb_ccname);
-       }
-       else{
-          std::string domainname = std::string(ldap_uri_arg);
-          for (auto&c : domainname)c = toupper(c);
-          std::string defaultprincipal = "'" + std::string(gmsa_account_name_arg) + "'" + "$@" + domainname;
-          krb_ticket_renewal(defaultprincipal.c_str(), krb_ccname);
-       }
+        auto x = std::chrono::steady_clock::now() + std::chrono::minutes( interval );
+        // TBD: check cache to see if the ticket need re-creation or renewal
+        // TBD: get multiple service accounts and loop through each of them to re-create/renew
+        // tickets
 
-
-       std::this_thread::sleep_until(x);
+        // TBD:: *** This must exit during shutdown or during errors ***
+        std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
+                        []( unsigned char c ) { return std::toupper( c ); } );
+        std::string default_principal =
+            "'" + gmsa_account_name + "'" + "$@" + domain_name;
+        krb_ticket_renewal( default_principal, krb_ccname );
+        std::this_thread::sleep_until( x );
     }
 }
-
-

@@ -29,8 +29,11 @@ class CF_krb
 };
 } // namespace creds_fetcher
 int generate_host_machine_krb_ticket(const char *krb_ccname = "");
-int get_krb_ticket(const char *ldap_uri_arg, const char *gmsa_account_name_arg);
-void krb_ticket_renewal(const char *defaultprincipal, const char *krb_ccname = "");
+int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger );
+int get_gmsa_krb_ticket( std::string domain_name, const std::string& gmsa_account_name,
+                         const std::string& krb_cc_name,
+                          const std::string& krb_files_dir, creds_fetcher::CF_logger& cf_logger);
+void krb_ticket_renewal( std::string principal, const std::string& krb_ccname );
 void krb_ticket_creation(const char *ldap_uri_arg, const char *gmsa_account_name_arg, const char *krb_ccname = "");
 
 #endif // _cf_krb_h_

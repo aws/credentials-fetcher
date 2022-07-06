@@ -1,17 +1,12 @@
 #include "daemon.h"
 #include <boost/algorithm/string.hpp>
-#include <iostream>
-#include <locale>
+#include <glib.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
+#include <utility>
 #include <vector>
-
-/**
- * TBD:: Add wrapper around base64.h for C++ to C linkage
- */
-extern "C" uint8_t* base64_decode( const uint8_t*, size_t, size_t* );
 
 /**
  * Execute a shell command such as "ls /tmp/"
@@ -43,13 +38,15 @@ static std::pair<int, std::string> exec_shell_cmd( std::string cmd )
 
 /**
  * If the host is domain-joined, the result is of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM'
- * @return result pair(error-code, string of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM')
+ * @param domain_name: Expected domain name as per configuration
+ * @return result pair<int, std::string> (error-code - 0 if successful
+ *                          string of the form EC2AMAZ-Q5VJZQ$@CONTOSO .COM')
  */
-static std::pair<int, std::string> get_machine_principal()
+static std::pair<int, std::string> get_machine_principal( std::string domain_name )
 {
     std::pair<int, std::string> result;
 
-    std::pair<int, std::string> hostname_result = exec_shell_cmd( "hostname -s" );
+    std::pair<int, std::string> hostname_result = exec_shell_cmd( "hostname -s | tr -d '\n'" );
     if ( hostname_result.first != 0 )
     {
         result.first = hostname_result.first;
@@ -57,14 +54,24 @@ static std::pair<int, std::string> get_machine_principal()
     }
 
     std::pair<int, std::string> realm_name_result =
-        exec_shell_cmd( "realm list | grep  'realm-name' | cut -f2 -d: | tr -d ' '" );
+        exec_shell_cmd( "realm list | grep  'realm-name' | cut -f2 -d: | tr -d ' ' | tr -d '\n'" );
     if ( realm_name_result.first != 0 )
     {
         result.first = realm_name_result.first;
         return result;
     }
 
-    /*
+    std::pair<int, std::string> domain_name_result =
+        exec_shell_cmd( "realm list | grep  'domain-name' | cut -f2 -d: | tr -d ' ' | tr -d '\n'" );
+    if ( domain_name_result.first != 0 ||
+         ( not std::equal( domain_name_result.second.begin(), domain_name_result.second.end(),
+                           domain_name.begin() ) ) )
+    {
+        result.first = -1;
+        return result;
+    }
+
+    /**
      * Machine principal is of the format EC2AMAZ-Q5VJZQ$@CONTOSO.COM'
      */
     result.first = 0;
@@ -76,27 +83,28 @@ static std::pair<int, std::string> get_machine_principal()
 /**
  * This function generates the kerberos ticket for the host machine.
  * It uses machine keytab located at /etc/krb5.keytab to generate the ticket.
- * @param krb_ccname
- * @return result pair(error-code, shell cmd output)
+ * @param cf_daemon - parent daemon object
+ * @return error-code - 0 if successful
  */
-
-int generate_host_machine_krb_ticket( const char* krb_ccname )
+int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger )
 {
-    std::pair<int, std::string> shell_result;
+    std::pair<int, std::string> result;
 
-    std::string set_krb5ccname_cmd = "export KRB5CCNAME=" + std::string( krb_ccname );
-    // generate kerberos ticket for the host machine
-    std::pair<int, std::string> machine_principal = get_machine_principal();
-    if ( machine_principal.first != 0 )
+    result = get_machine_principal( std::move(domain_name) );
+    if ( result.first != 0 )
     {
-        return machine_principal.first;
+        cf_logger.logger( LOG_ERR, "ERROR: %s:%d invalid machine principal", __func__, __LINE__ );
+        return result.first;
     }
 
-    std::string kinit_cmd =
-        set_krb5ccname_cmd + " && " + "kinit -k '" + machine_principal.second + "'";
-    shell_result = exec_shell_cmd( kinit_cmd);
+    // kinit -kt /etc/krb5.keytab  'EC2AMAZ-GG97ZL$'@CONTOSO.COM
+    std::transform( result.second.begin(), result.second.end(),
+                    result.second.begin(),
+                    []( unsigned char c ) { return std::toupper( c ); } );
+    std::string kinit_cmd = "kinit -kt /etc/krb5.keytab '" + result.second + "'";
+    result = exec_shell_cmd( kinit_cmd );
 
-    return shell_result.first;
+    return result.first;
 }
 
 /**
@@ -105,9 +113,10 @@ int generate_host_machine_krb_ticket( const char* krb_ccname )
  * @param input_blob_buf_sz - size of buffer
  * @return - returns 0 if successful, -1 on error
  */
-int fixup_utf16( uint8_t* input_blob_buf, int32_t input_blob_buf_sz )
+static int fixup_utf16( uint8_t* input_blob_buf, int32_t input_blob_buf_sz )
 {
-    if (input_blob_buf == nullptr || input_blob_buf_sz == 0) {
+    if ( input_blob_buf == nullptr || input_blob_buf_sz == 0 )
+    {
         return -1;
     }
 
@@ -137,40 +146,64 @@ int fixup_utf16( uint8_t* input_blob_buf, int32_t input_blob_buf_sz )
 }
 
 /**
- * This function fetches the gmsa password.
- * It uses existing krb ticket of machine to run ldap query over
+ * base64_decode - Decodes base64 encoded string
+ * @param password - base64 encoded password
+ * @param base64_decode_len - Length after decode
+ * @return buffer with base64 decoded contents
+ */
+static uint8_t* base64_decode( const std::string& password, gsize* base64_decode_len )
+{
+    if ( base64_decode_len == nullptr || password.empty() )
+    {
+        return nullptr;
+    }
+
+    guchar* result = g_base64_decode( password.c_str(), base64_decode_len );
+
+    /**
+     * result must be freed later
+     */
+    return (uint8_t*)result;
+}
+
+/**
+ * This function fetches the gmsa password and creates a krb ticket
+ * It uses the existing krb ticket of machine to run ldap query over
  * kerberos and do the appropriate UTF decoding.
- * TBD:: Replace return value after shell command is complete.
- * @param ldap_uri_arg like "contoso.com"
- * @param gmsa_account_name_arg like "webapp01"
+ *
+ * @param domain_name - Like 'contoso.com'
+ * @param gmsa_account_name - Like 'webapp01'
+ * @param krb_cc_name - Like '/tmp/krb5_cc'
+ * @param cf_logger - log to systemd daemon
+ * @param cf_daemon - parent creds-fetcher object
  * @return result code, 0 if successful, -1 on failure
  */
-int get_krb_ticket( const char* ldap_uri_arg, const char* gmsa_account_name_arg )
+int get_gmsa_krb_ticket( std::string domain_name, const std::string& gmsa_account_name,
+                         const std::string& krb_cc_name, const std::string& krb_files_dir,
+                         creds_fetcher::CF_logger& cf_logger)
 {
-    if ( ldap_uri_arg == nullptr || gmsa_account_name_arg == nullptr )
+    if ( domain_name.empty() || gmsa_account_name.empty() )
     {
-        printf( "**ERROR*%s:%d\n", __func__, __LINE__ );
+        cf_logger.logger( LOG_ERR, "ERROR*: %s:%d null args", __func__, __LINE__ );
         return -1;
     }
 
-    std::string ldap_uri( ldap_uri_arg );
-    std::string gmsa_arg( gmsa_account_name_arg );
     std::vector<std::string> results;
 
-    boost::split( results, ldap_uri, []( char c ) { return c == '.'; } );
+    boost::split( results, domain_name, []( char c ) { return c == '.'; } );
     std::string domain;
-    for (auto & result : results)
+    for ( auto& result : results )
     {
         domain += "DC=" + result + ",";
     }
     domain.pop_back(); // Remove last comma
 
-    // ldapsearch -H ldap://contoso.com -b 'CN=webapp01,CN=Managed Service
-    // Accounts,DC=contoso,DC=com' -s sub  "(objectClass=msDs-GroupManagedServiceAccount)"
-    // msDS-ManagedPassword
-
-    std::string cmd = std::string( "ldapsearch -H ldap://" ) + ldap_uri;
-    const std::string& gmsa_account_name(gmsa_arg);
+    /**
+     * ldapsearch -H ldap://contoso.com -b 'CN=webapp01,CN=Managed Service
+     *   Accounts,DC=contoso,DC=com' -s sub  "(objectClass=msDs-GroupManagedServiceAccount)"
+     *   msDS-ManagedPassword
+     */
+    std::string cmd = std::string( "ldapsearch -H ldap://" ) + domain_name;
     cmd += std::string( " -b 'CN=" ) + gmsa_account_name +
            std::string( ",CN=Managed Service Accounts," ) + domain + std::string( "'" ) +
            std::string( " -s sub  \"(objectClass=msDs-GroupManagedServiceAccount)\" "
@@ -179,14 +212,14 @@ int get_krb_ticket( const char* ldap_uri_arg, const char* gmsa_account_name_arg 
     std::pair<int, std::string> ldap_search_result = exec_shell_cmd( cmd );
     if ( ldap_search_result.first != 0 )
     {
-        printf( "**ERROR*%s:%d\n", __func__, __LINE__ );
+        cf_logger.logger( LOG_ERR, "ERROR*: %s:%d ldapsearch failed", __func__, __LINE__ );
         return -1;
     }
 
     std::string password = std::string( "msDS-ManagedPassword::" );
     boost::split( results, ldap_search_result.second, []( char c ) { return c == '#'; } );
 
-    for (auto & result : results)
+    for ( auto& result : results )
     {
         auto found = result.find( password );
         if ( found != std::string::npos )
@@ -198,80 +231,76 @@ int get_krb_ticket( const char* ldap_uri_arg, const char* gmsa_account_name_arg 
     }
 
     size_t base64_decode_len;
-    size_t len = password.length();
-    const auto* password_str = (const uint8_t*)password.c_str();
-    uint8_t* blob_base64_decoded = base64_decode( password_str, len, &base64_decode_len );
+    uint8_t* blob_base64_decoded = base64_decode( password, &base64_decode_len );
     creds_fetcher::blob_t* blob = ( (creds_fetcher::blob_t*)blob_base64_decoded );
 
-    fixup_utf16( blob->buf, BLOB_REMAINING_BUF_SIZE );
-
-    auto* blob_password = (uint8_t*)blob->buf;
-
-    // TBD: Move /var/log to dir in options file
-    char gmsa_password_file[PATH_MAX];
-    // TBD: Change the path to dir from config
-    char gmsa_passwd_path[] = "/home/ubuntu/code/tmp/gmsa_XXXXXX";
-    strncpy( gmsa_password_file, gmsa_passwd_path, strlen(gmsa_passwd_path));
-    if ( mkstemp( gmsa_password_file ) < 0 )
+    if ( fixup_utf16( blob->buf, BLOB_REMAINING_BUF_SIZE ) < 0 )
     {
-        printf( "**ERROR*%s:%d\n", __func__, __LINE__ );
+        cf_logger.logger( LOG_ERR, "ERROR*: %s:%d utf16 decode failed", __func__, __LINE__ );
         return -1;
     }
-    FILE* fp = fopen( gmsa_password_file, "wb" );
+
+    auto* blob_password = (uint8_t *)blob->buf;
+    std::string gmsa_password_file = krb_files_dir + std::string( "/gmsa_XXXXXX" );
+    // XXXXXX as per mkstemp man page
+    char gmsa_password_file_str[PATH_MAX];
+    strncpy(gmsa_password_file_str, gmsa_password_file.c_str(), gmsa_password_file.length());
+    if ( mkstemp( (char*)gmsa_password_file_str ) < 0 )
+    {
+        cf_logger.logger( LOG_ERR, "ERROR*: %s:%d mkstemp failed", __func__, __LINE__ );
+        free( blob_base64_decoded );
+        return -1;
+    }
+    FILE* fp = fopen( gmsa_password_file_str, "wb" );
     for ( int i = 0; i < GMSA_PASSWORD_SIZE; i++ )
     {
         fprintf( fp, "%c", blob_password[i] );
     }
     fclose( fp );
 
-    std::transform( ldap_uri.begin(), ldap_uri.end(), ldap_uri.begin(),
+    std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
                     []( unsigned char c ) { return std::toupper( c ); } );
-    std::string default_principal = std::string( gmsa_account_name_arg ) + "$@" + ldap_uri;
-    std::string kinit_cmd = std::string( "cat " ) + std::string( gmsa_password_file ) +
+    std::string default_principal = gmsa_account_name + "$@" + domain_name;
+    std::string kinit_cmd = std::string("export KRB5CCNAME=") + krb_cc_name + std::string(";") +
+                            std::string( " cat " ) +  gmsa_password_file_str +
                             std::string( " | iconv -f utf-16 -t utf-8 | kinit -V '" ) +
                             default_principal + "'";
     std::pair<int, std::string> result = exec_shell_cmd( kinit_cmd );
     if ( result.first != 0 )
     {
-        unlink( gmsa_password_file );
-        std::cout << "**ERROR kinit failed:" << result.second;
+        unlink( gmsa_password_file_str );
+        cf_logger.logger( LOG_ERR, "ERROR*: %s:%d kinit failed", __func__, __LINE__ );
+        free( blob_base64_decoded );
         return result.first;
     }
 
-    unlink( gmsa_password_file );
-    return result.first;
-}
+    unlink( gmsa_password_file_str );
+    free( blob_base64_decoded );
 
-/**
- * This function does the ticket re-creation.
- * TBD:: update the in memory db about the status of the ticket.
- * @param ldap_uri_arg like "contoso.com"
- * @param gmsa_account_name_arg like "webapp01"
- * @param krb_ccname file path like "/tmp/krb5ccname0
- */
-void krb_ticket_creation( const char* ldap_uri_arg, const char* gmsa_account_name_arg,
-                          const char* krb_ccname )
-{
-    // TBD: uncomment ticket generation once the implementation is done
-    generate_host_machine_krb_ticket( "" );
-    // get_krb_ticket(ldap_uri_arg, gmsa_account_name_arg);
+    return result.first;
 }
 
 /**
  * This function does the ticket renewal.
  * TBD:: update the in memory db about the status of the ticket.
- * @param defaultprincipal
+ * @param principal
  * @param krb_ccname
  */
-void krb_ticket_renewal( const char* defaultprincipal, const char* krb_ccname )
+void krb_ticket_renewal( std::string principal, const std::string& krb_ccname )
 {
+    std::string set_krb_ccname_cmd;
+
     // set krb cache location krb5ccname
-    if ( ( krb_ccname != nullptr ) && ( krb_ccname[0] == '\0' ) )
+    if ( not krb_ccname.empty() )
     {
-        std::string set_Krb5ccname_cmd = "export KRB5CCNAME=" + std::string( krb_ccname );
-        exec_shell_cmd( set_Krb5ccname_cmd );
+        set_krb_ccname_cmd = std::string( "export KRB5CCNAME=" ) + krb_ccname;
     }
 
-    std::string krb_ticket_refresh = "kinit -R " + std::string( defaultprincipal );
+    std::string krb_ticket_refresh =
+        set_krb_ccname_cmd + " && " + std::string( "kinit -R " ) + std::string( std::move(principal) );
+
+    // TBD: replace with exec_shell_cmd()
     system( krb_ticket_refresh.c_str() );
+
+    // TBD: Add error handling
 }

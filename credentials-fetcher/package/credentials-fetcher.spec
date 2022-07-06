@@ -8,7 +8,6 @@ URL:            tbd-project.com
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  cmake3 make
-Provides:       libcf-sources.so
 
 %description
 This daemon creates and refreshes kerberos tickets, these tickets can be
