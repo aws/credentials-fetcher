@@ -3,6 +3,8 @@ project(credentials-fetcher)
 
 set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall -Werror -pthread")
 
+add_subdirectory(openldap)
+
 set(config)
 add_subdirectory(config)
 set(auth)
@@ -27,8 +29,6 @@ target_include_directories(cf-sources
         /usr/lib/x86_64-linux-gnu/glib-2.0/include
         /usr/lib64/glib-2.0/include)
 
-project(credentials-fetcher)
-
 add_executable(credentials-fetcherd ${sources})
 target_include_directories(credentials-fetcherd PUBLIC common)
 
@@ -50,6 +50,9 @@ install(FILES ${CMAKE_BINARY_DIR}/libcf-sources.so
         DESTINATION "/usr/lib64/credentials-fetcher/"
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                     GROUP_EXECUTE GROUP_READ)
+install(FILES ${CMAKE_BINARY_DIR}/openldap/openldap/clients/tools/ldapsearch
+        DESTINATION "/usr/lib64/credentials-fetcher/")
+
 file(WRITE "${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file"  "LD_LIBRARY_PATH=/usr/lib64/credentials-fetcher:$LD_LIBRARY_PATH")
 install(FILES ${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file DESTINATION "/etc/credentials-fetcher")
 
