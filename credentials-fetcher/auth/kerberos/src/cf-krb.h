@@ -30,7 +30,7 @@ class CF_krb
 } // namespace creds_fetcher
 int generate_host_machine_krb_ticket(const char *krb_ccname = "");
 int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger );
-int get_gmsa_krb_ticket( std::string domain_name, const std::string& gmsa_account_name,
+std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name, const std::string& gmsa_account_name,
                          const std::string& krb_cc_name,
                           const std::string& krb_files_dir, creds_fetcher::CF_logger& cf_logger);
 void krb_ticket_renewal( std::string principal, const std::string& krb_ccname );
