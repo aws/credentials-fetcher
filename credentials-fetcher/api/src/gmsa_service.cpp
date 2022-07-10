@@ -55,6 +55,5 @@ int RunGrpcServer() {
 	    std::cout << "Server listening on " << server_address << std::endl;
 
 	    server->Wait();
-        std::cout << "gRPC Server is not available on the operating system" << std::endl;
     return 0;
 }
