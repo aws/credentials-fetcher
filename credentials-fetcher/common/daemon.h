@@ -16,6 +16,7 @@
 #include "../auth/kerberos/src/cf-krb.h"
 #include "../timer/src/cf-timer.h"
 #include "../cache/src/cf-cache.h"
+#include "../api/src/cf-service.h"
 
 #ifndef _daemon_h_
 #define _daemon_h_
@@ -48,6 +49,7 @@ namespace creds_fetcher {
 int parse_options(int argc, const char *argv[], creds_fetcher::Daemon &cf_daemon);
 int parse_config_file(creds_fetcher::Daemon &cf_daemon);
 void initialize_api();
+bool is_fedora();
 
 
 #endif // _daemon_h_
