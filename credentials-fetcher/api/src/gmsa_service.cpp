@@ -1,10 +1,11 @@
 #include "../../common/daemon.h"
 #include <memory>
 #include <string>
+
+
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
-
 #include "../../build/api/credentialsfetcher.grpc.pb.h"
 
 using grpc::Server;
@@ -18,37 +19,41 @@ using credentialsfetcher::DeleteKerberosLeaseResponse;
 using credentialsfetcher::CredentialsFetcherService;
 
 
-class CredentialsFetcherServiceImpl final : public CredentialsFetcherService::Service {
-    Status AddKerberosLease(ServerContext* context, const CreateKerberosLeaseRequest* request,
-                    CreateKerberosLeaseResponse* reply) override {
-        std::string prefix("Hello ");
-        reply->set_lease_id(prefix + "world");
-        return Status::OK;
-    }
 
-    Status DeleteKerberosLease(ServerContext* context, const DeleteKerberosLeaseRequest* request,
-                        DeleteKerberosLeaseResponse* reply) override {
-            std::string prefix("Hello ");
-            reply->set_lease_id(prefix + request->lease_id());
-            return Status::OK;
-    }
+/* CredentialsFetcherServiceImpl - Credentials fetcher implementation for the grpc service */
+class CredentialsFetcherServiceImpl final : public CredentialsFetcherService::Service {
+        Status AddKerberosLease(ServerContext* context, const CreateKerberosLeaseRequest* request,
+	            CreateKerberosLeaseResponse* reply) override {
+	         std::string prefix("Hello ");
+	         reply->set_lease_id(prefix + "world");
+	         return Status::OK;
+	    }
+
+	    Status DeleteKerberosLease(ServerContext* context, const DeleteKerberosLeaseRequest* request,
+	                DeleteKerberosLeaseResponse* reply) override {
+	             std::string prefix("Hello ");
+	             reply->set_lease_id(prefix + request->lease_id());
+	             return Status::OK;
+	    }
 };
 
-//TBD: use domain socket going forward
-void RunGrpcServer() {
-    std::string server_address("0.0.0.0:50051");
-    CredentialsFetcherServiceImpl service;
-    grpc::EnableDefaultHealthCheckService(true);
-    grpc::reflection::InitProtoReflectionServerBuilderPlugin();
-    ServerBuilder builder;
+/* RunGrpcServer - Runs the grpc initializes and runs the grpc server */
+int RunGrpcServer() {
 
-    // Listen on the given address without any authentication mechanism.
-    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-    // Register "service" as the instance through which we'll communicate with the clients.
-    builder.RegisterService(&service);
+        std::string server_address("unix:/tmp/credentials_fetcher.sock");
+	    CredentialsFetcherServiceImpl service;
+	    grpc::EnableDefaultHealthCheckService(true);
+	    grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+	    ServerBuilder builder;
 
-    std::unique_ptr<Server> server(builder.BuildAndStart());
-    std::cout << "Server listening on " << server_address << std::endl;
+	    // Listen on the given address without any authentication mechanism.
+        builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+	    // Register "service" as the instance through which we'll communicate with the clients.
+	    builder.RegisterService(&service);
 
-    server->Wait();
+	    std::unique_ptr<Server> server(builder.BuildAndStart());
+	    std::cout << "Server listening on " << server_address << std::endl;
+
+	    server->Wait();
+    return 0;
 }

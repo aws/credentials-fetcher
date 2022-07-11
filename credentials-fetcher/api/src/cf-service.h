@@ -1,12 +1,12 @@
-#ifndef _cf_gmsa_api_h_
-#define _cf_gmsa_api_h_
+#ifndef _cf_service_h_
+#define _cf_service_h_
 
 namespace creds_fetcher{
- class CredentialsFetcherServiceImpl{
-     public:
-         CredentialsFetcherServiceImpl();
-     };
- }
- void RunGrpcServer();
+    class CF_service{
+	    public:
+	        CF_service();
+	    };
+	}
+int RunGrpcServer();
 
- #endif // _cf_gmsa_api_h_
+#endif // _cf_service_h_

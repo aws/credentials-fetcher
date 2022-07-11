@@ -16,22 +16,6 @@ int main( int argc, const char* argv[] )
         exit( EXIT_FAILURE );
     }
 
-
-    /* we need to run three parallel processes */
-    // 1. Systemd - daemon
-    // 2. grpc server
-    // 3. timer to run every 45 min
-    if ( is_fedora() )
-    {
-       std::cout << "os  is fedoara" << std::endl;
-       //RunGrpcServer()
-       /* only runs on fedora, need to uncomment after resolving the dependencies for cmake*/
-       //std::thread(RunGrpcServer()).detach();
-    }
-
-    // TBD: remove hard coded values and get info from the configuration
-    //std::thread(krb_ticket_handler,cf_daemon.krb_ticket_handle_interval, "contoso.com", "webapp04$","").detach();
-
     status = parse_config_file( cf_daemon );
     if ( status < 0 )
     {
@@ -44,6 +28,19 @@ int main( int argc, const char* argv[] )
     {
         cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket", status );
     }
+
+    /* TBD: we need to run three parallel processes */
+    // 1. Systemd - daemon
+    // 2. grpc server
+    // 3. timer to run every 45 min
+    #if FEDORA_FOUND
+        std::cout << "os  is fedora" << std::endl;
+        /* only runs on fedora, need to uncomment after resolving the dependencies for cmake*/
+        //RunGrpcServer();
+    #endif
+
+    // TBD: remove hard coded values and get info from the configuration
+    //std::thread(krb_ticket_handler,cf_daemon.krb_ticket_handle_interval, "contoso.com", "webapp04$","").detach();
 
     // this is a test, remove this later
     std::string krb_ccname = cf_daemon.krb_files_dir + std::string( "/ccname_XXXXXX" );
@@ -113,18 +110,4 @@ int main( int argc, const char* argv[] )
     }
 
     return EXIT_SUCCESS;
-}
-
-bool is_fedora()
-{
-    FILE *fp;
-    char buffer[50] = " ";
-    fp = popen("cat /etc/*-release", "r");
-    fgets(buffer, 50, fp);
-    pclose(fp);
-    // check if the os is fedora
-    if (std::string(buffer).find("Fedora") != std::string::npos) {
-       return true;
-    }
-    return false;
 }

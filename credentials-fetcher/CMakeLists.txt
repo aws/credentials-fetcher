@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(credentials-fetcher)
 
-set(CMAKE_CXX_FLAGS "-std=c++11")
+set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall -Werror -pthread")
 
 find_package(Threads)
 
@@ -11,11 +11,14 @@ find_package(gRPC REQUIRED)
 
 ##  Check for Fedora, if found set the variable don't link grpc targets
 find_file (FEDORA_FOUND fedora-release PATHS /etc)
+message("${CMAKE_SYSTEM_NAME}")
+#TBD: Use add definition in the application
+add_definitions ( -DFEDORA_FOUND=${FEDORA_FOUND})
 if (FEDORA_FOUND)
-    set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
-    set(_REFLECTION gRPC::grpc++_reflection)
-    find_program(_PROTOBUF_PROTOC protoc)
-    find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
+     set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
+     set(_REFLECTION gRPC::grpc++_reflection)
+     find_program(_PROTOBUF_PROTOC protoc)
+     find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
 endif (FEDORA_FOUND)
 
 set(config)
@@ -36,8 +39,7 @@ add_subdirectory(daemon)
 set(sources ${auth} ${daemon} ${config} ${cache} ${timer} ${logger})
 
 
-add_library(cf-sources SHARED ${sources} common)
-
+add_library(cf-sources SHARED "${sources}" common)
 target_include_directories(cf-sources
         PUBLIC
         common /usr/include/glib-2.0
@@ -48,10 +50,10 @@ add_executable(credentials-fetcherd ${sources})
 target_include_directories(credentials-fetcherd PUBLIC common)
 
 if (FEDORA_FOUND)
-    target_link_libraries(credentials-fetcherd PUBLIC cf-gmsa-api ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
+     target_link_libraries(credentials-fetcherd PUBLIC cf-gmsa-service ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
 endif (FEDORA_FOUND)
-target_link_libraries(credentials-fetcherd PUBLIC systemd boost_program_options ldap krb5 sqlite3 cf-sources glib-2.0)
 
+target_link_libraries(credentials-fetcherd PUBLIC systemd boost_program_options krb5 sqlite3 cf-sources glib-2.0)
 
 install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
         DESTINATION "/usr/sbin"
@@ -69,6 +71,7 @@ install(FILES ${CMAKE_BINARY_DIR}/libcf-sources.so
         DESTINATION "/usr/lib64/credentials-fetcher/"
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                     GROUP_EXECUTE GROUP_READ)
+
 file(WRITE "${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file"  "LD_LIBRARY_PATH=/usr/lib64/credentials-fetcher:$LD_LIBRARY_PATH")
 install(FILES ${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file DESTINATION "/etc/credentials-fetcher")
 
