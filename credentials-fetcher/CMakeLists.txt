@@ -74,5 +74,3 @@ install(FILES ${CMAKE_BINARY_DIR}/libcf-sources.so
 
 file(WRITE "${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file"  "LD_LIBRARY_PATH=/usr/lib64/credentials-fetcher:$LD_LIBRARY_PATH")
 install(FILES ${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file DESTINATION "/etc/credentials-fetcher")
-
-cmake_minimum_required(VERSION 2.8)

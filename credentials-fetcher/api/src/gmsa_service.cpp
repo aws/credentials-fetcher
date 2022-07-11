@@ -6,7 +6,7 @@
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
-#include "../../build/api/credentialsfetcher.grpc.pb.h"
+#include <credentialsfetcher.grpc.pb.h>
 
 using grpc::Server;
 using grpc::ServerBuilder;

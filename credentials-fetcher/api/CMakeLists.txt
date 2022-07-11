@@ -24,6 +24,7 @@ if (FEDORA_FOUND)
 	         "${credentialsfetcher_proto}"
 	         DEPENDS "${credentialsfetcher_proto}")
 
+    include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
 	 list(APPEND SRC_FILES ${credentialsfetcher_proto_sources})
 	 list(APPEND SRC_FILES ${credentialsfetcher_proto_headers})
@@ -43,10 +44,9 @@ if (FEDORA_FOUND)
 	         ${_GRPC_GRPCPP})
 
 else (FEDORA_FOUND)
-	   set(api "${SRC_FILES}" PARENT_SCOPE)
+	  set(api "${SRC_FILES}" PARENT_SCOPE)
 endif (FEDORA_FOUND)
 
-cmake_minimum_required(VERSION 2.8)
 
 enable_testing ()
 add_subdirectory (tests)
