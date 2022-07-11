@@ -10,10 +10,10 @@ find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
 
 ##  Check for Fedora, if found set the variable don't link grpc targets
-#find_file (FEDORA_FOUND fedora-release PATHS /etc)
-
+find_file (FEDORA_FOUND fedora-release PATHS /etc)
+message("${CMAKE_SYSTEM_NAME}")
 #TBD: Use add definition in the application
-add_definitions ( -D_FEDORA_FOUND=${FEDORA_FOUND})
+add_definitions ( -DFEDORA_FOUND=${FEDORA_FOUND})
 if (FEDORA_FOUND)
      set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
      set(_REFLECTION gRPC::grpc++_reflection)

@@ -48,8 +48,6 @@ namespace creds_fetcher {
 /* TBD: Move to class and methods */
 int parse_options(int argc, const char *argv[], creds_fetcher::Daemon &cf_daemon);
 int parse_config_file(creds_fetcher::Daemon &cf_daemon);
-void initialize_api();
-bool is_fedora();
 
 
 #endif // _daemon_h_

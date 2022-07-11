@@ -33,12 +33,11 @@ int main( int argc, const char* argv[] )
     // 1. Systemd - daemon
     // 2. grpc server
     // 3. timer to run every 45 min
-    if ( is_fedora() )
-    {
-        std::cout << "os  is fedoara" << std::endl;
+    #if FEDORA_FOUND
+        std::cout << "os  is fedora" << std::endl;
         /* only runs on fedora, need to uncomment after resolving the dependencies for cmake*/
         //RunGrpcServer();
-    }
+    #endif
 
     // TBD: remove hard coded values and get info from the configuration
     //std::thread(krb_ticket_handler,cf_daemon.krb_ticket_handle_interval, "contoso.com", "webapp04$","").detach();
@@ -111,17 +110,4 @@ int main( int argc, const char* argv[] )
     }
 
     return EXIT_SUCCESS;
-}
-
-bool is_fedora(){
-	  FILE *fp;
-	  char buffer[50] = " ";
-	  fp = popen("cat /etc/os-release", "r");
-	  fgets(buffer, 50, fp);
-	  pclose(fp);
-	  // check if the os is fedora
-	  if (std::string(buffer).find("Fedora") != std::string::npos) {
-	      return true;
-	  }
-	  return false;
 }
