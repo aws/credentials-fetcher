@@ -69,6 +69,9 @@ int main( int argc, const char* argv[] )
     cf_daemon.cf_logger.set_log_level( LOG_NOTICE );
     initialize_cache( cf_daemon.cf_cache );
 
+    char *daemon_started_by_systemd = getenv("CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD");
+
+    if (daemon_started_by_systemd != NULL) {
     /*
      * This is a 'new-style daemon', fork() and other book-keeping is not required.
      * https://www.freedesktop.org/software/systemd/man/daemon.html#New-Style%20Daemons
@@ -90,6 +93,7 @@ int main( int argc, const char* argv[] )
                  cf_daemon.watchdog_interval_usecs );
         /* TBD: Use exit code scheme as defined in the LSB recommendations for SysV init scripts */
         exit( EXIT_FAILURE );
+    }
     }
 
     /* Tells the service manager that service startup is finished */

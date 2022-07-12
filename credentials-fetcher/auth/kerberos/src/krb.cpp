@@ -1,12 +1,9 @@
 #include "daemon.h"
 #include <boost/algorithm/string.hpp>
+#include <cstddef>
 #include <glib.h>
-#include <netdb.h>
 #include <netinet/in.h>
 #include <resolv.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <vector>
 
 /**
@@ -202,12 +199,12 @@ std::pair<int, std::string> get_fqdn_from_domain_name( std::string domain_name )
     boost::split( list_of_dc_names, fqdn.second, []( char c ) { return c == '\n'; } );
 
     std::string dc_fqdn;
-    for ( auto fqdn : list_of_dc_names )
+    for ( auto fqdn_str : list_of_dc_names )
     {
-        fqdn.pop_back(); // Remove trailing .
-        if ( !fqdn.empty() && fqdn.compare( domain_name ) != 0 )
+        fqdn_str.pop_back(); // Remove trailing .
+        if ( !fqdn_str.empty() && fqdn_str.compare( domain_name ) != 0 )
         {
-            dc_fqdn = fqdn;
+            dc_fqdn = fqdn_str;
             break;
         }
     }
@@ -309,6 +306,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     if ( fixup_utf16( blob->buf, BLOB_REMAINING_BUF_SIZE ) < 0 )
     {
         cf_logger.logger( LOG_ERR, "ERROR: %s:%d utf16 decode failed", __func__, __LINE__ );
+        free( blob_base64_decoded );
         return std::make_pair( -1, std::string( "" ) );
     }
 
@@ -330,27 +328,27 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
         fprintf( fp, "%c", blob_password[i] );
     }
     fclose( fp );
-    g_free( blob_base64_decoded );
+    gmsa_password_file = gmsa_password_file_str;
 
     std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
                     []( unsigned char c ) { return std::toupper( c ); } );
     std::string default_principal = gmsa_account_name + "$@" + domain_name;
     std::string kinit_cmd = std::string( "export KRB5CCNAME=" ) + krb_cc_name + std::string( ";" ) +
-                            std::string( " cat " ) + gmsa_password_file_str +
+                            std::string( " cat " ) + gmsa_password_file +
                             std::string( " | iconv -f utf-16 -t utf-8 | kinit -V '" ) +
                             default_principal + "'";
     std::cout << kinit_cmd << std::endl;
     std::pair<int, std::string> result = exec_shell_cmd( kinit_cmd );
     if ( result.first != 0 )
     {
-        unlink( gmsa_password_file_str );
+        unlink( gmsa_password_file.c_str() );
         cf_logger.logger( LOG_ERR, "ERROR: %s:%d kinit failed", __func__, __LINE__ );
         free( blob_base64_decoded );
         return std::make_pair( -1, std::string( "" ) );
     }
 
     free( blob_base64_decoded );
-    return std::make_pair( 0, std::string( gmsa_password_file_str ) );
+    return std::make_pair( 0, gmsa_password_file );
 }
 
 /**
