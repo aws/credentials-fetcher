@@ -33,6 +33,7 @@ namespace creds_fetcher {
                         boost::program_options::variables_map vm;
                         std::string config_file;
                         std::string krb_files_dir;
+                        std::string unix_socket_path;
                         std::string logging_dir;
                         std::string domain_name;
                         std::string gmsa_account_name;

@@ -23,24 +23,23 @@ int main( int argc, const char* argv[] )
         exit( EXIT_FAILURE );
     }
 
+    /* TBD: we need to run three parallel processes */
+    // 1. Systemd - daemon
+    // 2. grpc server
+    // 3. timer to run every 45 min
+    // un-comment to run grpc server, ensure grpc is installed already
+    //TBD: we should run it on a seperate thread
+    //RunGrpcServer( cf_daemon.unix_socket_path, cf_daemon.cf_logger );
+
     status = get_machine_krb_ticket( cf_daemon.domain_name, cf_daemon.cf_logger );
     if ( status < 0 )
     {
         cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket", status );
     }
 
-    /* TBD: we need to run three parallel processes */
-    // 1. Systemd - daemon
-    // 2. grpc server
-    // 3. timer to run every 45 min
-    #if FEDORA_FOUND
-        std::cout << "os  is fedora" << std::endl;
-        /* only runs on fedora, need to uncomment after resolving the dependencies for cmake*/
-        //RunGrpcServer();
-    #endif
-
     // TBD: remove hard coded values and get info from the configuration
-    //std::thread(krb_ticket_handler,cf_daemon.krb_ticket_handle_interval, "contoso.com", "webapp04$","").detach();
+    // std::thread(krb_ticket_handler,cf_daemon.krb_ticket_handle_interval, "contoso.com",
+    // "webapp04$","").detach();
 
     // this is a test, remove this later
     std::string krb_ccname = cf_daemon.krb_files_dir + std::string( "/ccname_XXXXXX" );
@@ -69,31 +68,33 @@ int main( int argc, const char* argv[] )
     cf_daemon.cf_logger.set_log_level( LOG_NOTICE );
     initialize_cache( cf_daemon.cf_cache );
 
-    char *daemon_started_by_systemd = getenv("CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD");
+    char* daemon_started_by_systemd = getenv( "CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD" );
 
-    if (daemon_started_by_systemd != NULL) {
-    /*
-     * This is a 'new-style daemon', fork() and other book-keeping is not required.
-     * https://www.freedesktop.org/software/systemd/man/daemon.html#New-Style%20Daemons
-     */
+    if ( daemon_started_by_systemd != NULL )
+    {
+        /*
+         * This is a 'new-style daemon', fork() and other book-keeping is not required.
+         * https://www.freedesktop.org/software/systemd/man/daemon.html#New-Style%20Daemons
+         */
 
-    /*
-     * If the daemon does not invoke sd_watchdog_enabled() in the interval, systemd will restart the
-     * daemon
-     */
-    bool watchdog = sd_watchdog_enabled( 0, &cf_daemon.watchdog_interval_usecs ) > 0;
-    if ( watchdog )
-    {
-        fprintf( stderr, SD_NOTICE "watchdog enabled with interval value = %ld",
-                 cf_daemon.watchdog_interval_usecs );
-    }
-    else
-    {
-        fprintf( stderr, SD_ERR "ERROR Cannot setup watchdog, interval value = %ld",
-                 cf_daemon.watchdog_interval_usecs );
-        /* TBD: Use exit code scheme as defined in the LSB recommendations for SysV init scripts */
-        exit( EXIT_FAILURE );
-    }
+        /*
+         * If the daemon does not invoke sd_watchdog_enabled() in the interval, systemd will restart
+         * the daemon
+         */
+        bool watchdog = sd_watchdog_enabled( 0, &cf_daemon.watchdog_interval_usecs ) > 0;
+        if ( watchdog )
+        {
+            fprintf( stderr, SD_NOTICE "watchdog enabled with interval value = %ld",
+                     cf_daemon.watchdog_interval_usecs );
+        }
+        else
+        {
+            fprintf( stderr, SD_ERR "ERROR Cannot setup watchdog, interval value = %ld",
+                     cf_daemon.watchdog_interval_usecs );
+            /* TBD: Use exit code scheme as defined in the LSB recommendations for SysV init scripts
+             */
+            exit( EXIT_FAILURE );
+        }
     }
 
     /* Tells the service manager that service startup is finished */

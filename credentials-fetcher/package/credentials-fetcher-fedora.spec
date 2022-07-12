@@ -49,6 +49,7 @@ cd %{_builddir}/credentials-fetcher-0.0.1/daemon/ && ctest3
 %{_datadir}/credentials-fetcher/.ignore
 %{_sysconfdir}/credentials-fetcher/.ignore
 %attr(0755, -, -) /usr/lib64/credentials-fetcher/libcf-sources.so
+%attr(0755, -, -) /usr/lib64/credentials-fetcher/libcf-gmsa-service.so
 
 %changelog
 * Tue Jul 12 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1

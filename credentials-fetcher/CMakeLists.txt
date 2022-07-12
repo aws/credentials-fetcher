@@ -6,6 +6,7 @@ set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall -Werror -pthread")
 find_package(Threads)
 
 find_file(FEDORA_FOUND fedora-release PATHS /etc)
+
 if (EXISTS ${FEDORA_FOUND})
     add_definitions(-DFEDORA_FOUND=1)
     set(protobuf_MODULE_COMPATIBLE TRUE)
@@ -33,9 +34,9 @@ set(daemon)
 add_subdirectory(daemon)
 
 if (EXISTS ${FEDORA_FOUND})
-    set(sources ${auth} ${daemon} ${config} ${cache} ${timer} ${logger} ${api})
-else ()
     set(sources ${auth} ${daemon} ${config} ${cache} ${timer} ${logger})
+else ()
+    set(sources ${auth} ${daemon} ${config} ${cache} ${timer} ${logger} ${api})
 endif ()
 
 add_library(cf-sources SHARED "${sources}" common)
@@ -85,6 +86,13 @@ install(FILES ${CMAKE_BINARY_DIR}/libcf-sources.so
         DESTINATION "/usr/lib64/credentials-fetcher/"
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
         GROUP_EXECUTE GROUP_READ)
+
+if (EXISTS ${FEDORA_FOUND})
+install(FILES ${CMAKE_BINARY_DIR}/api/libcf-gmsa-service.so
+        DESTINATION "/usr/lib64/credentials-fetcher/"
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+        GROUP_EXECUTE GROUP_READ)
+endif ()
 
 file(WRITE "${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file" "LD_LIBRARY_PATH=/usr/lib64/credentials-fetcher:$LD_LIBRARY_PATH")
 install(FILES ${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file DESTINATION "/etc/credentials-fetcher")

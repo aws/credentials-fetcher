@@ -66,6 +66,7 @@ int parse_config_file(creds_fetcher::Daemon &cf_daemon)
 
     cf_daemon.krb_files_dir = root.get<std::string>("krb_files_dir");
     cf_daemon.logging_dir = root.get<std::string>("logging_dir");
+    cf_daemon.unix_socket_path = root.get<std::string>("unix_socket_path");
 
     /**
      * Domain name and gmsa account are usually set in APIs.
@@ -76,6 +77,7 @@ int parse_config_file(creds_fetcher::Daemon &cf_daemon)
 
     std::cout << "krb_files_dir = " << cf_daemon.krb_files_dir << std::endl;
     std::cout << "logging_dir = " << cf_daemon.logging_dir << std::endl;
+    std::cout << "unix_socket_path = " << cf_daemon.unix_socket_path << std::endl;
 
     return 0;
 }
