@@ -9,6 +9,8 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  cmake3 make chrpath
 
+Requires: bind-utils
+
 %description
 This daemon creates and refreshes kerberos tickets, these tickets can be
 used to launch new containers.

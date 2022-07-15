@@ -8,6 +8,16 @@
 
 /**
  * Testing client to validate grpc communication with server
+ * Testing client to validate grpc communication with server, we need the client to mimic client
+ * server communication behaviour
+ * Invocation of the server can either be done from client or using grpc_cli
+ *
+ * Example cli invocations:
+ * -------------------------
+ * AddKerberoslease : grpc_cli {path_of_domain_sock}/credentials_fetcher.sock AddKerberoslease
+ * "'cred_contents = {"webapp01$@CONTOSO.COM", "webapp02$@CONTOSO.COM"}'"
+ * DeleteKerberoslease : grpc_cli {path_of_domain_sock}/credentials_fetcher.sock
+ * "'DeleteKerberoslease "'lease_id = lease_id'"
  */
 class CredentialsFetcherClient
 {

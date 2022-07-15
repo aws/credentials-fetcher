@@ -20,7 +20,7 @@ class CredentialsFetcherServiceImpl final
      * @param request - kerberos ticket creation request - list of credential spec contents
      * @param response - kerberos ticket creation response - lease_id and krb_ticket_paths for the
      * tickets created
-     * @return
+     * @return - string response from server
      */
     grpc::Status AddKerberosLease(
         grpc::ServerContext* context, const credentialsfetcher::CreateKerberosLeaseRequest* request,
@@ -38,7 +38,7 @@ class CredentialsFetcherServiceImpl final
      * created
      * @param response - kerberos ticket deletion response - lease_id and krb_ticket_paths for the
      * tickets deleted
-     * @return
+     * @return - string response from server
      */
     grpc::Status DeleteKerberosLease(
         grpc::ServerContext* context, const credentialsfetcher::DeleteKerberosLeaseRequest* request,
@@ -55,7 +55,7 @@ class CredentialsFetcherServiceImpl final
  * RunGrpcServer - Runs the grpc initializes and runs the grpc server
  * @param unix_socket_path - path for the unix socket creation
  * @param cf_logger - log to systemd daemon
- * @return
+ * @return - return 0 when server exits
  */
 int RunGrpcServer( std::string unix_socket_path, creds_fetcher::CF_logger& cf_logger )
 {
