@@ -6,6 +6,10 @@
 #include <resolv.h>
 #include <vector>
 
+// renew the ticket 1 hrs before the expiration
+#define RENEW_TICKET_HOURS 1
+#define SECONDS_IN_HOUR 3600
+
 /**
  * Execute a shell command such as "ls /tmp/"
  * output is a pair of error code and output log
@@ -352,6 +356,75 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
 }
 
 /**
+ * Checks if the given ticket needs renewal or recreation
+ * @param krb_cc_name  - Like '/var/credentials_fetcher/krb_dir/krb5_cc'
+ * @return - is renewal needed - true or false
+ */
+
+bool is_ticket_ready_for_renewal( const std::string& krb_cc_name )
+{
+    std::string cmd = "KRB5CCNAME=" + krb_cc_name + " &&  klist";
+    std::pair<int, std::string> krb_ticket_info_result = exec_shell_cmd( cmd );
+    if ( krb_ticket_info_result.first != 0 )
+    {
+        // we need to check if meta file exists to recreate the ticket
+        return false;
+    }
+
+    std::vector<std::string> results;
+
+    boost::split( results, krb_ticket_info_result.second, []( char c ) { return c == '#'; } );
+    std::string renew_until = "renew until";
+    bool is_ready_for_renewal = false;
+
+    for ( auto& result : results )
+    {
+        auto found = result.find( renew_until );
+        if ( found != std::string::npos )
+        {
+            found += renew_until.length();
+            std::string renewal_date_time = result.substr( found + 1, result.length() );
+
+            char renewal_date[80];
+            char renewal_time[80];
+
+            sscanf( renewal_date_time.c_str(), "%s %s", renewal_date, renewal_time );
+
+            renew_until = std::string( renewal_date ) + " " + std::string( renewal_time );
+            // trim extra spaces
+            ltrim(renew_until);
+            rtrim(renew_until);
+
+            // next renewal time for the ticket
+            struct tm tm;
+
+            // if the string is not date time format, return false
+            if ( strptime( renew_until.c_str(), "%m/%d/%Y %T", &tm ) == NULL )
+                return false;
+
+            std::time_t next_renewal_time = mktime( &tm );
+
+            // get the current system time
+            std::time_t t = std::time( NULL );
+            std::tm* now = std::localtime( &t );
+            std::time_t current_time = mktime( now );
+
+            // calculate the time difference in hours
+            double hours = std::difftime( next_renewal_time, current_time ) / SECONDS_IN_HOUR;
+
+            // check of the ticket need to be renewed
+            if ( hours <= RENEW_TICKET_HOURS )
+            {
+                is_ready_for_renewal = true;
+            }
+            break;
+        }
+    }
+
+    return is_ready_for_renewal;
+}
+
+/**
  * This function does the ticket renewal.
  * TBD:: update the in memory db about the status of the ticket.
  * @param principal
@@ -374,4 +447,26 @@ void krb_ticket_renewal( std::string principal, const std::string& krb_ccname )
     system( krb_ticket_refresh.c_str() );
 
     // TBD: Add error handling
+}
+
+/**
+ * trim from start (in place)
+ * @param s - string input
+ */
+void ltrim( std::string& s )
+{
+    s.erase( s.begin(), std::find_if( s.begin(), s.end(),
+                                      []( unsigned char ch ) { return !std::isspace( ch ); } ) );
+}
+
+/**
+ * trim from end (in place)
+ * @param s - string input
+ */
+void rtrim( std::string& s )
+{
+    s.erase(
+        std::find_if( s.rbegin(), s.rend(), []( unsigned char ch ) { return !std::isspace( ch ); } )
+            .base(),
+        s.end() );
 }
