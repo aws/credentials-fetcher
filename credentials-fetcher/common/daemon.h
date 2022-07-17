@@ -49,5 +49,4 @@ namespace creds_fetcher {
 int parse_options(int argc, const char *argv[], creds_fetcher::Daemon &cf_daemon);
 int parse_config_file(creds_fetcher::Daemon &cf_daemon);
 
-
 #endif // _daemon_h_
