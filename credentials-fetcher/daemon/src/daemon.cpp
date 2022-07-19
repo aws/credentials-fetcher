@@ -16,14 +16,12 @@ struct thread_info
     {                                                                                              \
         errno = en;                                                                                \
         perror( msg );                                                                             \
-        return ( EXIT_FAILURE );                                                                   \
     } while ( 0 )
 
 #define handle_error( msg )                                                                        \
     do                                                                                             \
     {                                                                                              \
         perror( msg );                                                                             \
-        return ( EXIT_FAILURE );                                                                   \
     } while ( 0 )
 
 /**
@@ -34,7 +32,7 @@ struct thread_info
 void* grpc_thread_start( void* arg )
 {
     struct thread_info* tinfo = (struct thread_info*)arg;
-    tinfo->argv_string = (char*)"grpc_thread";
+    tinfo->argv_string = (char*)arg;
 
     printf( "Thread %d: top of stack near %p; argv_string=%s\n", tinfo->thread_num, (void*)&tinfo,
             tinfo->argv_string );
@@ -47,56 +45,95 @@ void* grpc_thread_start( void* arg )
 }
 
 /**
- * Create one pthread for grpc processing
- * @return 0 if successful
+ * refresh_krb_tickets - used in pthread_create
+ * @param arg - thread info
+ * @return pthread name
  */
-int create_grpc_pthread()
+void* refresh_krb_tickets_thread_start( void* arg )
+{
+    struct thread_info* tinfo = (struct thread_info*)arg;
+    tinfo->argv_string = (char*)arg;
+
+    printf( "Thread %d: top of stack near %p; argv_string=%s\n", tinfo->thread_num, (void*)&tinfo,
+            tinfo->argv_string );
+
+#if FEDORA_FOUND
+    // Add ticket refresh here
+#endif
+
+    return tinfo->argv_string;
+}
+
+/**
+ * Create one pthread
+ * @param func - pthread function
+ * @param pthread_arg - pthread function parameter
+ * @param stack_size - pthread stack defaults to -1
+ * @return pair of return code and pointer to pthread
+ */
+std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthread_arg,
+                                      ssize_t stack_size )
 {
     pthread_attr_t attr;
-    ssize_t stack_size;
-    int s;
-    int num_threads = 1; /* One thread for grpc processing */
+    int status;
+    const int num_threads = 1;
+    std::pair<int, void*> result;
 
-    stack_size = -1;
-
+    if ( func == nullptr || pthread_arg == nullptr )
+    {
+        return std::make_pair( EXIT_FAILURE, nullptr );
+    }
     /* Initialize thread creation attributes. */
 
-    s = pthread_attr_init( &attr );
-    if ( s != 0 )
-        handle_error_en( s, "pthread_attr_init" );
+    status = pthread_attr_init( &attr );
+    if ( status != 0 )
+    {
+        handle_error_en( status, "pthread_attr_init" );
+        return std::make_pair( EXIT_FAILURE, nullptr );
+    }
 
     if ( stack_size > 0 )
     {
-        s = pthread_attr_setstacksize( &attr, stack_size );
-        if ( s != 0 )
-            handle_error_en( s, "pthread_attr_setstacksize" );
+        status = pthread_attr_setstacksize( &attr, stack_size );
+        if ( status != 0 )
+        {
+            handle_error_en( status, "pthread_attr_setstacksize" );
+            return std::make_pair( EXIT_FAILURE, nullptr );
+        }
     }
 
     /* Allocate memory for pthread_create() arguments. */
-
     struct thread_info* tinfo = (thread_info*)calloc( num_threads, sizeof( *tinfo ) );
     if ( tinfo == NULL )
+    {
         handle_error( "calloc" );
+        return std::make_pair( EXIT_FAILURE, nullptr );
+    }
+    tinfo->argv_string = (char*)pthread_arg;
 
-    /* Create one thread for each command-line argument. */
+    status = pthread_create( &tinfo->thread_id, &attr, func, &tinfo );
+    if ( status != 0 )
+    {
+        handle_error_en( status, "pthread_create" );
+        return std::make_pair( EXIT_FAILURE, nullptr );
+    }
 
-    s = pthread_create( &tinfo->thread_id, &attr, &grpc_thread_start, &tinfo );
-    if ( s != 0 )
-        handle_error_en( s, "pthread_create" );
+    /* Destroy the thread attributes object, since it is no longer needed. */
+    status = pthread_attr_destroy( &attr );
+    if ( status != 0 )
+    {
+        handle_error_en( status, "pthread_attr_destroy" );
+        return std::make_pair( EXIT_FAILURE, nullptr );
+    }
 
-    /* Destroy the thread attributes object, since it is no
-       longer needed. */
-
-    s = pthread_attr_destroy( &attr );
-    if ( s != 0 )
-        handle_error_en( s, "pthread_attr_destroy" );
-
-    return EXIT_SUCCESS;
+    return std::make_pair( EXIT_SUCCESS, tinfo );
 }
 
 int main( int argc, const char* argv[] )
 {
     int status;
+    void* grpc_pthread;
+    void* krb_refresh_pthread;
 
     status = parse_options( argc, argv, cf_daemon );
     if ( status < 0 )
@@ -120,14 +157,27 @@ int main( int argc, const char* argv[] )
     // un-comment to run grpc server, ensure grpc is installed already
 
     /* Create one pthread for gRPC processing */
-    status = create_grpc_pthread();
-    if ( status < 0 )
+    std::pair<int, void*> pthread_status = create_pthread( grpc_thread_start, "grpc_pthread", -1 );
+    if ( pthread_status.first < 0 )
     {
         cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads", status );
+        exit( EXIT_FAILURE );
     }
+    grpc_pthread = pthread_status.second;
+    cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
+
+    /* Create pthread for refreshing krb tickets */
+    pthread_status =
+        create_pthread( refresh_krb_tickets_thread_start, "krb_ticket_refresh_thread", -1 );
+    if ( pthread_status.first < 0 )
+    {
+        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads", status );
+        exit( EXIT_FAILURE );
+    }
+    krb_refresh_pthread = pthread_status.second;
+    cf_daemon.cf_logger.logger( LOG_INFO, "krb refresh pthread is at %p", krb_refresh_pthread );
 
     cf_daemon.cf_logger.set_log_level( LOG_NOTICE );
-    // initialize_cache( cf_daemon.cf_cache );
 
     char* daemon_started_by_systemd = getenv( "CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD" );
 
