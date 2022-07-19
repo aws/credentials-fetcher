@@ -1,10 +1,6 @@
 #include "daemon.h"
-#include <boost/algorithm/string.hpp>
-#include <cstddef>
-#include <glib.h>
-#include <netinet/in.h>
-#include <resolv.h>
-#include <vector>
+#include <dirent.h>
+#include <sys/types.h>
 
 // renew the ticket 1 hrs before the expiration
 #define RENEW_TICKET_HOURS 1
@@ -392,8 +388,8 @@ bool is_ticket_ready_for_renewal( const std::string& krb_cc_name )
 
             renew_until = std::string( renewal_date ) + " " + std::string( renewal_time );
             // trim extra spaces
-            ltrim(renew_until);
-            rtrim(renew_until);
+            ltrim( renew_until );
+            rtrim( renew_until );
 
             // next renewal time for the ticket
             struct tm tm;
@@ -447,6 +443,52 @@ void krb_ticket_renewal( std::string principal, const std::string& krb_ccname )
     system( krb_ticket_refresh.c_str() );
 
     // TBD: Add error handling
+}
+
+/**
+ * delete kerberos ticket corresponding to lease id
+ * @param krb_files_dir - path to kerberos directory
+ * @param lease_id - lease_id associated to kerberos tickets
+ * @return - vector of kerberos deleted paths
+ */
+std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::string lease_id )
+{
+    std::vector<std::string> delete_krb_ticket_paths;
+
+    if ( lease_id.empty() || krb_files_dir.empty() )
+        return delete_krb_ticket_paths;
+
+    std::string krb_tickets_path = "/usr/share/credentials-fetcher/krbdir/" + lease_id;
+
+    DIR* curr_dir;
+    struct dirent* file;
+    // open the directory
+    curr_dir = opendir( krb_tickets_path.c_str() );
+    if ( curr_dir )
+    {
+        while ( ( file = readdir( curr_dir ) ) != NULL )
+        {
+            std::string krb_cc_name = file->d_name;
+            if ( !krb_cc_name.empty() && krb_cc_name.find( "ccname" ) != std::string::npos )
+            {
+                std::string cmd = "export KRB5CCNAME=" + krb_tickets_path + "/" + krb_cc_name +
+                                  " && kdestroy";
+
+                std::pair<int, std::string> krb_ticket_destroy_result = exec_shell_cmd( cmd );
+                if ( krb_ticket_destroy_result.first == 0 )
+                {
+                    delete_krb_ticket_paths.push_back( krb_cc_name );
+                }
+                else
+                {
+                    // log ticket deletion failure
+                }
+            }
+        }
+        // close directory
+        closedir( curr_dir );
+    }
+    return delete_krb_ticket_paths;
 }
 
 /**

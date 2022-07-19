@@ -40,7 +40,7 @@ void* grpc_thread_start( void* arg )
             tinfo->argv_string );
 
 #if FEDORA_FOUND
-    RunGrpcServer( cf_daemon.unix_socket_path, cf_daemon.cf_logger );
+    RunGrpcServer( cf_daemon.unix_socket_path, cf_daemon.krb_files_dir, cf_daemon.cf_logger );
 #endif
 
     return tinfo->argv_string;
@@ -124,40 +124,6 @@ int main( int argc, const char* argv[] )
     if ( status < 0 )
     {
         cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads", status );
-    }
-
-    status = get_machine_krb_ticket( cf_daemon.domain_name, cf_daemon.cf_logger );
-    if ( status < 0 )
-    {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket", status );
-    }
-
-    // TBD: remove hard coded values and get info from the configuration
-    // std::thread(krb_ticket_handler,cf_daemon.krb_ticket_handle_interval, "contoso.com",
-    // "webapp04$","").detach();
-
-    // this is a test, remove this later
-    std::string krb_ccname = cf_daemon.krb_files_dir + std::string( "/ccname_XXXXXX" );
-    char krb_ccname_str[PATH_MAX];
-    strncpy( krb_ccname_str, krb_ccname.c_str(), PATH_MAX );
-    status = mkstemp( krb_ccname_str ); // XXXXXX as per mkstemp man page
-    if ( status < 0 )
-    {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot make temporary file", status );
-        // TBD:: Add error handling
-    }
-
-    std::pair<int, std::string> gmsa_ticket_result =
-        get_gmsa_krb_ticket( cf_daemon.domain_name, cf_daemon.gmsa_account_name, krb_ccname_str,
-                             cf_daemon.krb_files_dir, cf_daemon.cf_logger );
-    if ( gmsa_ticket_result.first < 0 )
-    {
-        cf_daemon.cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket", status );
-    }
-    else
-    {
-        cf_daemon.cf_logger.logger( LOG_INFO, "gMSA ticket is at %s", gmsa_ticket_result.second );
-        std::cout << "gMSA ticket is at " << gmsa_ticket_result.second << std::endl;
     }
 
     cf_daemon.cf_logger.set_log_level( LOG_NOTICE );

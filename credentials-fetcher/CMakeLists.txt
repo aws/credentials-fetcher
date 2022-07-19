@@ -60,15 +60,16 @@ endif ()
 
 target_include_directories(credentials-fetcherd PUBLIC common)
 
+
+target_link_libraries(credentials-fetcherd
+        PUBLIC systemd boost_program_options krb5 sqlite3 cf-sources glib-2.0)
+
 if (EXISTS ${FEDORA_FOUND})
     target_link_libraries(credentials-fetcherd
             PUBLIC
             cf-gmsa-service
             ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
 endif ()
-
-target_link_libraries(credentials-fetcherd
-        PUBLIC systemd boost_program_options krb5 sqlite3 cf-sources glib-2.0)
 
 install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
         DESTINATION "/usr/sbin"
@@ -88,10 +89,10 @@ install(FILES ${CMAKE_BINARY_DIR}/libcf-sources.so
         GROUP_EXECUTE GROUP_READ)
 
 if (EXISTS ${FEDORA_FOUND})
-install(FILES ${CMAKE_BINARY_DIR}/api/libcf-gmsa-service.so
-        DESTINATION "/usr/lib64/credentials-fetcher/"
-        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
-        GROUP_EXECUTE GROUP_READ)
+    install(FILES ${CMAKE_BINARY_DIR}/api/libcf-gmsa-service.so
+            DESTINATION "/usr/lib64/credentials-fetcher/"
+            PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+            GROUP_EXECUTE GROUP_READ)
 endif ()
 
 file(WRITE "${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file" "LD_LIBRARY_PATH=/usr/lib64/credentials-fetcher:$LD_LIBRARY_PATH")

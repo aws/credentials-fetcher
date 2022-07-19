@@ -34,13 +34,24 @@ if (EXISTS ${FEDORA_FOUND})
             ${credentialsfetcher_proto_sources}
             ${credentialsfetcher_proto_headers}
             ${credentialsfetcher_grpc_sources}
-            ${credentialsfetcher_grpc_headers})
+            ${credentialsfetcher_grpc_headers}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../auth/kerberos/src/krb.cpp
+            )
+
+    target_include_directories(cf-gmsa-service
+            PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../common
+            /usr/include/glib-2.0
+            /usr/lib/x86_64-linux-gnu/glib-2.0/include
+            /usr/lib64/glib-2.0/include)
 
     target_compile_definitions(cf-gmsa-service PRIVATE FEDORA_FOUND)
     target_link_libraries(cf-gmsa-service
             ${_PROTOBUF_LIBPROTOBUF}
             ${_REFLECTION}
-            ${_GRPC_GRPCPP})
+            ${_GRPC_GRPCPP}
+            systemd
+            glib-2.0
+            boost_filesystem)
 
 else ()
     set(api "${SRC_FILES}" PARENT_SCOPE)

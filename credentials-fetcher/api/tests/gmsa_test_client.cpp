@@ -53,6 +53,11 @@ class CredentialsFetcherClient
         // Handle response
         if ( status.ok() )
         {
+            for ( int i = 0; i < response.created_kerberos_file_paths_size(); i++ )
+            {
+                std::cout << "created ticket file paths" + response.created_kerberos_file_paths( i )
+                          << std::endl;
+            }
             return response.lease_id();
         }
         else
@@ -83,6 +88,11 @@ class CredentialsFetcherClient
         // Handle response
         if ( status.ok() )
         {
+            for ( int i = 0; i < response.deleted_kerberos_file_paths_size(); i++ )
+            {
+                std::cout << "deleted ticket file paths" + response.deleted_kerberos_file_paths( i )
+                          << std::endl;
+            }
             return response.lease_id();
         }
         else
@@ -103,13 +113,25 @@ int main( int argc, char** argv )
         grpc::CreateChannel( server_address, grpc::InsecureChannelCredentials() ) };
 
     // create kerberos tickets
-    std::list<std::string> credspec_contents = { "webapp01$@CONTOSO.COM", "webapp02$@CONTOSO.COM" };
+    std::list<std::string> credspec_contents = {
+        "{\"CmsPlugins\":[\"ActiveDirectory\"],"
+        "\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4217655605-3681839426-3493040985\","
+        "\"MachineAccountName\":\"WebApp01\",\"Guid\":\"af602f85-d754-4eea-9fa8-fd76810485f1\","
+        "\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},"
+        "\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"WebApp01\","
+        "\"Scope\":\"contoso.com\"},{\"Name\":\"WebApp01\",\"Scope\":\"contoso\"}]}}",
+        "{\"CmsPlugins\":[\"ActiveDirectory\"],"
+        "\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4217655605-3681839426-3493040985\","
+        "\"MachineAccountName\":\"WebApp03\",\"Guid\":\"af602f85-d754-4eea-9fa8-fd76810485f1\","
+        "\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},"
+        "\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"WebApp03\","
+        "\"Scope\":\"contoso.com\"},{\"Name\":\"WebApp03\",\"Scope\":\"contoso\"}]}}" };
     std::string add_response_field_lease_id = client.AddKerberosLeaseMethod( credspec_contents );
     std::cout << "Client received output for add kerberos lease: " << add_response_field_lease_id
               << std::endl;
 
     // delete kerberos tickets
-    std::string lease_id = "lease_id";
+    std::string lease_id = add_response_field_lease_id;
     std::string delete_response_field_lease_id = client.DeleteKerberosLeaseMethod( lease_id );
     std::cout << "Client received output for delete kerberos lease: "
               << delete_response_field_lease_id << std::endl;
