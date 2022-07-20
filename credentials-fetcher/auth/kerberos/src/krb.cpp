@@ -164,13 +164,14 @@ static uint8_t* base64_decode( const std::string& password, gsize* base64_decode
 }
 
 /**
- * Resolve domain to FQDN of domain-controller's hostname for ldapsearch
- * Pick the first DC for now
+ * Get list of domain-ips representing a domain
  * @param domain_name Like 'contoso.com'
  * @return - Pair of result and string, 0 if successful and FQDN like win-m744.contoso.com
  */
-std::pair<int, std::string> get_fqdn_from_domain_name( std::string domain_name )
+std::pair<int, std::vector<std::string>> get_domain_ips( std::string domain_name )
 {
+    std::vector<std::string> list_of_ips = { "" };
+
     /**
      * TBD:: change shell commands to using api
      */
@@ -179,37 +180,58 @@ std::pair<int, std::string> get_fqdn_from_domain_name( std::string domain_name )
     std::pair<int, std::string> ips = exec_shell_cmd( cmd );
     if ( ips.first != 0 )
     {
-        return std::make_pair( ips.first, std::string( "" ) );
+        return std::make_pair( ips.first, list_of_ips );
     }
 
-    std::vector<std::string> list_of_ips;
     boost::split( list_of_ips, ips.second, []( char c ) { return c == '\n'; } );
 
-    std::string first_ip = list_of_ips.front();
-    cmd =
-        "dig -x " + first_ip + " +noall +answer | grep -v  ';' | grep -v '^$' | awk '{print $5}' ";
+    return std::make_pair( EXIT_SUCCESS, list_of_ips );
+}
 
-    std::pair<int, std::string> fqdn = exec_shell_cmd( cmd );
-    if ( fqdn.first != 0 )
+/**
+ * DNS reverse lookup, given IP, return domain name
+ * @param domain_name Like 'contoso.com'
+ * @return - Pair of result and string, 0 if successful and FQDN like win-m744.contoso.com
+ */
+std::pair<int, std::string> get_fqdn_from_domain_ip( std::string domain_ip,
+                                                     std::string domain_name )
+{
+    /**
+     * We expect fqdns to have hostnames, only the second entry is picked from below.
+     * $ dig -x 172.32.157.20 +noall +short +answer
+     * contoso.com.
+     * win-cqec6o8gd7i.contoso.com.
+     */
+    std::string cmd = "dig -x " + domain_ip + " +noall +answer +short | grep -v ^" + domain_name;
+
+    std::pair<int, std::string> reverse_dns_output = exec_shell_cmd( cmd );
+    if ( reverse_dns_output.first != 0 )
     {
-        return std::make_pair( ips.first, std::string( "" ) );
+        return std::make_pair( reverse_dns_output.first, std::string( "" ) );
     }
 
     std::vector<std::string> list_of_dc_names;
-    boost::split( list_of_dc_names, fqdn.second, []( char c ) { return c == '\n'; } );
+    boost::split( list_of_dc_names, reverse_dns_output.second, []( char c ) { return c == '\n'; } );
 
-    std::string dc_fqdn;
     for ( auto fqdn_str : list_of_dc_names )
     {
-        fqdn_str.pop_back(); // Remove trailing .
-        if ( !fqdn_str.empty() && fqdn_str.compare( domain_name ) != 0 )
+        if ( fqdn_str.length() == 0 )
         {
-            dc_fqdn = fqdn_str;
-            break;
+            return std::make_pair( EXIT_FAILURE, "" );
+        }
+        fqdn_str.pop_back(); // Remove trailing .
+
+        /**
+         * We can ignore DNS resolution like ip-10-0-0-162.us-west-1.compute.internal
+         * since it does not have a domain such as "contoso.com"
+         */
+        if ( !fqdn_str.empty() && ( fqdn_str.find( domain_name ) != std::string::npos ) )
+        {
+            return std::make_pair( EXIT_SUCCESS, fqdn_str );
         }
     }
 
-    return std::make_pair( ips.first, dc_fqdn );
+    return std::make_pair( EXIT_FAILURE, "" );
 }
 
 /**
@@ -241,18 +263,33 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     std::vector<std::string> results;
 
     boost::split( results, domain_name, []( char c ) { return c == '.'; } );
-    std::string domain;
+    std::string base_dn; /* Distinguished name */
     for ( auto& result : results )
     {
-        domain += "DC=" + result + ",";
+        base_dn += "DC=" + result + ",";
     }
-    domain.pop_back(); // Remove last comma
+    base_dn.pop_back(); // Remove last comma
 
-    std::pair<int, std::string> fqdn = get_fqdn_from_domain_name( domain_name );
-    if ( fqdn.first != 0 )
+    std::pair<int, std::vector<std::string>> domain_ips = get_domain_ips( domain_name );
+    if ( domain_ips.first != 0 )
     {
-        cf_logger.logger( LOG_ERR, "ERROR: %s:%d cannot get fqdn of %s", __func__, __LINE__,
+        cf_logger.logger( LOG_ERR, "ERROR: Cannot resolve domain IPs of %s", __func__, __LINE__,
                           domain_name );
+        return std::make_pair( -1, std::string( "" ) );
+    }
+
+    std::string fqdn;
+    for ( auto domain_ip : domain_ips.second )
+    {
+        auto fqdn_result = get_fqdn_from_domain_ip( domain_ip, domain_name );
+        if ( fqdn_result.first == 0 )
+        {
+            fqdn = fqdn_result.second;
+            break;
+        }
+    }
+    if ( fqdn.empty() )
+    {
         return std::make_pair( -1, std::string( "" ) );
     }
 
@@ -261,9 +298,9 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
      *   Accounts,DC=contoso,DC=com' -s sub  "(objectClass=msDs-GroupManagedServiceAccount)"
      *   msDS-ManagedPassword
      */
-    std::string cmd = std::string( "ldapsearch -H ldap://" ) + fqdn.second;
+    std::string cmd = std::string( "ldapsearch -H ldap://" ) + fqdn;
     cmd += std::string( " -b 'CN=" ) + gmsa_account_name +
-           std::string( ",CN=Managed Service Accounts," ) + domain + std::string( "'" ) +
+           std::string( ",CN=Managed Service Accounts," ) + base_dn + std::string( "'" ) +
            std::string( " -s sub  \"(objectClass=msDs-GroupManagedServiceAccount)\" "
                         " msDS-ManagedPassword" );
 
@@ -471,8 +508,8 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
             std::string krb_cc_name = file->d_name;
             if ( !krb_cc_name.empty() && krb_cc_name.find( "ccname" ) != std::string::npos )
             {
-                std::string cmd = "export KRB5CCNAME=" + krb_tickets_path + "/" + krb_cc_name +
-                                  " && kdestroy";
+                std::string cmd =
+                    "export KRB5CCNAME=" + krb_tickets_path + "/" + krb_cc_name + " && kdestroy";
 
                 std::pair<int, std::string> krb_ticket_destroy_result = exec_shell_cmd( cmd );
                 if ( krb_ticket_destroy_result.first == 0 )
