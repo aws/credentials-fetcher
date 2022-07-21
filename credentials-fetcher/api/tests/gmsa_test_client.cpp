@@ -55,7 +55,7 @@ class CredentialsFetcherClient
         {
             for ( int i = 0; i < response.created_kerberos_file_paths_size(); i++ )
             {
-                std::cout << "created ticket file paths" + response.created_kerberos_file_paths( i )
+                std::cout << "created ticket file " + response.created_kerberos_file_paths( i )
                           << std::endl;
             }
             return response.lease_id();
@@ -90,7 +90,7 @@ class CredentialsFetcherClient
         {
             for ( int i = 0; i < response.deleted_kerberos_file_paths_size(); i++ )
             {
-                std::cout << "deleted ticket file paths" + response.deleted_kerberos_file_paths( i )
+                std::cout << "deleted ticket file " + response.deleted_kerberos_file_paths( i )
                           << std::endl;
             }
             return response.lease_id();

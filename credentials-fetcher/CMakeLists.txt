@@ -24,8 +24,8 @@ set(api)
 add_subdirectory(api)
 set(auth)
 add_subdirectory(auth)
-set(cache)
-add_subdirectory(cache)
+set(meta_data)
+add_subdirectory(meta_data)
 set(timer)
 add_subdirectory(timer)
 set(logger)
@@ -34,9 +34,9 @@ set(daemon)
 add_subdirectory(daemon)
 
 if (EXISTS ${FEDORA_FOUND})
-    set(sources ${auth} ${daemon} ${config} ${cache} ${timer} ${logger})
+    set(sources ${auth} ${daemon} ${config} ${meta_data} ${timer} ${logger})
 else ()
-    set(sources ${auth} ${daemon} ${config} ${cache} ${timer} ${logger} ${api})
+    set(sources ${auth} ${daemon} ${config} ${meta_data} ${timer} ${logger} ${api})
 endif ()
 
 add_library(cf-sources SHARED "${sources}" common)
@@ -62,7 +62,7 @@ target_include_directories(credentials-fetcherd PUBLIC common)
 
 
 target_link_libraries(credentials-fetcherd
-        PUBLIC systemd boost_program_options krb5 sqlite3 cf-sources glib-2.0)
+        PUBLIC systemd boost_program_options krb5 cf-sources glib-2.0 boost_filesystem boost_system)
 
 if (EXISTS ${FEDORA_FOUND})
     target_link_libraries(credentials-fetcherd

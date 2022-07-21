@@ -114,7 +114,6 @@ class CredentialsFetcherImpl final
                     creds_fetcher::krb_ticket_info* krb_ticket_info =
                         new creds_fetcher::krb_ticket_info;
 
-                    krb_ticket_info->lease_id = lease_id;
                     int parse_result = parse_cred_spec( create_krb_request_.credspec_contents( i ),
                                                         krb_ticket_info );
 
@@ -139,9 +138,9 @@ class CredentialsFetcherImpl final
                     }
 
                     boost::filesystem::create_directories( krb_ticket->krb_file_path );
-                    std::string krb_ccname = krb_ticket->krb_file_path + "/" +
+                    std::string krb_ccname = krb_ticket->krb_file_path + "/ccname_" +
                                              krb_ticket->service_account_name +
-                                             std::string( "_ccname_XXXXXX" );
+                                             std::string( "_XXXXXX" );
                     char krb_ccname_str[PATH_MAX];
                     strncpy( krb_ccname_str, krb_ccname.c_str(), PATH_MAX );
                     status = mkstemp( krb_ccname_str ); // XXXXXX as per mkstemp man page
@@ -171,6 +170,9 @@ class CredentialsFetcherImpl final
                     }
                     create_krb_reply_.add_created_kerberos_file_paths( krb_ticket->krb_file_path );
                 }
+                 //write the ticket information to meta data file
+                write_meta_data_json(krb_ticket_info_list, lease_id, krb_files_dir );
+
                 create_krb_reply_.set_lease_id( lease_id );
 
                 // And we are done! Let the gRPC runtime know we've finished, using the

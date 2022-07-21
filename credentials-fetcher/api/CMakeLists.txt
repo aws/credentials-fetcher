@@ -36,6 +36,7 @@ if (EXISTS ${FEDORA_FOUND})
             ${credentialsfetcher_grpc_sources}
             ${credentialsfetcher_grpc_headers}
             ${CMAKE_CURRENT_SOURCE_DIR}/../auth/kerberos/src/krb.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../meta_data/src/meta_data.cpp
             )
 
     target_include_directories(cf-gmsa-service
