@@ -11,6 +11,8 @@ struct thread_info
     char* argv_string;   /* From command-line argument */
 };
 
+static const char* grpc_thread_name = "grpc_thread";
+
 #define handle_error_en( en, msg )                                                                 \
     do                                                                                             \
     {                                                                                              \
@@ -32,7 +34,6 @@ struct thread_info
 void* grpc_thread_start( void* arg )
 {
     struct thread_info* tinfo = (struct thread_info*)arg;
-    tinfo->argv_string = (char*)arg;
 
     printf( "Thread %d: top of stack near %p; argv_string=%s\n", tinfo->thread_num, (void*)&tinfo,
             tinfo->argv_string );
@@ -52,7 +53,6 @@ void* grpc_thread_start( void* arg )
 void* refresh_krb_tickets_thread_start( void* arg )
 {
     struct thread_info* tinfo = (struct thread_info*)arg;
-    tinfo->argv_string = (char*)arg;
 
     printf( "Thread %d: top of stack near %p; argv_string=%s\n", tinfo->thread_num, (void*)&tinfo,
             tinfo->argv_string );
@@ -111,7 +111,7 @@ std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthrea
     }
     tinfo->argv_string = (char*)pthread_arg;
 
-    status = pthread_create( &tinfo->thread_id, &attr, func, &tinfo );
+    status = pthread_create( &tinfo->thread_id, &attr, func, tinfo );
     if ( status != 0 )
     {
         handle_error_en( status, "pthread_create" );
@@ -157,7 +157,8 @@ int main( int argc, const char* argv[] )
     // un-comment to run grpc server, ensure grpc is installed already
 
     /* Create one pthread for gRPC processing */
-    std::pair<int, void*> pthread_status = create_pthread( grpc_thread_start, "grpc_pthread", -1 );
+    std::pair<int, void*> pthread_status =
+        create_pthread( grpc_thread_start, grpc_thread_name, -1 );
     if ( pthread_status.first < 0 )
     {
         cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads", status );

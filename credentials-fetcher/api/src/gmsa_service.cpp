@@ -157,13 +157,12 @@ class CredentialsFetcherImpl final
 
                     std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
                         krb_ticket->domain_name, krb_ticket->service_account_name, krb_ccname_str,
-                        krb_files_dir, cf_logger );
+                        cf_logger );
                     if ( gmsa_ticket_result.first < 0 )
                     {
+                        std::cout << "ERROR: Cannot get gMSA krb ticket" << std::endl;
                         cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket", status );
-                    }
-                    else
-                    {
+	           } else {
                         cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
                                           gmsa_ticket_result.second );
                         std::cout << "gMSA ticket is at " << gmsa_ticket_result.second << std::endl;

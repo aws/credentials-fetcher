@@ -62,7 +62,7 @@ target_include_directories(credentials-fetcherd PUBLIC common)
 
 
 target_link_libraries(credentials-fetcherd
-        PUBLIC systemd boost_program_options krb5 cf-sources glib-2.0 boost_filesystem boost_system)
+        PUBLIC systemd boost_program_options krb5 cf-sources glib-2.0 boost_filesystem boost_system crypto)
 
 if (EXISTS ${FEDORA_FOUND})
     target_link_libraries(credentials-fetcherd
