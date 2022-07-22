@@ -112,7 +112,7 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
  * @param input_blob_buf_sz - size of buffer
  * @return - returns 0 if successful, -1 on error
  */
-static int fixup_utf16( uint8_t* input_blob_buf, int32_t input_blob_buf_sz )
+static int fixup_utf16( uint8_t* input_blob_buf, size_t input_blob_buf_sz )
 {
     if ( input_blob_buf == nullptr || input_blob_buf_sz == 0 )
     {
@@ -123,8 +123,8 @@ static int fixup_utf16( uint8_t* input_blob_buf, int32_t input_blob_buf_sz )
      * In UTF-16, characters in ranges U+0000—U+D7FF and U+E000—U+FFFD are
      * stored as a single 16 bits unit.
      */
-    auto codepoints = (uint16_t*)input_blob_buf;
-    for ( int i = 0; i < input_blob_buf_sz; i++ )
+    uint16_t *codepoints = (uint16_t*)input_blob_buf;
+    for ( size_t i = 0; i < (input_blob_buf_sz/sizeof(uint16_t)); i++ )
     {
         /**
          * U+D800 to U+DFFF As per, https://en.wikipedia.org/wiki/UTF-16, the
@@ -157,18 +157,24 @@ static uint8_t* base64_decode( const std::string& password, gsize* base64_decode
         return nullptr;
     }
 
+    *base64_decode_len = 0;
     guchar* result = g_base64_decode( password.c_str(), base64_decode_len );
-
-    void* secure_mem = OPENSSL_malloc( *base64_decode_len );
-    if ( result == nullptr || secure_mem == nullptr )
+    if ( result == nullptr || *base64_decode_len <= 0 )
     {
         return nullptr;
     }
 
-    memcpy( secure_mem, password.c_str(), *base64_decode_len );
+    void* secure_mem = OPENSSL_malloc( *base64_decode_len );
+    if ( secure_mem == nullptr )
+    {
+        g_free( result );
+        return nullptr;
+    }
+
+    memcpy( secure_mem, result, *base64_decode_len );
 
     memset( result, 0, *base64_decode_len );
-    free( result );
+    g_free( result );
 
     /**
      * secure_mem must be freed later
