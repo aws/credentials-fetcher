@@ -106,13 +106,46 @@ class CredentialsFetcherClient
     std::unique_ptr<credentialsfetcher::CredentialsFetcherService::Stub> _stub;
 };
 
+static void show_usage( std::string name )
+{
+    std::cout
+        << "Usage: " << name << " <option(s)> SOURCES"
+        << "Options:\n"
+        << "\t-h,--help\t\tShow this help message\n"
+        << "\t-no option\t\tcreate & delete kerberos tickets\n"
+        << "\t -create \t\tcreate krb tickets for service account\n"
+        << "\t -delete \t\tdelete krb tickets for a given lease_id\tprovide lease_id to be "
+           "deleted\n"
+        << "\t -invalidargs \t\ttest with invalid args, failure scenario\n"
+        << std::endl;
+}
+
+// create kerberos tickets
+std::string create_krb_ticket( CredentialsFetcherClient &client, std::list<std::string>
+    credspec_contents )
+{
+    std::string add_response_field_lease_id = client.AddKerberosLeaseMethod( credspec_contents );
+    std::cout << "Client received output for add kerberos lease: " << add_response_field_lease_id
+              << std::endl;
+    return add_response_field_lease_id;
+}
+
+// delete kerberos tickets
+std::string delete_krb_ticket( CredentialsFetcherClient &client, std::string lease_id )
+{
+    std::string delete_response_field_lease_id = client.DeleteKerberosLeaseMethod( lease_id );
+    std::cout << "Client received output for delete kerberos lease: "
+              << delete_response_field_lease_id << std::endl;
+    return delete_response_field_lease_id;
+}
+
 int main( int argc, char** argv )
 {
+    std::string lease_id;
     std::string server_address{ unix_socket_address };
     CredentialsFetcherClient client{
         grpc::CreateChannel( server_address, grpc::InsecureChannelCredentials() ) };
 
-    // create kerberos tickets
     std::list<std::string> credspec_contents = {
         "{\"CmsPlugins\":[\"ActiveDirectory\"],"
         "\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4217655605-3681839426-3493040985\","
@@ -126,15 +159,59 @@ int main( int argc, char** argv )
         "\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},"
         "\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"WebApp03\","
         "\"Scope\":\"contoso.com\"},{\"Name\":\"WebApp03\",\"Scope\":\"contoso\"}]}}" };
-    std::string add_response_field_lease_id = client.AddKerberosLeaseMethod( credspec_contents );
-    std::cout << "Client received output for add kerberos lease: " << add_response_field_lease_id
-              << std::endl;
 
-    // delete kerberos tickets
-    std::string lease_id = add_response_field_lease_id;
-    std::string delete_response_field_lease_id = client.DeleteKerberosLeaseMethod( lease_id );
-    std::cout << "Client received output for delete kerberos lease: "
-              << delete_response_field_lease_id << std::endl;
+    std::list<std::string> invalid_credspec_contents = {
+        "{\"CmsPlugins\":[\"ActiveDirectory\"],"
+        "\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4217655605-3681839426-3493040985\","
+        "\"MachineAccountName\":\"WebApp01\",\"Guid\":\"af602f85-d754-4eea-9fa8-fd76810485f1\","
+        "\"DnsTreeName\":\"contoso.com\",\"NetBiosName\":\"contoso\"}," };
 
+    // create and delete krb tickets
+    if ( argc == 1 )
+    {
+        lease_id = create_krb_ticket( client, credspec_contents );
+        delete_krb_ticket( client, lease_id );
+    }
+
+    for ( int i = 1; i < argc; ++i )
+    {
+        std::string arg = argv[i];
+        if ( ( arg == "-h" ) || ( arg == "--help" ) )
+        {
+            show_usage( argv[0] );
+            return 0;
+        }
+        else if ( arg == "-delete" )
+        {
+            if ( i + 1 < argc )
+            {
+                lease_id = argv[i + 1];
+            }
+            else
+            {
+                std::cout << "--delete option requires lease_id argument." << std::endl;
+                return 0;
+            }
+            std::cout << "krb tickets will get deleted for a given lease_id" << std::endl;
+            delete_krb_ticket( client, lease_id );
+            i++;
+        }
+        else if ( arg == "-create" )
+        {
+            std::cout << "krb tickets will get created" << std::endl;
+            create_krb_ticket( client, credspec_contents );
+        }
+        else if ( arg == "-invalidargs" )
+        {
+            std::cout << "test for invalid args" << std::endl;
+            create_krb_ticket( client, invalid_credspec_contents );
+        }
+        else
+        {
+            std::cout << "provide a valid arg, for help use -h or --help" << std::endl;
+            return 0;
+        }
+    }
     return 0;
 }
+

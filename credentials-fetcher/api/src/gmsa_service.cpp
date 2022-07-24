@@ -109,6 +109,8 @@ class CredentialsFetcherImpl final
                 std::string lease_id = generate_lease_id();
                 std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
 
+                std::string err_msg;
+                create_krb_reply_.set_lease_id( lease_id );
                 for ( int i = 0; i < create_krb_request_.credspec_contents_size(); i++ )
                 {
                     creds_fetcher::krb_ticket_info* krb_ticket_info =
@@ -124,61 +126,86 @@ class CredentialsFetcherImpl final
 
                         krb_ticket_info_list.push_back( krb_ticket_info );
                     }
+                    else
+                    {
+                        err_msg = "Error: credential spec provided is not properly formatted";
+                        break;
+                    }
                 }
-
-                // create the kerberos tickets for the service accounts
-                for ( auto krb_ticket : krb_ticket_info_list )
+                if ( err_msg.empty() )
                 {
-                    // invoke to get machine ticket
-                    int status = get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
-                    if ( status < 0 )
+                    // create the kerberos tickets for the service accounts
+                    for ( auto krb_ticket : krb_ticket_info_list )
                     {
-                        cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
-                                          status );
-                    }
+                        // invoke to get machine ticket
+                        int status = get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
+                        if ( status < 0 )
+                        {
+                            cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
+                                              status );
+                            err_msg = "ERROR: cannot get machine krb ticket";
+                            break;
+                        }
 
-                    boost::filesystem::create_directories( krb_ticket->krb_file_path );
-                    std::string krb_ccname = krb_ticket->krb_file_path + "/ccname_" +
-                                             krb_ticket->service_account_name +
-                                             std::string( "_XXXXXX" );
-                    char krb_ccname_str[PATH_MAX];
-                    strncpy( krb_ccname_str, krb_ccname.c_str(), PATH_MAX );
-                    status = mkstemp( krb_ccname_str ); // XXXXXX as per mkstemp man page
-                    krb_ticket->krb_file_path = krb_ccname_str;
+                        boost::filesystem::create_directories( krb_ticket->krb_file_path );
+                        std::string krb_ccname = krb_ticket->krb_file_path + "/ccname_" +
+                                                 krb_ticket->service_account_name +
+                                                 std::string( "_XXXXXX" );
+                        char krb_ccname_str[PATH_MAX];
+                        strncpy( krb_ccname_str, krb_ccname.c_str(), PATH_MAX );
+                        status = mkstemp( krb_ccname_str ); // XXXXXX as per mkstemp man page
+                        krb_ticket->krb_file_path = krb_ccname_str;
 
-                    if ( status < 0 )
-                    {
-                        cf_logger.logger( LOG_ERR,
-                                          "Error %d: Cannot make "
-                                          "temporary file",
-                                          status );
-                        // TBD:: Add error handling
-                    }
+                        if ( status < 0 )
+                        {
+                            cf_logger.logger( LOG_ERR,
+                                              "Error %d: Cannot make "
+                                              "temporary file",
+                                              status );
 
-                    std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
-                        krb_ticket->domain_name, krb_ticket->service_account_name, krb_ccname_str,
-                        cf_logger );
-                    if ( gmsa_ticket_result.first < 0 )
-                    {
-                        std::cout << "ERROR: Cannot get gMSA krb ticket" << std::endl;
-                        cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket", status );
-	           } else {
-                        cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
-                                          gmsa_ticket_result.second );
-                        std::cout << "gMSA ticket is at " << gmsa_ticket_result.second << std::endl;
+                            err_msg = "ERROR: cannot make the temporary file for kerberos ticket";
+                            break;
+                        }
+
+                        std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
+                            krb_ticket->domain_name, krb_ticket->service_account_name,
+                            krb_ccname_str, cf_logger );
+                        if ( gmsa_ticket_result.first != 0 )
+                        {
+                            err_msg = "ERROR: Cannot get gMSA krb ticket";
+                            std::cout << err_msg << std::endl;
+                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket",
+                                              status );
+                            break;
+                        }
+                        else
+                        {
+                            cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
+                                              gmsa_ticket_result.second );
+                            std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
+                                      << std::endl;
+                        }
+                        create_krb_reply_.add_created_kerberos_file_paths(
+                            krb_ticket->krb_file_path );
                     }
-                    create_krb_reply_.add_created_kerberos_file_paths( krb_ticket->krb_file_path );
                 }
-                 //write the ticket information to meta data file
-                write_meta_data_json(krb_ticket_info_list, lease_id, krb_files_dir );
-
-                create_krb_reply_.set_lease_id( lease_id );
-
                 // And we are done! Let the gRPC runtime know we've finished, using the
                 // memory address of this instance as the uniquely identifying tag for
                 // the event.
-                status_ = FINISH;
-                create_krb_responder_.Finish( create_krb_reply_, grpc::Status::OK, this );
+                if ( !err_msg.empty() )
+                {
+                    status_ = FINISH;
+                    create_krb_responder_.Finish(
+                        create_krb_reply_, grpc::Status( grpc::StatusCode::INTERNAL, err_msg ),
+                        this );
+                }
+                else
+                {
+                    // write the ticket information to meta data file
+                    write_meta_data_json( krb_ticket_info_list, lease_id, krb_files_dir );
+                    status_ = FINISH;
+                    create_krb_responder_.Finish( create_krb_reply_, grpc::Status::OK, this );
+                }
             }
             else
             {
@@ -318,6 +345,8 @@ class CredentialsFetcherImpl final
 
                 // The actual processing.
                 std::string lease_id = delete_krb_request_.lease_id();
+                std::string err_msg;
+
                 if ( !lease_id.empty() )
                 {
                     std::vector<std::string> deleted_krb_file_paths =
@@ -327,14 +356,28 @@ class CredentialsFetcherImpl final
                     {
                         delete_krb_reply_.add_deleted_kerberos_file_paths( deleted_krb_path );
                     }
+                    delete_krb_reply_.set_lease_id( lease_id );
                 }
-                delete_krb_reply_.set_lease_id( lease_id );
+                else
+                {
+                    err_msg = "Error: lease_id is not valid";
+                }
 
                 // And we are done! Let the gRPC runtime know we've finished, using the
                 // memory address of this instance as the uniquely identifying tag for
                 // the event.
-                status_ = FINISH;
-                delete_krb_responder_.Finish( delete_krb_reply_, grpc::Status::OK, this );
+                if ( !err_msg.empty() )
+                {
+                    status_ = FINISH;
+                    delete_krb_responder_.Finish(
+                        delete_krb_reply_,
+                        grpc::Status( grpc::StatusCode::INTERNAL, err_msg ), this );
+                }
+                else
+                {
+                    status_ = FINISH;
+                    delete_krb_responder_.Finish( delete_krb_reply_, grpc::Status::OK, this );
+                }
             }
             else
             {

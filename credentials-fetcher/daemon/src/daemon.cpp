@@ -58,7 +58,9 @@ void* refresh_krb_tickets_thread_start( void* arg )
             tinfo->argv_string );
 
 #if FEDORA_FOUND
-    // Add ticket refresh here
+    // ticket refresh
+    krb_ticket_renew_handler ( cf_daemon.krb_ticket_handle_interval, cf_daemon.krb_files_dir,
+                              cf_daemon.cf_logger );
 #endif
 
     return tinfo->argv_string;
@@ -135,6 +137,7 @@ int main( int argc, const char* argv[] )
     void* grpc_pthread;
     void* krb_refresh_pthread;
 
+    setenv("run_renewal", "1", 1);
     status = parse_options( argc, argv, cf_daemon );
     if ( status < 0 )
     {
@@ -198,11 +201,13 @@ int main( int argc, const char* argv[] )
         {
             fprintf( stderr, SD_NOTICE "watchdog enabled with interval value = %ld",
                      cf_daemon.watchdog_interval_usecs );
+            setenv("run_renewal", "1", 1);
         }
         else
         {
             fprintf( stderr, SD_ERR "ERROR Cannot setup watchdog, interval value = %ld",
                      cf_daemon.watchdog_interval_usecs );
+            setenv("run_renewal", "0", 1);
             /* TBD: Use exit code scheme as defined in the LSB recommendations for SysV init scripts
              */
             exit( EXIT_FAILURE );

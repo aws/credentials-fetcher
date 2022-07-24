@@ -24,7 +24,8 @@
  * This is a singleton class for the daemon, it is used
  * in method calls between the daemon and libraries.
  */
-namespace creds_fetcher {
+namespace creds_fetcher
+{
     /**
      * TBD: move the classes to the corresponding header files
      */
@@ -32,8 +33,9 @@ namespace creds_fetcher {
     /**
      * krb_ticket_info defines the information of the kerberos ticket created
      */
-    class krb_ticket_info {
-    public:
+    class krb_ticket_info
+    {
+      public:
         std::string krb_file_path;
         std::string service_account_name;
         std::string domain_name;
@@ -42,29 +44,33 @@ namespace creds_fetcher {
     /*
      * Log the info/error logs with journalctl
      */
-    class CF_logger {
+    class CF_logger
+    {
         /* TBD:: Fill this later */
 
-    public:
+      public:
         int log_level = LOG_NOTICE;
 
         /* systemd uses log levels from syslog */
-        void set_log_level(int _log_level) {
+        void set_log_level( int _log_level )
+        {
             log_level = _log_level;
         }
 
-        template<typename... Logs>
-        void logger(const int level, const char *fmt, Logs... logs) {
-            if (level >= log_level) {
-                sd_journal_print(level, fmt, logs...);
+        template <typename... Logs> void logger( const int level, const char* fmt, Logs... logs )
+        {
+            if ( level >= log_level )
+            {
+                sd_journal_print( level, fmt, logs... );
             }
         }
     };
 
-    class Daemon {
+    class Daemon
+    {
         /* TBD:: Fill this later */
 
-    public: /* Add get methods */
+      public: /* Add get methods */
         uint64_t watchdog_interval_usecs = 0;
         boost::program_options::variables_map vm;
         std::string config_file;
@@ -74,11 +80,13 @@ namespace creds_fetcher {
         std::string domain_name;
         std::string gmsa_account_name;
         CF_logger cf_logger;
+        //run ticket renewal every 10 minutes
         uint64_t krb_ticket_handle_interval = 10;
     };
 
     // https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/a9019740-3d73-46ef-a9ae-3ea8eb86ac2e
-    typedef struct blob_t_ {
+    typedef struct blob_t_
+    {
         uint16_t version;
         uint16_t reserved;
         uint32_t length;
@@ -100,59 +108,57 @@ namespace creds_fetcher {
 /**
  * Methods in auth module
  */
-int generate_host_machine_krb_ticket(const char *krb_ccname = "");
+int generate_host_machine_krb_ticket( const char* krb_ccname = "" );
 
-int get_machine_krb_ticket(std::string domain_name, creds_fetcher::CF_logger &cf_logger);
+int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger );
 
-std::pair<int, std::string> get_gmsa_krb_ticket(std::string domain_name,
-                                                const std::string &gmsa_account_name,
-                                                const std::string &krb_cc_name,
-                                                creds_fetcher::CF_logger &cf_logger);
+std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
+                                                 const std::string& gmsa_account_name,
+                                                 const std::string& krb_cc_name,
+                                                 creds_fetcher::CF_logger& cf_logger );
 
-void krb_ticket_renewal(std::string principal, const std::string &krb_ccname);
+void krb_ticket_renewal( std::string principal, const std::string& krb_ccname );
 
-void krb_ticket_creation(const char *ldap_uri_arg, const char *gmsa_account_name_arg,
-                         const char *krb_ccname = "");
+void krb_ticket_creation( const char* ldap_uri_arg, const char* gmsa_account_name_arg,
+                          const char* krb_ccname = "" );
 
-bool is_ticket_ready_for_renewal(const char *krb_ccname = "");
+bool is_ticket_ready_for_renewal( std::string krb_cc_name );
 
-std::vector <std::string> delete_krb_tickets(std::string krb_files_dir, std::string lease_id);
+std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::string lease_id );
 
-void ltrim(std::string &s);
+void ltrim( std::string& s );
 
-void rtrim(std::string &s);
+void rtrim( std::string& s );
 
 /**
  * Methods in config module
  */
-int parse_options(int argc, const char *argv[], creds_fetcher::Daemon &cf_daemon);
+int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemon );
 
-int parse_config_file(creds_fetcher::Daemon &cf_daemon);
+int parse_config_file( creds_fetcher::Daemon& cf_daemon );
 
 /**
  * Methods in api module
  */
-int RunGrpcServer(std::string unix_socket_path, std::string krb_file_path,
-                  creds_fetcher::CF_logger &cf_logger);
+int RunGrpcServer( std::string unix_socket_path, std::string krb_file_path,
+                   creds_fetcher::CF_logger& cf_logger );
 
-int parse_cred_spec(std::string credspec_data, creds_fetcher::krb_ticket_info *krb_ticket_info);
+int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info );
 
 std::string generate_lease_id();
 
 /**
- * Methods in timer module
+ * Methods in renewal module
  */
-void krb_ticket_handler(unsigned int interval, const char *ldap_uri_arg,
-                        const char *gmsa_account_name_arg, const char *krb_ccname = "");
+void krb_ticket_renew_handler ( unsigned int interval, std::string krb_files_dir,
+                         creds_fetcher::CF_logger& cf_logger );
 
 /**
- * Methods in cache module
+ * Methods in metadata module
  */
-std::vector<creds_fetcher::krb_ticket_info *> read_meta_data_json(std::string lease_id,
-                                                                  std::string krb_files_dir);
+std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path );
 
-int write_meta_data_json(std::list<creds_fetcher::krb_ticket_info *> krb_ticket_info_list,
-                         std::string lease_id,
-                         std::string krb_files_dir);
+int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list,
+                          std::string lease_id, std::string krb_files_dir );
 
 #endif // _daemon_h_

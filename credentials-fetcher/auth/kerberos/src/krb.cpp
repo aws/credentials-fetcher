@@ -409,9 +409,9 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
  * @return - is renewal needed - true or false
  */
 
-bool is_ticket_ready_for_renewal( const std::string& krb_cc_name )
+bool is_ticket_ready_for_renewal( std::string krb_cc_name )
 {
-    std::string cmd = "KRB5CCNAME=" + krb_cc_name + " &&  klist";
+    std::string cmd = "export KRB5CCNAME=" + krb_cc_name + " &&  klist";
     std::pair<int, std::string> krb_ticket_info_result = exec_shell_cmd( cmd );
     if ( krb_ticket_info_result.first != 0 )
     {
