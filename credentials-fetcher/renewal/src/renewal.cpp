@@ -3,9 +3,12 @@
 #include <chrono>
 #include <stdlib.h>
 
-void krb_ticket_renew_handler ( unsigned int interval, std::string krb_files_dir,
-                         creds_fetcher::CF_logger& cf_logger )
+void krb_ticket_renew_handler ( creds_fetcher::Daemon cf_daemon )
 {
+    std::string krb_files_dir = cf_daemon.krb_files_dir;
+    int interval = cf_daemon.krb_ticket_handle_interval;
+    creds_fetcher::CF_logger cf_logger = cf_daemon.cf_logger;
+
     // TBD: check cache to see if the ticket need re-creation or renewal
     // TBD: get multiple service accounts and loop through each of them to re-create/renew
     // tickets
@@ -18,14 +21,7 @@ void krb_ticket_renew_handler ( unsigned int interval, std::string krb_files_dir
         return;
     }
 
-    const char* run_renewal_env = getenv("run_renewal");
-    bool run_renewal;
-    if(run_renewal_env != nullptr)
-    {
-        std::istringstream(run_renewal_env) >> run_renewal;
-    }
-
-    while ( run_renewal )
+    while ( !cf_daemon.got_systemd_shutdown_signal )
     {
         try
         {

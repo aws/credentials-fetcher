@@ -82,6 +82,7 @@ namespace creds_fetcher
         CF_logger cf_logger;
         //run ticket renewal every 10 minutes
         uint64_t krb_ticket_handle_interval = 10;
+        volatile sig_atomic_t got_systemd_shutdown_signal;
     };
 
     // https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/a9019740-3d73-46ef-a9ae-3ea8eb86ac2e
@@ -141,7 +142,7 @@ int parse_config_file( creds_fetcher::Daemon& cf_daemon );
  * Methods in api module
  */
 int RunGrpcServer( std::string unix_socket_path, std::string krb_file_path,
-                   creds_fetcher::CF_logger& cf_logger );
+                   creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t *shutdown_signal );
 
 int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info );
 
@@ -150,8 +151,7 @@ std::string generate_lease_id();
 /**
  * Methods in renewal module
  */
-void krb_ticket_renew_handler ( unsigned int interval, std::string krb_files_dir,
-                         creds_fetcher::CF_logger& cf_logger );
+void krb_ticket_renew_handler ( creds_fetcher::Daemon cf_daemon );
 
 /**
  * Methods in metadata module

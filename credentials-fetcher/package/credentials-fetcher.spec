@@ -9,7 +9,7 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  cmake3 make
 
-Requires: bind-utils
+Requires: bind-utils openldap
 
 %description
 This daemon creates and refreshes kerberos tickets, these tickets can be
@@ -45,6 +45,8 @@ cd %{_builddir}/credentials-fetcher-0.0.1/daemon/ && ctest3
 %attr(0755, -, -) /usr/lib64/credentials-fetcher/libcf-sources.so
 
 %changelog
+* Mon Jul 25 2022 Samiullah Mohammed <samiull@amazon.com>
+- Add openldap as a requirement, also added crypto lib
 * Sat Jun 18 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.1
 - Refactor cmake for all the directories
 * Thu Jun 16 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1

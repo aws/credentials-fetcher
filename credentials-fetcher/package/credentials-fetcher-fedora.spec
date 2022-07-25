@@ -9,7 +9,7 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  cmake3 make chrpath
 
-Requires: bind-utils
+Requires: bind-utils openldap
 
 %description
 This daemon creates and refreshes kerberos tickets, these tickets can be

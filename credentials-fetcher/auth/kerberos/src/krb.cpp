@@ -2,11 +2,35 @@
 #include <boost/filesystem.hpp>
 #include <dirent.h>
 #include <openssl/crypto.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 // renew the ticket 1 hrs before the expiration
 #define RENEW_TICKET_HOURS 1
 #define SECONDS_IN_HOUR 3600
+
+/**
+ * Check if binary is writable other than root
+ * @param filename - must be owned and writable only by root
+ * @return - true or false
+ */
+bool check_file_permissions( std::string filename )
+{
+    struct stat st;
+
+    if ( lstat( filename.c_str(), &st ) == -1 )
+    {
+        return false;
+    }
+
+    // S_IWOTH - Write permission bit for other users. Usually 02.
+    if ( ( st.st_uid != 0 ) || ( st.st_gid != 0 ) || ( st.st_mode & S_IWOTH ) )
+    {
+        return false;
+    }
+
+    return true;
+}
 
 /**
  * Execute a shell command such as "ls /tmp/"
@@ -90,6 +114,34 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
 {
     std::pair<int, std::string> result;
 
+    std::pair<int, std::string> cmd = exec_shell_cmd( "which hostname" );
+    rtrim( cmd.second );
+    if ( !check_file_permissions( cmd.second ) )
+    {
+        return -1;
+    }
+
+    cmd = exec_shell_cmd( "which realm" );
+    rtrim( cmd.second );
+    if ( !check_file_permissions( cmd.second ) )
+    {
+        return -1;
+    }
+
+    cmd = exec_shell_cmd( "which kinit" );
+    rtrim( cmd.second );
+    if ( !check_file_permissions( cmd.second ) )
+    {
+        return -1;
+    }
+
+    cmd = exec_shell_cmd( "which ldapsearch" );
+    rtrim( cmd.second );
+    if ( !check_file_permissions( cmd.second ) )
+    {
+        return -1;
+    }
+
     result = get_machine_principal( std::move( domain_name ) );
     if ( result.first != 0 )
     {
@@ -123,8 +175,8 @@ static int fixup_utf16( uint8_t* input_blob_buf, size_t input_blob_buf_sz )
      * In UTF-16, characters in ranges U+0000—U+D7FF and U+E000—U+FFFD are
      * stored as a single 16 bits unit.
      */
-    uint16_t *codepoints = (uint16_t*)input_blob_buf;
-    for ( size_t i = 0; i < (input_blob_buf_sz/sizeof(uint16_t)); i++ )
+    uint16_t* codepoints = (uint16_t*)input_blob_buf;
+    for ( size_t i = 0; i < ( input_blob_buf_sz / sizeof( uint16_t ) ); i++ )
     {
         /**
          * U+D800 to U+DFFF As per, https://en.wikipedia.org/wiki/UTF-16, the

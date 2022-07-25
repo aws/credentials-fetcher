@@ -11,6 +11,8 @@
 #define LEASE_ID_LENGTH 10
 #define UNIX_SOCKET_NAME "credentials_fetcher.sock"
 
+volatile sig_atomic_t* pthread_shutdown_signal = nullptr;
+
 /**
  * gRPC code derived from
  * https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
@@ -370,8 +372,8 @@ class CredentialsFetcherImpl final
                 {
                     status_ = FINISH;
                     delete_krb_responder_.Finish(
-                        delete_krb_reply_,
-                        grpc::Status( grpc::StatusCode::INTERNAL, err_msg ), this );
+                        delete_krb_reply_, grpc::Status( grpc::StatusCode::INTERNAL, err_msg ),
+                        this );
                 }
                 else
                 {
@@ -474,7 +476,7 @@ class CredentialsFetcherImpl final
         new CallDataCreateKerberosLease( &service_, cq_.get() );
         new CallDataDeleteKerberosLease( &service_, cq_.get() );
 
-        while ( true ) // TBD:: add shutdown flag
+        while ( pthread_shutdown_signal != nullptr && !( *pthread_shutdown_signal ) )
         {
             // Spawn a new CallData instance to serve new clients.
             // Block waiting to read the next event from the completion queue. The
@@ -501,12 +503,15 @@ class CredentialsFetcherImpl final
  * RunGrpcServer - Runs the grpc initializes and runs the grpc server
  * @param unix_socket_path - path for the unix socket creation
  * @param cf_logger - log to systemd daemon
+ * @param shutdown_signal - sigterm from systemd
  * @return - return 0 when server exits
  */
 int RunGrpcServer( std::string unix_socket_path, std::string krb_files_dir,
-                   creds_fetcher::CF_logger& cf_logger )
+                   creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t* shutdown_signal )
 {
     CredentialsFetcherImpl creds_fetcher_grpc;
+
+    pthread_shutdown_signal = shutdown_signal;
 
     creds_fetcher_grpc.RunServer( unix_socket_path, krb_files_dir, cf_logger );
 

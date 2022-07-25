@@ -13,6 +13,11 @@ struct thread_info
 
 static const char* grpc_thread_name = "grpc_thread";
 
+static void systemd_shutdown_signal_catcher( int signo )
+{
+    cf_daemon.got_systemd_shutdown_signal = 1;
+}
+
 #define handle_error_en( en, msg )                                                                 \
     do                                                                                             \
     {                                                                                              \
@@ -39,7 +44,8 @@ void* grpc_thread_start( void* arg )
             tinfo->argv_string );
 
 #if FEDORA_FOUND
-    RunGrpcServer( cf_daemon.unix_socket_path, cf_daemon.krb_files_dir, cf_daemon.cf_logger );
+    RunGrpcServer( cf_daemon.unix_socket_path, cf_daemon.krb_files_dir, cf_daemon.cf_logger,
+                   &cf_daemon.got_systemd_shutdown_signal );
 #endif
 
     return tinfo->argv_string;
@@ -59,8 +65,7 @@ void* refresh_krb_tickets_thread_start( void* arg )
 
 #if FEDORA_FOUND
     // ticket refresh
-    krb_ticket_renew_handler ( cf_daemon.krb_ticket_handle_interval, cf_daemon.krb_files_dir,
-                              cf_daemon.cf_logger );
+    krb_ticket_renew_handler( cf_daemon );
 #endif
 
     return tinfo->argv_string;
@@ -137,7 +142,17 @@ int main( int argc, const char* argv[] )
     void* grpc_pthread;
     void* krb_refresh_pthread;
 
-    setenv("run_renewal", "1", 1);
+    cf_daemon.got_systemd_shutdown_signal  = 0;
+
+    struct sigaction sa;
+    memset( &sa, 0, sizeof( struct sigaction ) );
+    sa.sa_handler = &systemd_shutdown_signal_catcher;
+    if ( sigaction( SIGTERM, &sa, NULL ) == -1 )
+    {
+        perror( "sigaction" );
+        return EXIT_FAILURE;
+    }
+
     status = parse_options( argc, argv, cf_daemon );
     if ( status < 0 )
     {
@@ -201,13 +216,11 @@ int main( int argc, const char* argv[] )
         {
             fprintf( stderr, SD_NOTICE "watchdog enabled with interval value = %ld",
                      cf_daemon.watchdog_interval_usecs );
-            setenv("run_renewal", "1", 1);
         }
         else
         {
             fprintf( stderr, SD_ERR "ERROR Cannot setup watchdog, interval value = %ld",
                      cf_daemon.watchdog_interval_usecs );
-            setenv("run_renewal", "0", 1);
             /* TBD: Use exit code scheme as defined in the LSB recommendations for SysV init scripts
              */
             exit( EXIT_FAILURE );
@@ -217,7 +230,7 @@ int main( int argc, const char* argv[] )
     /* Tells the service manager that service startup is finished */
     sd_notify( 0, "READY=1" );
     int i = 0;
-    while ( true )
+    while ( !cf_daemon.got_systemd_shutdown_signal )
     {
         usleep( cf_daemon.watchdog_interval_usecs / 2 ); /* TBD: Replace this later */
         /* Tells the service manager to update the watchdog timestamp */
