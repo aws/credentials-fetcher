@@ -9,6 +9,8 @@
 #define RENEW_TICKET_HOURS 1
 #define SECONDS_IN_HOUR 3600
 
+static const std::string install_path_for_decode_exe = "/usr/lib64/credentials-fetcher/decode.exe";
+
 /**
  * Check if binary is writable other than root
  * @param filename - must be owned and writable only by root
@@ -142,6 +144,11 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
         return -1;
     }
 
+    if ( !check_file_permissions( install_path_for_decode_exe ) )
+    {
+        return -1;
+    }
+
     result = get_machine_principal( std::move( domain_name ) );
     if ( result.first != 0 )
     {
@@ -156,44 +163,6 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
     result = exec_shell_cmd( kinit_cmd );
 
     return result.first;
-}
-
-/**
- * Replace certain characters that do not have mappings in UTF-16
- * @param input_blob_buf - Buffer from ldap query
- * @param input_blob_buf_sz - size of buffer
- * @return - returns 0 if successful, -1 on error
- */
-static int fixup_utf16( uint8_t* input_blob_buf, size_t input_blob_buf_sz )
-{
-    if ( input_blob_buf == nullptr || input_blob_buf_sz == 0 )
-    {
-        return -1;
-    }
-
-    /**
-     * In UTF-16, characters in ranges U+0000—U+D7FF and U+E000—U+FFFD are
-     * stored as a single 16 bits unit.
-     */
-    uint16_t* codepoints = (uint16_t*)input_blob_buf;
-    for ( size_t i = 0; i < ( input_blob_buf_sz / sizeof( uint16_t ) ); i++ )
-    {
-        /**
-         * U+D800 to U+DFFF As per, https://en.wikipedia.org/wiki/UTF-16, the
-         * Unicode standard permanently reserves these code point values for
-         * UTF-16 encoding of the high and low surrogates, and they will never be
-         * assigned a character, so there should be no reason to encode them. The
-         * official Unicode standard says that no UTF forms, including UTF-16,
-         * can encode these code points.
-         * For example: (0xdef0 -> 0xfffd) (0xde6f -> 0xfffd)
-         *              (0xd82d -> 0xfffd) (0xda34 -> 0xfffd)
-         **/
-        if ( ( codepoints[i] & 0xf800 ) == 0xd800 )
-        {
-            codepoints[i] = 0xfffd;
-        }
-    }
-    return 0;
 }
 
 /**
@@ -415,24 +384,16 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
 
     creds_fetcher::blob_t* blob = ( (creds_fetcher::blob_t*)blob_base64_decoded );
 
-    if ( fixup_utf16( blob->buf, BLOB_REMAINING_BUF_SIZE ) < 0 )
-    {
-        std::cout << "ERROR: utf16 decode failed" << std::endl;
-        cf_logger.logger( LOG_ERR, "ERROR: %s:%d utf16 decode failed", __func__, __LINE__ );
-        OPENSSL_cleanse( blob_base64_decoded, base64_decode_len );
-        OPENSSL_free( blob_base64_decoded );
-        return std::make_pair( -1, std::string( "" ) );
-    }
-
-    auto* blob_password = (uint8_t*)blob->buf;
+    auto* blob_password = (uint8_t*)blob->current_password;
 
     std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
                     []( unsigned char c ) { return std::toupper( c ); } );
     std::string default_principal = "'" + gmsa_account_name + "$'" + "@" + domain_name;
 
-    /* Pipe password to iconv and kinit */
-    std::string kinit_cmd = std::string( "iconv -f utf16 -t utf8 | kinit " ) +
-                            std::string( " -c " ) + krb_cc_name + " -V " + default_principal;
+    /* Pipe password to the utf16 decoder and kinit */
+    std::string kinit_cmd = std::string( "mono " ) + std::string( install_path_for_decode_exe ) +
+                            std::string( " | kinit " ) + std::string( " -c " ) + krb_cc_name +
+                            " -V " + default_principal;
     std::cout << kinit_cmd << std::endl;
     FILE* fp = popen( kinit_cmd.c_str(), "w" );
     if ( fp == nullptr )

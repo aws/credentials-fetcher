@@ -97,7 +97,7 @@ namespace creds_fetcher
         uint16_t unchanged_password_interval_offset;
 #define BLOB_REMAINING_BUF_SIZE 1024 /* TBD:: Fix this, remaining buf size is variable */
 #define GMSA_PASSWORD_SIZE 256       /* TBD: Get from parsed blob */
-        uint8_t buf[1024];
+        uint8_t current_password[1024];
         /* TBD:: Add remaining fields here */
     } blob_t;
 

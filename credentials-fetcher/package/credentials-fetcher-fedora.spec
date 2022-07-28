@@ -9,7 +9,7 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  cmake3 make chrpath
 
-Requires: bind-utils openldap
+Requires: bind-utils openldap mono-core
 
 %description
 This daemon creates and refreshes kerberos tickets, these tickets can be
@@ -52,8 +52,11 @@ cd %{_builddir}/credentials-fetcher-0.0.1/daemon/ && ctest3
 %{_sysconfdir}/credentials-fetcher/.ignore
 %attr(0755, -, -) /usr/lib64/credentials-fetcher/libcf-sources.so
 %attr(0755, -, -) /usr/lib64/credentials-fetcher/libcf-gmsa-service.so
+%attr(0755, -, -) /usr/lib64/credentials-fetcher/decode.exe
 
 %changelog
+* Thu Jul 28 2022 Samiullah Mohammed <samiull@amazon.com>
+- Add mono-based utf16 decoder
 * Tue Jul 12 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Resolve rpath for Fedora and change macros
 * Sat Jun 18 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.1

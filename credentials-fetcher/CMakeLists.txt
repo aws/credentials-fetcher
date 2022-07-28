@@ -46,6 +46,12 @@ target_include_directories(cf-sources
         /usr/lib/x86_64-linux-gnu/glib-2.0/include
         /usr/lib64/glib-2.0/include)
 
+add_custom_command(
+    TARGET cf-sources
+    PRE_LINK
+    COMMAND bash -c  "pwd && mcs ${CMAKE_SOURCE_DIR}/auth/kerberos/src/decode.cs -out:decode.exe"
+    VERBATIM)
+
 add_executable(credentials-fetcherd ${sources})
 
 if (EXISTS ${FEDORA_FOUND})
@@ -85,14 +91,18 @@ install(FILES ${CMAKE_BINARY_DIR}/.ignore DESTINATION "/var/log/credentials-fetc
 install(FILES ${CMAKE_BINARY_DIR}/.ignore DESTINATION "/usr/share/credentials-fetcher/")
 install(FILES ${CMAKE_BINARY_DIR}/libcf-sources.so
         DESTINATION "/usr/lib64/credentials-fetcher/"
-        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
-        GROUP_EXECUTE GROUP_READ)
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
+install(FILES ${CMAKE_BINARY_DIR}/decode.exe
+        DESTINATION "/usr/lib64/credentials-fetcher/"
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
 
 if (EXISTS ${FEDORA_FOUND})
     install(FILES ${CMAKE_BINARY_DIR}/api/libcf-gmsa-service.so
             DESTINATION "/usr/lib64/credentials-fetcher/"
-            PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
-            GROUP_EXECUTE GROUP_READ)
+            PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
+    install(FILES ${CMAKE_BINARY_DIR}/decode.exe
+            DESTINATION "/usr/lib64/credentials-fetcher/"
+            PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
 endif ()
 
 file(WRITE "${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file" "LD_LIBRARY_PATH=/usr/lib64/credentials-fetcher:$LD_LIBRARY_PATH")
