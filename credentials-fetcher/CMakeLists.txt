@@ -108,3 +108,9 @@ endif ()
 file(WRITE "${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file" "LD_LIBRARY_PATH=/usr/lib64/credentials-fetcher:$LD_LIBRARY_PATH")
 install(FILES ${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file DESTINATION "/etc/credentials-fetcher")
 
+enable_testing()
+
+add_test(NAME check_help COMMAND ${CMAKE_BINARY_DIR}/credentials-fetcherd "--help")
+add_test(NAME run_self_test COMMAND ${CMAKE_BINARY_DIR}/credentials-fetcherd "--self_test")
+set_tests_properties(check_help PROPERTIES WILL_FAIL TRUE)
+set_tests_properties(run_self_test PROPERTIES WILL_FAIL FALSE)

@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 # set the project name
 project(api-tests)
 
-enable_testing()
+#enable_testing()
 
 if (EXISTS ${FEDORA_FOUND})
     add_executable(gmsa_test_client "gmsa_test_client.cpp")
@@ -22,4 +22,3 @@ if (EXISTS ${FEDORA_FOUND})
     endif ()
 
 endif ()
-

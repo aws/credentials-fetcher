@@ -1,6 +1,18 @@
+%global major_version 0
+%global minor_version 0
+%global patch_version 90
+
+# Set to RC version if building RC, else %%{nil}
+%global rcsuf rc2
+%{?rcsuf:%global relsuf .%{rcsuf}}
+%{?rcsuf:%global versuf -%{rcsuf}}
+
+# For handling bump release by rpmdev-bumpspec and mass rebuild
+%global baserelease 0.2
+
 Name:           credentials-fetcher
-Version:        0.0.1
-Release:        1%{?dist}
+Version:        %{major_version}.%{minor_version}.%{patch_version}
+Release:        %{baserelease}%{?relsuf}%{?dist}
 Summary:        credentials-fetcher is a daemon that refreshes tickets or tokens periodically
 
 License:        Apache 2.0
@@ -29,7 +41,7 @@ The same method can be used to refresh other types of security tokens.
 
 %check
 # TBD: Run tests from top-level directory
-cd %{_builddir}/credentials-fetcher-0.0.1/daemon/ && ctest3
+ctest3
 
 %files
 %{_sbindir}/credentials-fetcherd
@@ -46,6 +58,8 @@ cd %{_builddir}/credentials-fetcher-0.0.1/daemon/ && ctest3
 %attr(0755, -, -) /usr/lib64/credentials-fetcher/decode.exe
 
 %changelog
+* Sat Jul 30 2022 Samiullah Mohammed <samiull@amazon.com>
+- add ctests and bump revision to 0.0.90 - 0.0.90
 * Thu Jul 28 2022 Samiullah Mohammed <samiull@amazon.com>
 - Add mono-based utf16 decoder
 * Mon Jul 25 2022 Samiullah Mohammed <samiull@amazon.com>

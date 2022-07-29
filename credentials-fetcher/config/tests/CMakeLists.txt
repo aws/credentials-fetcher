@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 # set the project name
 project(config-tests)
 
-enable_testing()
+#enable_testing()
 
 # does the application run
 #add_test(NAME Runs COMMAND configuration 25)

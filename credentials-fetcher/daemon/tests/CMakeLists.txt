@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 # set the project name
 project(credentials-fetcherd-tests)
 
-enable_testing()
+#enable_testing()
 
 # does the application run
 #add_test(NAME Runs COMMAND credentials-fetcherd 25)
@@ -15,12 +15,12 @@ enable_testing()
 #  )
 
 # define a function to simplify adding tests
-function(do_test target arg result)
-  add_test(NAME Comp${arg} COMMAND ${target} ${arg})
-  set_tests_properties(Comp${arg}
-    PROPERTIES PASS_REGULAR_EXPRESSION ${result}
-    )
-endfunction()
+#function(do_test target arg result)
+#  add_test(NAME Comp${arg} COMMAND ${target} ${arg})
+#  set_tests_properties(Comp${arg}
+#    PROPERTIES PASS_REGULAR_EXPRESSION ${result}
+#    )
+#endfunction()
 
 # do a bunch of result based tests
 #do_test(credentials-fetcherd 4 "4 is 2")

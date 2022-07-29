@@ -72,14 +72,14 @@ namespace creds_fetcher
 
       public: /* Add get methods */
         uint64_t watchdog_interval_usecs = 0;
-        boost::program_options::variables_map vm;
-        std::string config_file;
+        char *config_file = NULL;
         std::string krb_files_dir;
         std::string unix_socket_path;
         std::string logging_dir;
         std::string domain_name;
         std::string gmsa_account_name;
         CF_logger cf_logger;
+        bool run_diagnostic = false;
         //run ticket renewal every 10 minutes
         uint64_t krb_ticket_handle_interval = 10;
         volatile sig_atomic_t got_systemd_shutdown_signal;
@@ -130,6 +130,8 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
 void ltrim( std::string& s );
 
 void rtrim( std::string& s );
+
+int test_utf16_decode();
 
 /**
  * Methods in config module

@@ -142,9 +142,24 @@ int main( int argc, const char* argv[] )
     void* grpc_pthread;
     void* krb_refresh_pthread;
 
-    cf_daemon.got_systemd_shutdown_signal  = 0;
+    for (int i = 1; i < argc; i++) {
+        if (argv[i] != nullptr && argv[i][0] != '-') {
+            std::cout << "Run with --help to see options" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+    }
+    status = parse_options( argc, argv, cf_daemon );
+    if ( status != EXIT_SUCCESS )
+    {
+        exit( EXIT_FAILURE );
+    }
+
+    if (cf_daemon.run_diagnostic) {
+        exit(test_utf16_decode());
+    }
 
     struct sigaction sa;
+    cf_daemon.got_systemd_shutdown_signal  = 0;
     memset( &sa, 0, sizeof( struct sigaction ) );
     sa.sa_handler = &systemd_shutdown_signal_catcher;
     if ( sigaction( SIGTERM, &sa, NULL ) == -1 )
@@ -152,15 +167,6 @@ int main( int argc, const char* argv[] )
         perror( "sigaction" );
         return EXIT_FAILURE;
     }
-
-    status = parse_options( argc, argv, cf_daemon );
-    if ( status < 0 )
-    {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot get parse command line options",
-                                    status );
-        exit( EXIT_FAILURE );
-    }
-
     status = parse_config_file( cf_daemon );
     if ( status < 0 )
     {
@@ -168,11 +174,10 @@ int main( int argc, const char* argv[] )
         exit( EXIT_FAILURE );
     }
 
-    /* TBD: we need to run three parallel processes */
+    /* We need to run three parallel processes */
     // 1. Systemd - daemon
     // 2. grpc server
     // 3. timer to run every 45 min
-    // un-comment to run grpc server, ensure grpc is installed already
 
     /* Create one pthread for gRPC processing */
     std::pair<int, void*> pthread_status =
