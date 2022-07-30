@@ -1,8 +1,17 @@
+#include <chrono>
 #include <credentialsfetcher.grpc.pb.h>
+#include <ctime>
+#include <errno.h>
+#include <exception>
+#include <fstream>
 #include <grpc++/grpc++.h>
 #include <iostream>
 #include <list>
+#include <random>
+#include <stdlib.h>
 #include <string>
+#include <unistd.h>
+#include <vector>
 
 #define unix_socket_address "unix:/usr/share/credentials-fetcher/socket/credentials_fetcher.sock"
 
@@ -33,10 +42,13 @@ class CredentialsFetcherClient
      * @return
      */
 
-    std::string AddKerberosLeaseMethod( std::list<std::string> credspec_contents )
+    std::pair<std::string, std::list<std::string>> AddKerberosLeaseMethod(
+        std::list<std::string> credspec_contents )
     {
         // Prepare request
+        std::list<std::string> krb_ticket_paths;
         credentialsfetcher::CreateKerberosLeaseRequest request;
+        std::pair<std::string, std::list<std::string>> result;
         for ( std::list<std::string>::const_iterator i = credspec_contents.begin();
               i != credspec_contents.end(); ++i )
         {
@@ -55,15 +67,21 @@ class CredentialsFetcherClient
         {
             for ( int i = 0; i < response.created_kerberos_file_paths_size(); i++ )
             {
-                std::cout << "created ticket file " + response.created_kerberos_file_paths( i )
-                          << std::endl;
+                std::string msg =
+                    "created ticket file " + response.created_kerberos_file_paths( i );
+                krb_ticket_paths.push_back( msg );
+                std::cout << msg << std::endl;
             }
-            return response.lease_id();
+            result = std::pair<std::string, std::list<std::string>>( response.lease_id(),
+                                                                     krb_ticket_paths );
+            return result;
         }
         else
         {
             std::cerr << status.error_code() << ": " << status.error_message() << std::endl;
-            return "RPC failed";
+            result =
+                std::pair<std::string, std::list<std::string>>( "RPC failed", krb_ticket_paths );
+            return result;
         }
     }
 
@@ -72,8 +90,10 @@ class CredentialsFetcherClient
      * @param credspec_contents - lease_id corresponding to the tickets created
      * @return
      */
-    std::string DeleteKerberosLeaseMethod( std::string lease_id )
+    std::pair<std::string, std::list<std::string>> DeleteKerberosLeaseMethod( std::string lease_id )
     {
+        std::pair<std::string, std::list<std::string>> result;
+        std::list<std::string> krb_ticket_paths;
         // Prepare request
         credentialsfetcher::DeleteKerberosLeaseRequest request;
         request.set_lease_id( lease_id );
@@ -90,15 +110,21 @@ class CredentialsFetcherClient
         {
             for ( int i = 0; i < response.deleted_kerberos_file_paths_size(); i++ )
             {
-                std::cout << "deleted ticket file " + response.deleted_kerberos_file_paths( i )
-                          << std::endl;
+                std::string msg =
+                    "deleted ticket file " + response.deleted_kerberos_file_paths( i );
+                krb_ticket_paths.push_back( msg );
+                std::cout << msg << std::endl;
             }
-            return response.lease_id();
+            result = std::pair<std::string, std::list<std::string>>( response.lease_id(),
+                                                                     krb_ticket_paths );
+            return result;
         }
         else
         {
             std::cerr << status.error_code() << ": " << status.error_message() << std::endl;
-            return "RPC failed";
+            result =
+                std::pair<std::string, std::list<std::string>>( "RPC failed", krb_ticket_paths );
+            return result;
         }
     }
 
@@ -108,40 +134,132 @@ class CredentialsFetcherClient
 
 static void show_usage( std::string name )
 {
-    std::cout
-        << "Usage: " << name << " <option(s)> SOURCES"
-        << "Options:\n"
-        << "\t-h,--help\t\tShow this help message\n"
-        << "\t-no option\t\tcreate & delete kerberos tickets\n"
-        << "\t -create \t\tcreate krb tickets for service account\n"
-        << "\t -delete \t\tdelete krb tickets for a given lease_id\tprovide lease_id to be "
-           "deleted\n"
-        << "\t -invalidargs \t\ttest with invalid args, failure scenario\n"
-        << std::endl;
+    std::cout << "Usage: " << name << " <option(s)> SOURCES"
+              << "Options:\n"
+              << "\t-h,--help\t\tShow this help message\n"
+              << "\t-no option\t\tcreate & delete kerberos tickets\n"
+              << "\t --create \t\tcreate krb tickets for service account\n"
+              << "\t --delete \t\tdelete krb tickets for a given lease_id\tprovide lease_id to be "
+                 "deleted\n"
+              << "\t --invalidargs \t\ttest with invalid args, failure scenario\n"
+              << "\t --run_stress_test \t\tstress test with multiple accounts and leases\n"
+              << std::endl;
 }
 
 // create kerberos tickets
-std::string create_krb_ticket( CredentialsFetcherClient &client, std::list<std::string>
-    credspec_contents )
+std::pair<std::string, std::list<std::string>> create_krb_ticket(
+    CredentialsFetcherClient& client, std::list<std::string> credspec_contents )
 {
-    std::string add_response_field_lease_id = client.AddKerberosLeaseMethod( credspec_contents );
-    std::cout << "Client received output for add kerberos lease: " << add_response_field_lease_id
-              << std::endl;
-    return add_response_field_lease_id;
+    std::pair<std::string, std::list<std::string>> add_kerberos_lease_response =
+        client.AddKerberosLeaseMethod( credspec_contents );
+    std::cout << "Client received output for add kerberos lease: "
+              << add_kerberos_lease_response.first << std::endl;
+    return add_kerberos_lease_response;
 }
 
 // delete kerberos tickets
-std::string delete_krb_ticket( CredentialsFetcherClient &client, std::string lease_id )
+std::pair<std::string, std::list<std::string>> delete_krb_ticket( CredentialsFetcherClient& client,
+                                                                  std::string lease_id )
 {
-    std::string delete_response_field_lease_id = client.DeleteKerberosLeaseMethod( lease_id );
+    std::pair<std::string, std::list<std::string>> delete_kerberos_lease_response =
+        client.DeleteKerberosLeaseMethod( lease_id );
     std::cout << "Client received output for delete kerberos lease: "
-              << delete_response_field_lease_id << std::endl;
-    return delete_response_field_lease_id;
+              << delete_kerberos_lease_response.first << std::endl;
+    return delete_kerberos_lease_response;
+}
+
+int run_stress_test( CredentialsFetcherClient& client, int num_of_leases,
+                     int number_of_service_acounts )
+{
+    // log stress test metric
+    std::ofstream logfile;
+    logfile.open( "stress_test_log.txt" );
+    try
+    {
+        auto start = std::chrono::system_clock::now();
+        std::time_t start_time = std::chrono::system_clock::to_time_t( start );
+
+        logfile << "Start time: ";
+        logfile << std::ctime( &start_time );
+        logfile << "\n";
+
+        std::ifstream file( "credspec_stress_test.txt" );
+        if ( !file )
+        {
+            std::cerr << "ERROR: Cannot open 'credspec_stress_test.txt' !" << std::endl;
+            return -1;
+        }
+        std::string line;
+        std::vector<std::string> all_cred_specs;
+        while ( std::getline( file, line ) )
+        {
+            all_cred_specs.push_back( line );
+        }
+
+        int num_of_credspecs = all_cred_specs.size();
+        int num_of_service_accounts_in_lease = number_of_service_acounts;
+
+        // build subsets of credspecs to make gRPC calls
+        for ( int lease = 0; lease < num_of_leases; lease++ )
+        {
+            std::random_device rd;    // obtain a random number from hardware
+            std::mt19937 gen( rd() ); // seed the generator
+            std::uniform_int_distribution<> distr( 0, num_of_credspecs - 1 ); // define the range
+
+            std::list<std::string> sub_set_credspecs;
+            for ( int ns = 0; ns < num_of_service_accounts_in_lease; ns++ )
+            {
+                int index = distr( gen );
+                sub_set_credspecs.push_back( all_cred_specs[index] );
+            }
+            std::pair<std::string, std::list<std::string>> add_kerberos_lease_response =
+                create_krb_ticket( client, sub_set_credspecs );
+
+            logfile << "create krb ticket with lease id: " + add_kerberos_lease_response.first +
+                           "\n";
+            for ( auto create_krb_path : add_kerberos_lease_response.second )
+            {
+                logfile << create_krb_path + "\n";
+            }
+
+            std::pair<std::string, std::list<std::string>> delete_kerberos_lease_response =
+                delete_krb_ticket( client, add_kerberos_lease_response.first );
+
+            for ( auto delete_krb_path : delete_kerberos_lease_response.second )
+            {
+                logfile << delete_krb_path + "\n";
+            }
+
+            logfile << "deleted krb tickets associated with lease id: " +
+                           delete_kerberos_lease_response.first + "\n";
+            logfile << "\n";
+            sleep( 1 );
+        }
+
+        auto end = std::chrono::system_clock::now();
+        std::chrono::duration<double> elapsed_seconds = end - start;
+        std::time_t end_time = std::chrono::system_clock::to_time_t( end );
+        logfile << "End time: ";
+        logfile << std::ctime( &end_time );
+        logfile << "\n";
+        logfile << "time elapsed: " + std::to_string( elapsed_seconds.count() );
+        logfile.close();
+    }
+    catch ( const std::exception& ex )
+    {
+        std::cerr << "Exception: '" << ex.what() << "'!" << std::endl;
+        logfile.close();
+        return -1;
+    }
+
+    return 0;
 }
 
 int main( int argc, char** argv )
 {
     std::string lease_id;
+    int number_of_leases;
+    int number_of_service_acounts;
     std::string server_address{ unix_socket_address };
     CredentialsFetcherClient client{
         grpc::CreateChannel( server_address, grpc::InsecureChannelCredentials() ) };
@@ -169,8 +287,9 @@ int main( int argc, char** argv )
     // create and delete krb tickets
     if ( argc == 1 )
     {
-        lease_id = create_krb_ticket( client, credspec_contents );
-        delete_krb_ticket( client, lease_id );
+        std::pair<std::string, std::list<std::string>> add_kerberos_lease_response =
+            create_krb_ticket( client, credspec_contents );
+        delete_krb_ticket( client, add_kerberos_lease_response.first );
     }
 
     for ( int i = 1; i < argc; ++i )
@@ -181,7 +300,7 @@ int main( int argc, char** argv )
             show_usage( argv[0] );
             return 0;
         }
-        else if ( arg == "-delete" )
+        else if ( arg == "--delete" )
         {
             if ( i + 1 < argc )
             {
@@ -196,15 +315,32 @@ int main( int argc, char** argv )
             delete_krb_ticket( client, lease_id );
             i++;
         }
-        else if ( arg == "-create" )
+        else if ( arg == "--create" )
         {
             std::cout << "krb tickets will get created" << std::endl;
             create_krb_ticket( client, credspec_contents );
         }
-        else if ( arg == "-invalidargs" )
+        else if ( arg == "--invalidargs" )
         {
             std::cout << "test for invalid args" << std::endl;
             create_krb_ticket( client, invalid_credspec_contents );
+        }
+        else if ( arg == "--run_stress_test" )
+        {
+            if ( i + 2 < argc )
+            {
+                number_of_leases = atoi( argv[i + 1] );
+                number_of_service_acounts = atoi( argv[i + 2] );
+            }
+            else
+            {
+                std::cout << "--run_stress_testing option requires number_of_leases and "
+                             "number_of_service_account per lease arguments. "
+                          << std::endl;
+                return 0;
+            }
+            run_stress_test( client, number_of_leases, number_of_service_acounts );
+            i = 1 + 2;
         }
         else
         {
@@ -214,4 +350,3 @@ int main( int argc, char** argv )
     }
     return 0;
 }
-
