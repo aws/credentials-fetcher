@@ -155,18 +155,22 @@ class CredentialsFetcherImpl final
                                                  std::string( "_XXXXXX" );
                         char krb_ccname_str[PATH_MAX];
                         strncpy( krb_ccname_str, krb_ccname.c_str(), PATH_MAX );
-                        status = mkstemp( krb_ccname_str ); // XXXXXX as per mkstemp man page
+                        int fd = mkstemp( krb_ccname_str ); // XXXXXX as per mkstemp man page
                         krb_ticket->krb_file_path = krb_ccname_str;
 
-                        if ( status < 0 )
+                        if ( fd < 0 )
                         {
                             cf_logger.logger( LOG_ERR,
                                               "Error %d: Cannot make "
                                               "temporary file",
-                                              status );
+                                              errno );
 
                             err_msg = "ERROR: cannot make the temporary file for kerberos ticket";
                             break;
+                        }
+                        else
+                        {
+                            close( fd );
                         }
 
                         std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(

@@ -3,7 +3,7 @@
 #include <chrono>
 #include <stdlib.h>
 
-void krb_ticket_renew_handler ( creds_fetcher::Daemon cf_daemon )
+void krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
 {
     std::string krb_files_dir = cf_daemon.krb_files_dir;
     int interval = cf_daemon.krb_ticket_handle_interval;
@@ -14,10 +14,9 @@ void krb_ticket_renew_handler ( creds_fetcher::Daemon cf_daemon )
     // tickets
 
     // TBD:: *** This must exit during shutdown or during errors ***
-    if(krb_files_dir.empty())
+    if ( krb_files_dir.empty() )
     {
-        fprintf(stderr, SD_CRIT
-                 "directory path for kerberos tickets is not provided" );
+        fprintf( stderr, SD_CRIT "directory path for kerberos tickets is not provided" );
         return;
     }
 
@@ -57,44 +56,48 @@ void krb_ticket_renew_handler ( creds_fetcher::Daemon cf_daemon )
                 // renewal
                 for ( auto krb_ticket : krb_ticket_info_list )
                 {
+                    std::pair<int, std::string> gmsa_ticket_result;
                     std::string krb_cc_name = krb_ticket->krb_file_path;
                     // check if the ticket is ready for renewal
-                    if(is_ticket_ready_for_renewal(krb_cc_name))
+                    if ( is_ticket_ready_for_renewal( krb_cc_name ) )
                     {
-                        // invoke to get machine ticket
-                        int status = get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
-                        if ( status < 0 )
+                        int num_retries = 1;
+                        for ( int i = 0; i <= num_retries; i++ )
                         {
-                            cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
-                                              status );
-                        }
-
-                        std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
-                            krb_ticket->domain_name, krb_ticket->service_account_name,
-                            krb_cc_name, cf_logger );
-                        if ( gmsa_ticket_result.first != 0 )
-                        {
-                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket",
-                                              status );
-                        }
-                        else
-                        {
-                            cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
-                                              gmsa_ticket_result.second );
-                            std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
-                                      << std::endl;
+                            gmsa_ticket_result = get_gmsa_krb_ticket(
+                                krb_ticket->domain_name, krb_ticket->service_account_name,
+                                krb_cc_name, cf_logger );
+                            if ( gmsa_ticket_result.first != 0 )
+                            {
+                                cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket");
+                                int status =
+                                    get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
+                                if ( status < 0 )
+                                {
+                                    cf_logger.logger( LOG_ERR,
+                                                      "Error %d: Cannot get machine krb ticket",
+                                                      status );
+                                }
+                                else
+                                {
+                                    break;
+                                }
+                            }
                         }
                     }
+                    else
+                    {
+                        cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
+                                          gmsa_ticket_result.second );
+                        std::cout << "gMSA ticket is at " << gmsa_ticket_result.second << std::endl;
+                    }
                 }
-            }
-        }
-        catch (...)
-        {
-            fprintf(stderr, SD_CRIT
-                     "failed to run the ticket renewal" );
-            break;
         }
     }
+    catch ( ... )
+    {
+        fprintf( stderr, SD_CRIT "failed to run the ticket renewal" );
+        break;
+    }
 }
-
-
+}
