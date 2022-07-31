@@ -142,12 +142,6 @@ int main( int argc, const char* argv[] )
     void* grpc_pthread;
     void* krb_refresh_pthread;
 
-    for (int i = 1; i < argc; i++) {
-        if (argv[i] != nullptr && argv[i][0] != '-') {
-            std::cout << "Run with --help to see options" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
     status = parse_options( argc, argv, cf_daemon );
     if ( status != EXIT_SUCCESS )
     {

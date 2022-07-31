@@ -45,11 +45,12 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
             return EXIT_FAILURE;
         }
 
-        cf_daemon.config_file = (char *)DEFAULT_CONFIG_FILE_LOCATION;
+        cf_daemon.config_file = (char*)DEFAULT_CONFIG_FILE_LOCATION;
         if ( vm.count( "config_file" ) )
         {
             std::string value = vm["config_file"].as<std::string>();
-            cf_daemon.config_file = (char *)value.c_str();
+            cf_daemon.config_file = new char[value.length() + 1];
+            std::copy( value.begin(), value.end(), cf_daemon.config_file );
         }
         std::cout << "config file set to " << cf_daemon.config_file << std::endl;
 
