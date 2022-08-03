@@ -39,8 +39,9 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
             krb_ticket_info_list.push_back( krb_ticket_info );
         }
     }
-    catch ( ... )
+    catch ( const std::exception& ex  )
     {
+        std::cout << "Exception: '" << ex.what() << "'!" << std::endl;
         fprintf( stderr, SD_CRIT "meta data file is not properly formatted" );
         return krb_ticket_info_list;
     }
@@ -96,8 +97,9 @@ int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_
         root.add_child( "krb_ticket_info", krb_ticket_info_parent );
         boost::property_tree::write_json( file_path, root );
     }
-    catch ( ... )
+    catch (  const std::exception& ex )
     {
+        std::cout << "Exception: '" << ex.what() << "'!" << std::endl;
         fprintf( stderr, SD_CRIT "failed to write meta data file" );
         return -1;
     }

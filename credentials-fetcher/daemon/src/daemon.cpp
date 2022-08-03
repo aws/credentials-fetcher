@@ -148,12 +148,15 @@ int main( int argc, const char* argv[] )
         exit( EXIT_FAILURE );
     }
 
-    if (cf_daemon.run_diagnostic) {
-        exit(test_utf16_decode());
+    if ( cf_daemon.run_diagnostic )
+    {
+        exit( test_utf16_decode() || config_parse_test() || read_meta_data_json_test() ||
+              read_meta_data_json_test() || renewal_failure_krb_dir_not_found_test() ||
+              write_meta_data_json_test() );
     }
 
     struct sigaction sa;
-    cf_daemon.got_systemd_shutdown_signal  = 0;
+    cf_daemon.got_systemd_shutdown_signal = 0;
     memset( &sa, 0, sizeof( struct sigaction ) );
     sa.sa_handler = &systemd_shutdown_signal_catcher;
     if ( sigaction( SIGTERM, &sa, NULL ) == -1 )

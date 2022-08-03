@@ -3,21 +3,16 @@
 #include <chrono>
 #include <stdlib.h>
 
-void krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
+int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
 {
     std::string krb_files_dir = cf_daemon.krb_files_dir;
     int interval = cf_daemon.krb_ticket_handle_interval;
     creds_fetcher::CF_logger cf_logger = cf_daemon.cf_logger;
 
-    // TBD: check cache to see if the ticket need re-creation or renewal
-    // TBD: get multiple service accounts and loop through each of them to re-create/renew
-    // tickets
-
-    // TBD:: *** This must exit during shutdown or during errors ***
     if ( krb_files_dir.empty() )
     {
         fprintf( stderr, SD_CRIT "directory path for kerberos tickets is not provided" );
-        return;
+        return -1;
     }
 
     while ( !cf_daemon.got_systemd_shutdown_signal )
@@ -69,7 +64,7 @@ void krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                                 krb_cc_name, cf_logger );
                             if ( gmsa_ticket_result.first != 0 )
                             {
-                                cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket");
+                                cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket" );
                                 int status =
                                     get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
                                 if ( status < 0 )
@@ -87,17 +82,21 @@ void krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                     }
                     else
                     {
-                        cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
-                                          gmsa_ticket_result.second );
-                        std::cout << "gMSA ticket is at " << gmsa_ticket_result.second << std::endl;
+                        cf_logger.logger( LOG_INFO, "gMSA ticket is at %s", krb_cc_name );
+                        std::cout << "gMSA ticket is at " + krb_cc_name +
+                                         " is not yet ready for "
+                                         "renewal"
+                                  << std::endl;
                     }
                 }
+            }
+        }
+        catch ( const std::exception& ex  )
+        {
+            std::cout << "Exception: '" << ex.what() << "'!" << std::endl;
+            fprintf( stderr, SD_CRIT "failed to run the ticket renewal" );
+            break;
         }
     }
-    catch ( ... )
-    {
-        fprintf( stderr, SD_CRIT "failed to run the ticket renewal" );
-        break;
-    }
-}
+    return -1;
 }

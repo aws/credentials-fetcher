@@ -7,4 +7,3 @@ FILE(GLOB SRC_FILES src/*.cpp)
 set(daemon "${SRC_FILES}" PARENT_SCOPE)
 
 enable_testing()
-add_subdirectory (tests)

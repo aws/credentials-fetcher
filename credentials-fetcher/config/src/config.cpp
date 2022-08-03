@@ -89,25 +89,34 @@ int parse_config_file( creds_fetcher::Daemon& cf_daemon )
         fprintf( stderr, SD_CRIT "config file is empty" );
         return -1;
     }
+    try
+    {
+        namespace pt = boost::property_tree;
+        pt::ptree root;
+        pt::read_json( config_file, root );
 
-    namespace pt = boost::property_tree;
-    pt::ptree root;
-    pt::read_json( config_file, root );
+        cf_daemon.krb_files_dir = root.get<std::string>( "krb_files_dir" );
+        cf_daemon.logging_dir = root.get<std::string>( "logging_dir" );
+        cf_daemon.unix_socket_path = root.get<std::string>( "unix_socket_path" );
 
-    cf_daemon.krb_files_dir = root.get<std::string>( "krb_files_dir" );
-    cf_daemon.logging_dir = root.get<std::string>( "logging_dir" );
-    cf_daemon.unix_socket_path = root.get<std::string>( "unix_socket_path" );
-
-    /**
+        /**
      * Domain name and gmsa account are usually set in APIs.
      * The options below can be used as a test.
-     */
-    cf_daemon.domain_name = root.get<std::string>( "domain_name" );
-    cf_daemon.gmsa_account_name = root.get<std::string>( "gmsa_account_name" );
+         */
+        cf_daemon.domain_name = root.get<std::string>( "domain_name" );
+        cf_daemon.gmsa_account_name = root.get<std::string>( "gmsa_account_name" );
 
-    std::cout << "krb_files_dir = " << cf_daemon.krb_files_dir << std::endl;
-    std::cout << "logging_dir = " << cf_daemon.logging_dir << std::endl;
-    std::cout << "unix_socket_path = " << cf_daemon.unix_socket_path << std::endl;
+        std::cout << "krb_files_dir = " << cf_daemon.krb_files_dir << std::endl;
+        std::cout << "logging_dir = " << cf_daemon.logging_dir << std::endl;
+        std::cout << "unix_socket_path = " << cf_daemon.unix_socket_path << std::endl;
+    }
+    catch ( ... )
+    {
+        std::cout << "config file parsing failed. check if the file exists at path " +
+                         config_file <<
+            std::endl;
+        return -1;
+    }
 
     return 0;
 }

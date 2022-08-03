@@ -72,7 +72,7 @@ namespace creds_fetcher
 
       public: /* Add get methods */
         uint64_t watchdog_interval_usecs = 0;
-        char *config_file = NULL;
+        char* config_file = NULL;
         std::string krb_files_dir;
         std::string unix_socket_path;
         std::string logging_dir;
@@ -80,7 +80,7 @@ namespace creds_fetcher
         std::string gmsa_account_name;
         CF_logger cf_logger;
         bool run_diagnostic = false;
-        //run ticket renewal every 10 minutes
+        // run ticket renewal every 10 minutes
         uint64_t krb_ticket_handle_interval = 10;
         volatile sig_atomic_t got_systemd_shutdown_signal;
     };
@@ -131,7 +131,12 @@ void ltrim( std::string& s );
 
 void rtrim( std::string& s );
 
+// unit tests
 int test_utf16_decode();
+int config_parse_test();
+int read_meta_data_json_test();
+int write_meta_data_json_test();
+int renewal_failure_krb_dir_not_found_test();
 
 /**
  * Methods in config module
@@ -144,7 +149,7 @@ int parse_config_file( creds_fetcher::Daemon& cf_daemon );
  * Methods in api module
  */
 int RunGrpcServer( std::string unix_socket_path, std::string krb_file_path,
-                   creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t *shutdown_signal );
+                   creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t* shutdown_signal );
 
 int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info );
 
@@ -153,7 +158,7 @@ std::string generate_lease_id();
 /**
  * Methods in renewal module
  */
-void krb_ticket_renew_handler ( creds_fetcher::Daemon cf_daemon );
+int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon );
 
 /**
  * Methods in metadata module

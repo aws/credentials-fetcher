@@ -28,18 +28,16 @@ set(metadata)
 add_subdirectory(metadata)
 set(renewal)
 add_subdirectory(renewal)
-set(logger)
-add_subdirectory(logger)
 set(daemon)
 add_subdirectory(daemon)
 
 if (EXISTS ${FEDORA_FOUND})
-    set(sources ${auth} ${daemon} ${config} ${metadata} ${renewal} ${logger})
+    set(sources ${auth} ${daemon} ${config} ${metadata} ${renewal} )
 else ()
-    set(sources ${auth} ${daemon} ${config} ${metadata} ${renewal} ${logger} ${api})
+    set(sources ${auth} ${daemon} ${config} ${metadata} ${renewal} ${api})
 endif ()
 
-add_library(cf-sources SHARED "${sources}" common)
+add_library(cf-sources SHARED "${sources}" common )
 target_include_directories(cf-sources
         PUBLIC
         common /usr/include/glib-2.0
