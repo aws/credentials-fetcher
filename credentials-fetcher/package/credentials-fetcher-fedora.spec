@@ -1,6 +1,6 @@
 %global major_version 0
 %global minor_version 0
-%global patch_version 90
+%global patch_version 91
 
 # Set to RC version if building RC, else %%{nil}
 %global rcsuf rc2
@@ -45,31 +45,32 @@ This spec file is specific to Fedora, use this file to rpmbuild on Fedora.
 %cmake_install
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_removing_rpath
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_rpath_for_internal_libraries
-chrpath -r /usr/lib64/credentials-fetcher %{buildroot}/usr/sbin/credentials-fetcherd
+chrpath --delete %{buildroot}/opt/credentials-fetcher/bin/credentials-fetcherd
 
 %check
 # TBD: Run tests from top-level directory
 ctest3
 
 %files
-%{_sbindir}/credentials-fetcherd
+/opt/credentials-fetcher/bin/credentials-fetcherd
+# https://tldp.org/LDP/Linux-Filesystem-Hierarchy/html/opt.html
 %{_sysconfdir}/systemd/system/credentials-fetcher.service
 %license LICENSE
-%config /etc/credentials-fetcher/config.json
-%{_sysconfdir}/credentials-fetcher/env-file
+%config /etc/opt/credentials-fetcher/config.json
+%config /etc/opt/credentials-fetcher/env-file
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
 %doc CONTRIBUTING.md NOTICE README.md
-%{_localstatedir}/log/credentials-fetcher/.ignore
-%{_datadir}/credentials-fetcher/.ignore
-%{_sysconfdir}/credentials-fetcher/.ignore
-%attr(0755, -, -) /usr/lib64/credentials-fetcher/libcf-sources.so
-%attr(0755, -, -) /usr/lib64/credentials-fetcher/libcf-gmsa-service.so
-%attr(0755, -, -) /usr/lib64/credentials-fetcher/decode.exe
+# https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch03s13.html
+%attr(0700, -, -) /opt/credentials-fetcher/lib/libcf_private.so
+%attr(0700, -, -) /opt/credentials-fetcher/lib/libcf_gmsa_service_private.so
+%attr(0700, -, -) /opt/credentials-fetcher/bin/credentials_fetcher_utf16_private.exe
 
 %changelog
-* Sat Jul 30 2022 Samiullah Mohammed <samiull@amazon.com>
-- add ctests and bump revision to 0.0.90  - 0.0.90
-* Thu Jul 28 2022 Samiullah Mohammed <samiull@amazon.com>
+* Sun Aug 7 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.91
+- Relocate binary, library files and change permissions
+* Sat Jul 30 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.90
+- add ctests and bump revision to 0.0.90
+* Thu Jul 28 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Add mono-based utf16 decoder
 * Tue Jul 12 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Resolve rpath for Fedora and change macros

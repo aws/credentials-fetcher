@@ -13,7 +13,7 @@
 #include <unistd.h>
 #include <vector>
 
-#define unix_socket_address "unix:/usr/share/credentials-fetcher/socket/credentials_fetcher.sock"
+#define unix_socket_address "unix:/var/opt/credentials-fetcher/socket/credentials_fetcher.sock"
 
 /**
  * Testing client to validate grpc communication with server

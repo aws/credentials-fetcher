@@ -29,7 +29,7 @@ if (EXISTS ${FEDORA_FOUND})
     list(APPEND SRC_FILES ${credentialsfetcher_grpc_sources})
     list(APPEND SRC_FILES ${credentialsfetcher_grpc_headers})
 
-    add_library(cf-gmsa-service SHARED
+    add_library(cf_gmsa_service_private SHARED
             ${SRC_FILES}
             ${credentialsfetcher_proto_sources}
             ${credentialsfetcher_proto_headers}
@@ -39,14 +39,14 @@ if (EXISTS ${FEDORA_FOUND})
             ${CMAKE_CURRENT_SOURCE_DIR}/../metadata/src/metadata.cpp
             )
 
-    target_include_directories(cf-gmsa-service
+    target_include_directories(cf_gmsa_service_private
             PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../common
             /usr/include/glib-2.0
             /usr/lib/x86_64-linux-gnu/glib-2.0/include
             /usr/lib64/glib-2.0/include)
 
-    target_compile_definitions(cf-gmsa-service PRIVATE FEDORA_FOUND)
-    target_link_libraries(cf-gmsa-service
+    target_compile_definitions(cf_gmsa_service_private PRIVATE FEDORA_FOUND)
+    target_link_libraries(cf_gmsa_service_private
             ${_PROTOBUF_LIBPROTOBUF}
             ${_REFLECTION}
             ${_GRPC_GRPCPP}

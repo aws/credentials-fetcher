@@ -103,7 +103,8 @@ namespace creds_fetcher
 
 } // namespace creds_fetcher
 
-#define DEFAULT_CONFIG_FILE_LOCATION "/etc/credentials-fetcher/config.json"
+// TBD: Pick up from config.json
+#define DEFAULT_CONFIG_FILE_LOCATION "/etc/opt/credentials-fetcher/config.json"
 
 /* TBD: Move to class and methods */
 /**

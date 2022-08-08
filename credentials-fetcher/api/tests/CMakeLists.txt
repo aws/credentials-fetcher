@@ -15,7 +15,7 @@ file(
 if (EXISTS ${FEDORA_FOUND})
     add_executable(gmsa_test_client "gmsa_test_client.cpp")
     target_link_libraries(gmsa_test_client
-            cf-gmsa-service
+            cf_gmsa_service_private
             ${_PROTOBUF_LIBPROTOBUF}
             ${_REFLECTION}
             ${_GRPC_GRPCPP})

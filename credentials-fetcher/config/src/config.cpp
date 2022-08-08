@@ -19,7 +19,7 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         desc.add_options()( "help", "produce help message" ) /* TBD: Add help message description */
             ( "config_file", po::value<std::string>(),
                 "config file location (default is "
-                "/etc/credentials-fetcher/config.json ), "
+                "/opt/etc/credentials-fetcher/config.json ), "
                 "config.json (fill values as needed)"
                 "{\n"
                 "    \"krb_files_dir\": <root protected dir>\n"
