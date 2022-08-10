@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 project(credentials-fetcher)
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall -Werror -pthread")
+include(GNUInstallDirs)
 
-find_package(Threads)
+set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall -Werror -pthread")
 
 find_file(FEDORA_FOUND fedora-release PATHS /etc)
 
@@ -20,35 +20,55 @@ endif ()
 
 set(config)
 add_subdirectory(config)
-set(api)
-add_subdirectory(api)
-set(auth)
-add_subdirectory(auth)
-set(metadata)
-add_subdirectory(metadata)
-set(renewal)
-add_subdirectory(renewal)
+if (EXISTS ${FEDORA_FOUND})
+    set(api)
+    add_subdirectory(api)
+    set(renewal)
+    add_subdirectory(renewal)
+endif()
 set(daemon)
 add_subdirectory(daemon)
 
-if (EXISTS ${FEDORA_FOUND})
-    set(sources ${auth} ${daemon} ${config} ${metadata} ${renewal} )
-else ()
-    set(sources ${auth} ${daemon} ${config} ${metadata} ${renewal} ${api})
-endif ()
+if (NOT CF_KRB_DIR)
+    set(CF_KRB_DIR "/var/credentials-fetcher/krbdir")
+endif()
 
-add_library(cf_private SHARED "${sources}" common )
-target_include_directories(cf_private
-        PUBLIC
-        common /usr/include/glib-2.0
-        /usr/lib/x86_64-linux-gnu/glib-2.0/include
-        /usr/lib64/glib-2.0/include)
+if (NOT CF_UNIX_DOMAIN_SOCKET_DIR)
+    set(CF_UNIX_DOMAIN_SOCKET_DIR "/var/credentials-fetcher/socket")
+endif()
 
-add_custom_command(
-    TARGET cf_private
-    PRE_LINK
-    COMMAND bash -c  "pwd && mcs ${CMAKE_SOURCE_DIR}/auth/kerberos/src/decode.cs -out:credentials_fetcher_utf16_private.exe"
-    VERBATIM)
+if (NOT CF_LOGGING_DIR)
+    set(CF_LOGGING_DIR "/var/credentials-fetcher/logging")
+endif()
+
+if (NOT CF_TEST_DOMAIN_NAME)
+    set(CF_TEST_DOMAIN_NAME "contoso.com")
+endif()
+
+if (NOT CF_TEST_GMSA_ACCOUNT)
+    set(CF_TEST_GMSA_ACCOUNT "webapp01")
+endif()
+
+configure_file(${CMAKE_SOURCE_DIR}/config/config.h.in
+	${CMAKE_BINARY_DIR}/config.h @ONLY)
+
+file(WRITE scripts/systemd/credentials-fetcher.service
+  "[Unit]\n"
+  "Description=credentials-fetcher systemd service unit file.\n\n"
+  "[Service]\n"
+  "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+  "ExecStartPre=chmod 700 ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+  "ExecStart=/usr/sbin/credentials-fetcherd\n"
+  "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
+  "Type=notify\n"
+  "NotifyAccess=main\n"
+  "WatchdogSec=5s\n"
+  "Restart=on-failure\n\n"
+  "[Install]\n"
+  "WantedBy=multi-user.target\n"
+)
+
+set(sources ${auth} ${daemon} ${config} ${renewal})
 
 add_executable(credentials-fetcherd ${sources})
 
@@ -59,48 +79,58 @@ if (EXISTS ${FEDORA_FOUND})
     if (CMAKE_C_LINK_PIE_SUPPORTED)
         set_property(TARGET credentials-fetcherd
                 PROPERTY POSITION_INDEPENDENT_CODE TRUE)
+        set_property(TARGET cf_gmsa_service_private
+                PROPERTY POSITION_INDEPENDENT_CODE TRUE)
     endif ()
 endif ()
 
+find_path(GLIB_INCLUDE_DIR glib.h "/usr/include" "/usr/include/glib-2.0")
+find_path(GLIB_CONFIG_DIR glibconfig.h "/usr/include" "/usr/lib64/glib-2.0/include")
+
+target_include_directories(credentials-fetcherd
+        PUBLIC
+        common
+        ${GLIB_INCLUDE_DIR}
+        ${GLIB_CONFIG_DIR}
+	    ${CMAKE_CURRENT_BINARY_DIR})
+
+find_program(MONO_CSHARP_COMPILER mcs)
+if (NOT MONO_CSHARP_COMPILER)
+   message(FATAL_ERROR "Mono compiler mcs is not found")
+endif()
+
+add_custom_command(
+    TARGET credentials-fetcherd
+    PRE_LINK
+    COMMAND bash -c  "pwd && mcs ${CMAKE_SOURCE_DIR}/auth/kerberos/src/decode.cs -out:credentials_fetcher_utf16_private.exe"
+    VERBATIM)
+
 target_include_directories(credentials-fetcherd PUBLIC common)
 
-
+if (EXISTS ${FEDORA_FOUND})
 target_link_libraries(credentials-fetcherd
-        PUBLIC systemd boost_program_options krb5 cf_private glib-2.0 boost_filesystem boost_system crypto)
+        PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private boost_filesystem boost_system crypto)
+else()
+target_link_libraries(credentials-fetcherd
+        PUBLIC systemd boost_program_options krb5 glib-2.0 boost_filesystem boost_system crypto)
+endif()
+
 
 if (EXISTS ${FEDORA_FOUND})
     target_link_libraries(credentials-fetcherd
             PUBLIC
-            cf_gmsa_service_private
             ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
 endif ()
 
 install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
-        DESTINATION "/opt/credentials-fetcher/bin"
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-        )
+        DESTINATION "/usr/sbin/"
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+
 install(FILES ${CMAKE_SOURCE_DIR}/scripts/systemd/credentials-fetcher.service
         DESTINATION "/etc/systemd/system/")
-install(FILES ${CMAKE_SOURCE_DIR}/config/config.json
-        DESTINATION "/etc/opt/credentials-fetcher/")
-install(FILES ${CMAKE_BINARY_DIR}/libcf_private.so
-        DESTINATION "/opt/credentials-fetcher/lib/"
-        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
 install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.exe
-        DESTINATION "/opt/credentials-fetcher/bin/"
+        DESTINATION "/usr/sbin/"
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
-
-if (EXISTS ${FEDORA_FOUND})
-    install(FILES ${CMAKE_BINARY_DIR}/api/libcf_gmsa_service_private.so
-            DESTINATION "/opt/credentials-fetcher/lib/"
-            PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
-    install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.exe
-            DESTINATION "/opt/credentials-fetcher/bin"
-            PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
-endif ()
-
-file(WRITE "${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file" "LD_LIBRARY_PATH=/opt/credentials-fetcher/lib:$LD_LIBRARY_PATH")
-install(FILES ${CMAKE_BINARY_DIR}/etc/credentials-fetcher/env-file DESTINATION "/etc/opt/credentials-fetcher")
 
 enable_testing()
 

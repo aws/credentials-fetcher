@@ -1,6 +1,6 @@
 %global major_version 0
 %global minor_version 0
-%global patch_version 91
+%global patch_version 92
 
 # Set to RC version if building RC, else %%{nil}
 %global rcsuf rc2
@@ -44,27 +44,24 @@ The same method can be used to refresh other types of security tokens.
 ctest3
 
 %files
-# https://tldp.org/LDP/Linux-Filesystem-Hierarchy/html/opt.html
-%/opt/credentials-fetcher/bin/credentials-fetcherd
+/usr/sbin/credentials-fetcherd
 %{_sysconfdir}/systemd/system/credentials-fetcher.service
 %license LICENSE
-%config /etc/opt/credentials-fetcher/etc/config.json
-%{_sysconfdir}/opt/credentials-fetcher/env-file
+%config /etc/credentials-fetcher/config.json
+%config /etc/credentials-fetcher/env-file
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
 %doc CONTRIBUTING.md NOTICE README.md
-# https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch03s13.html
-%attr(0700, -, -) /opt/credentials-fetcher/lib/libcf_private.so
-%attr(0700, -, -) /opt/credentials-fetcher/lib/libcf_gmsa_service_private.so
-%attr(0700, -, -) /opt/credentials-fetcher/bin/credentials_fetcher_utf16_private.exe
 
 %changelog
+* Tue Aug  9 Samiullah Mohammed <samiull@amazon.com> - 0.0.92
+- Move binaries to standard Linux directories
 * Sat Aug 7 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.91
 - Relocate binary, library files and change permissions
 * Sat Jul 30 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.90
 - add ctests and bump revision to 0.0.90
 * Thu Jul 28 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Add mono-based utf16 decoder
-* Mon Jul 25 2022 Samiullah Mohammed <samiull@amazon.com>
+* Mon Jul 25 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Add openldap as a requirement, also added crypto lib
 * Sat Jun 18 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.1
 - Refactor cmake for all the directories

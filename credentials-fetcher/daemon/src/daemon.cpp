@@ -1,6 +1,8 @@
 #include "daemon.h"
 #include <iostream>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <libgen.h>
 
 creds_fetcher::Daemon cf_daemon;
 
@@ -44,7 +46,7 @@ void* grpc_thread_start( void* arg )
             tinfo->argv_string );
 
 #if FEDORA_FOUND
-    RunGrpcServer( cf_daemon.unix_socket_path, cf_daemon.krb_files_dir, cf_daemon.cf_logger,
+    RunGrpcServer( cf_daemon.unix_socket_dir, cf_daemon.krb_files_dir, cf_daemon.cf_logger,
                    &cf_daemon.got_systemd_shutdown_signal );
 #endif
 
@@ -138,21 +140,39 @@ std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthrea
 
 int main( int argc, const char* argv[] )
 {
-    int status;
     void* grpc_pthread;
     void* krb_refresh_pthread;
 
-    status = parse_options( argc, argv, cf_daemon );
+    int status = parse_options( argc, argv, cf_daemon );
     if ( status != EXIT_SUCCESS )
     {
         exit( EXIT_FAILURE );
     }
 
+    cf_daemon.krb_files_dir = CF_KRB_DIR;
+    cf_daemon.logging_dir = CF_LOGGING_DIR;
+    cf_daemon.unix_socket_dir = CF_UNIX_DOMAIN_SOCKET_DIR;
+
+    /**
+     * Domain name and gmsa account are usually set in APIs.
+     * The options below can be used as a test.
+    */
+    cf_daemon.domain_name = CF_TEST_DOMAIN_NAME;
+    cf_daemon.gmsa_account_name = CF_TEST_GMSA_ACCOUNT;
+
+    std::cout << "krb_files_dir = " << cf_daemon.krb_files_dir << std::endl;
+    std::cout << "logging_dir = " << cf_daemon.logging_dir << std::endl;
+    std::cout << "unix_socket_dir = " << cf_daemon.unix_socket_dir << std::endl;
+
     if ( cf_daemon.run_diagnostic )
     {
-        exit( test_utf16_decode() || config_parse_test() || read_meta_data_json_test() ||
+#ifdef FEDORA_FOUND
+        exit( test_utf16_decode() || read_meta_data_json_test() ||
               read_meta_data_json_test() || renewal_failure_krb_dir_not_found_test() ||
               write_meta_data_json_test() );
+#else
+        exit(EXIT_SUCCESS);
+#endif
     }
 
     struct sigaction sa;
@@ -163,12 +183,6 @@ int main( int argc, const char* argv[] )
     {
         perror( "sigaction" );
         return EXIT_FAILURE;
-    }
-    status = parse_config_file( cf_daemon );
-    if ( status < 0 )
-    {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot parse config file", status );
-        exit( EXIT_FAILURE );
     }
 
     /* We need to run three parallel processes */
@@ -181,7 +195,7 @@ int main( int argc, const char* argv[] )
         create_pthread( grpc_thread_start, grpc_thread_name, -1 );
     if ( pthread_status.first < 0 )
     {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads", status );
+        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads", pthread_status.first );
         exit( EXIT_FAILURE );
     }
     grpc_pthread = pthread_status.second;
@@ -192,7 +206,7 @@ int main( int argc, const char* argv[] )
         create_pthread( refresh_krb_tickets_thread_start, "krb_ticket_refresh_thread", -1 );
     if ( pthread_status.first < 0 )
     {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads", status );
+        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads", pthread_status.first );
         exit( EXIT_FAILURE );
     }
     krb_refresh_pthread = pthread_status.second;

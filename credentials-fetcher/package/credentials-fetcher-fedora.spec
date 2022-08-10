@@ -1,6 +1,6 @@
 %global major_version 0
 %global minor_version 0
-%global patch_version 91
+%global patch_version 92
 
 # Set to RC version if building RC, else %%{nil}
 %global rcsuf rc2
@@ -23,6 +23,8 @@ BuildRequires:  cmake3 make chrpath
 
 Requires: bind-utils openldap mono-core
 
+# https://docs.fedoraproject.org/en-US/packaging-guidelines/CMake/
+
 %description
 This daemon creates and refreshes kerberos tickets, these tickets can be
 used to launch new containers.
@@ -31,8 +33,6 @@ Kerberos tickets are refreshed when tickets expire or when a gMSA password chang
 The same method can be used to refresh other types of security tokens.
 This spec file is specific to Fedora, use this file to rpmbuild on Fedora.
 
-
-# https://docs.fedoraproject.org/en-US/packaging-guidelines/CMake/
 %prep
 %setup -q
 
@@ -45,27 +45,25 @@ This spec file is specific to Fedora, use this file to rpmbuild on Fedora.
 %cmake_install
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_removing_rpath
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_rpath_for_internal_libraries
-chrpath --delete %{buildroot}/opt/credentials-fetcher/bin/credentials-fetcherd
+chrpath --delete %{buildroot}/%{_sbindir}/credentials-fetcherd
 
 %check
 # TBD: Run tests from top-level directory
 ctest3
 
 %files
-/opt/credentials-fetcher/bin/credentials-fetcherd
-# https://tldp.org/LDP/Linux-Filesystem-Hierarchy/html/opt.html
+%{_sbindir}/credentials-fetcherd
 %{_sysconfdir}/systemd/system/credentials-fetcher.service
 %license LICENSE
-%config /etc/opt/credentials-fetcher/config.json
-%config /etc/opt/credentials-fetcher/env-file
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
 %doc CONTRIBUTING.md NOTICE README.md
-# https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch03s13.html
-%attr(0700, -, -) /opt/credentials-fetcher/lib/libcf_private.so
-%attr(0700, -, -) /opt/credentials-fetcher/lib/libcf_gmsa_service_private.so
-%attr(0700, -, -) /opt/credentials-fetcher/bin/credentials_fetcher_utf16_private.exe
+%attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 
 %changelog
+* Wed Aug 10 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.92
+- Move binaries to standard Linux directories
+- Add directory paths as configurable variables in cmake
+- Generate systemd service file from cmake
 * Sun Aug 7 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.91
 - Relocate binary, library files and change permissions
 * Sat Jul 30 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.90

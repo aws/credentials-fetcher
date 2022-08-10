@@ -16,6 +16,7 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#include "config.h"
 
 #ifndef _daemon_h_
 #define _daemon_h_
@@ -74,7 +75,7 @@ namespace creds_fetcher
         uint64_t watchdog_interval_usecs = 0;
         char* config_file = NULL;
         std::string krb_files_dir;
-        std::string unix_socket_path;
+        std::string unix_socket_dir;
         std::string logging_dir;
         std::string domain_name;
         std::string gmsa_account_name;
@@ -102,9 +103,6 @@ namespace creds_fetcher
     } blob_t;
 
 } // namespace creds_fetcher
-
-// TBD: Pick up from config.json
-#define DEFAULT_CONFIG_FILE_LOCATION "/etc/opt/credentials-fetcher/config.json"
 
 /* TBD: Move to class and methods */
 /**
@@ -149,7 +147,7 @@ int parse_config_file( creds_fetcher::Daemon& cf_daemon );
 /**
  * Methods in api module
  */
-int RunGrpcServer( std::string unix_socket_path, std::string krb_file_path,
+int RunGrpcServer( std::string unix_socket_dir, std::string krb_file_path,
                    creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t* shutdown_signal );
 
 int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info );

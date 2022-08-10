@@ -29,21 +29,24 @@ if (EXISTS ${FEDORA_FOUND})
     list(APPEND SRC_FILES ${credentialsfetcher_grpc_sources})
     list(APPEND SRC_FILES ${credentialsfetcher_grpc_headers})
 
-    add_library(cf_gmsa_service_private SHARED
-            ${SRC_FILES}
-            ${credentialsfetcher_proto_sources}
-            ${credentialsfetcher_proto_headers}
-            ${credentialsfetcher_grpc_sources}
-            ${credentialsfetcher_grpc_headers}
-            ${CMAKE_CURRENT_SOURCE_DIR}/../auth/kerberos/src/krb.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/../metadata/src/metadata.cpp
-            )
+    add_library(cf_gmsa_service_private OBJECT
+	${SRC_FILES}
+	${credentialsfetcher_proto_sources}
+	${credentialsfetcher_proto_headers}
+	${credentialsfetcher_grpc_sources}
+	${credentialsfetcher_grpc_headers}
+	${CMAKE_CURRENT_SOURCE_DIR}/../auth/kerberos/src/krb.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../metadata/src/metadata.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../metadata/tests/metadata_test.cpp)
+
+    find_path(GLIB_INCLUDE_DIR glib.h "/usr/include" "/usr/include/glib-2.0")
+    find_path(GLIB_CONFIG_DIR glibconfig.h "/usr/include" "/usr/lib64/glib-2.0/include")
 
     target_include_directories(cf_gmsa_service_private
             PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../common
-            /usr/include/glib-2.0
-            /usr/lib/x86_64-linux-gnu/glib-2.0/include
-            /usr/lib64/glib-2.0/include)
+            ${GLIB_INCLUDE_DIR}
+            ${GLIB_CONFIG_DIR}
+	    ${CMAKE_BINARY_DIR})
 
     target_compile_definitions(cf_gmsa_service_private PRIVATE FEDORA_FOUND)
     target_link_libraries(cf_gmsa_service_private
@@ -55,9 +58,8 @@ if (EXISTS ${FEDORA_FOUND})
             boost_filesystem)
 
 else ()
-    set(api "${SRC_FILES}" PARENT_SCOPE)
+    set(cf_gmsa_service_private "${cf_gmsa_service_private}" PARENT_SCOPE)
 endif ()
-
 
 enable_testing()
 add_subdirectory(tests)

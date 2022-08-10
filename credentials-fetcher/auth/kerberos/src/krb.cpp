@@ -9,8 +9,7 @@
 #define RENEW_TICKET_HOURS 1
 #define SECONDS_IN_HOUR 3600
 
-// TBD: Pick from config.json
-static const std::string install_path_for_decode_exe = "/opt/credentials-fetcher/bin/credentials_fetcher_utf16_private.exe";
+static const std::string install_path_for_decode_exe = "/usr/sbin/credentials_fetcher_utf16_private.exe";
 
 /**
  * Check if binary is writable other than root

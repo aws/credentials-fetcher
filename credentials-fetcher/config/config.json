@@ -1,7 +1,0 @@
-{
-    "krb_files_dir": "/var/opt/credentials-fetcher/krbdir",
-    "unix_socket_path": "/var/opt/credentials-fetcher/socket",
-    "logging_dir": "/var/opt/credentials-fetcher/logs",
-    "domain_name": "contoso.com",
-    "gmsa_account_name": "webapp01"
-}

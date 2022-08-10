@@ -29,14 +29,14 @@ class CredentialsFetcherImpl final
 
     /**
      * RunServer - Run one grpc server for all rpcs
-     * @param unix_socket_path: path to unix domain socket
+     * @param unix_socket_dir: path to unix domain socket
      * @param cf_logger : log to systemd
      */
-    void RunServer( std::string unix_socket_path, std::string krb_files_dir,
+    void RunServer( std::string unix_socket_dir, std::string krb_files_dir,
                     creds_fetcher::CF_logger& cf_logger )
     {
         std::string unix_socket_address =
-            std::string( "unix:" ) + unix_socket_path + "/" + std::string( UNIX_SOCKET_NAME );
+            std::string( "unix:" ) + unix_socket_dir + "/" + std::string( UNIX_SOCKET_NAME );
         std::string server_address( unix_socket_address );
 
         grpc::ServerBuilder builder;
@@ -505,19 +505,19 @@ class CredentialsFetcherImpl final
 
 /**
  * RunGrpcServer - Runs the grpc initializes and runs the grpc server
- * @param unix_socket_path - path for the unix socket creation
+ * @param unix_socket_dir - path for the unix socket creation
  * @param cf_logger - log to systemd daemon
  * @param shutdown_signal - sigterm from systemd
  * @return - return 0 when server exits
  */
-int RunGrpcServer( std::string unix_socket_path, std::string krb_files_dir,
+int RunGrpcServer( std::string unix_socket_dir, std::string krb_files_dir,
                    creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t* shutdown_signal )
 {
     CredentialsFetcherImpl creds_fetcher_grpc;
 
     pthread_shutdown_signal = shutdown_signal;
 
-    creds_fetcher_grpc.RunServer( unix_socket_path, krb_files_dir, cf_logger );
+    creds_fetcher_grpc.RunServer( unix_socket_dir, krb_files_dir, cf_logger );
 
     // TBD:: Add return status for errors
     return 0;
