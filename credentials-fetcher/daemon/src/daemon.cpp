@@ -168,7 +168,7 @@ int main( int argc, const char* argv[] )
     {
 #ifdef FEDORA_FOUND
         exit( test_utf16_decode() || read_meta_data_json_test() ||
-              read_meta_data_json_test() || renewal_failure_krb_dir_not_found_test() ||
+              read_meta_data_invalid_json_test() || renewal_failure_krb_dir_not_found_test() ||
               write_meta_data_json_test() );
 #else
         exit(EXIT_SUCCESS);

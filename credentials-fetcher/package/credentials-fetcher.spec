@@ -1,6 +1,6 @@
 %global major_version 0
 %global minor_version 0
-%global patch_version 92
+%global patch_version 93
 
 # Set to RC version if building RC, else %%{nil}
 %global rcsuf rc2
@@ -21,7 +21,7 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  cmake3 make
 
-Requires: bind-utils openldap mono-core
+Requires: bind-utils openldap mono-core openldap-clients
 
 %description
 This daemon creates and refreshes kerberos tickets, these tickets can be
@@ -53,6 +53,8 @@ ctest3
 %doc CONTRIBUTING.md NOTICE README.md
 
 %changelog
+* Mon Aug 22 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.93
+- Add validation for read metadata file and rpm install require openldap-clients
 * Tue Aug  9 Samiullah Mohammed <samiull@amazon.com> - 0.0.92
 - Move binaries to standard Linux directories
 * Sat Aug 7 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.91

@@ -6,7 +6,7 @@
       "domain_name": "contoso.com"
     },
     {
-      "krb_file_path": "usr\/share\/credentials-fetcher\/krbdir\/73099acdb5807b4bbf91\/ccname_WebApp03_53Yg4I",
+      "krb_file_path": "\/usr\/share\/credentials-fetcher\/krbdir\/73099acdb5807b4bbf91\/ccname_WebApp03_53Yg4I",
       "service_account_name": "WebApp03",
       "domain_name": "contoso.com"
     }

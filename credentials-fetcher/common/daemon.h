@@ -134,6 +134,7 @@ void rtrim( std::string& s );
 int test_utf16_decode();
 int config_parse_test();
 int read_meta_data_json_test();
+int read_meta_data_invalid_json_test();
 int write_meta_data_json_test();
 int renewal_failure_krb_dir_not_found_test();
 
@@ -162,6 +163,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon );
 /**
  * Methods in metadata module
  */
+bool contains_invalid_characters(const std::string & path);
 std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path );
 
 int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list,

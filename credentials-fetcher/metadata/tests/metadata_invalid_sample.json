@@ -1,0 +1,9 @@
+{
+  "krb_ticket_info": [
+    {
+      "krb_file_path": "\/usr\/share\/credentials-fetcher\/krbdir\/73099acdb5807b4bbf91\/ccname_WebApp01_7K4PEM && test",
+      "service_account_name": "WebApp01",
+      "domain_name": "contoso.com"
+    }
+  ]
+}

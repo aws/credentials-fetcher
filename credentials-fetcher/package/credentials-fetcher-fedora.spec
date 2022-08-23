@@ -1,6 +1,6 @@
 %global major_version 0
 %global minor_version 0
-%global patch_version 92
+%global patch_version 93
 
 # Set to RC version if building RC, else %%{nil}
 %global rcsuf rc2
@@ -21,7 +21,7 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  cmake3 make chrpath
 
-Requires: bind-utils openldap mono-core
+Requires: bind-utils openldap mono-core openldap-clients
 
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/CMake/
 
@@ -60,6 +60,8 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 
 %changelog
+* Mon Aug 22 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.93
+- Add validation for read metadata file and rpm install require openldap-clients
 * Wed Aug 10 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.92
 - Move binaries to standard Linux directories
 - Add directory paths as configurable variables in cmake
