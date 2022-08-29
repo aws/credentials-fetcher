@@ -10,7 +10,7 @@ Version:        %{major_version}.%{minor_version}.%{patch_version}
 Release:        %{baserelease}%{?dist}
 Summary:        credentials-fetcher is a daemon that refreshes tickets or tokens periodically
 
-License:        Apache 2.0
+License:        Apache-2.0
 URL:            https://github.com/aws/credentials-fetcher
 Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/%{version}.tar.gz
 
@@ -24,9 +24,10 @@ Requires: bind-utils openldap mono-core openldap-clients
 This daemon creates and refreshes kerberos tickets, these tickets can be
 used to launch new containers.
 The gMSA feature can be implemented using this daemon.
-Kerberos tickets are refreshed when tickets expire or when a gMSA password changes.
-The same method can be used to refresh other types of security tokens.
-This spec file is specific to Fedora, use this file to rpmbuild on Fedora.
+Kerberos tickets are refreshed when tickets expire or when a gMSA 
+password changes. The same method can be used to refresh other types 
+of security tokens. This spec file is specific to Fedora, use this file 
+to rpmbuild on Fedora.
 
 %prep
 %setup -q
@@ -55,7 +56,7 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 
 %changelog
-* Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94
+* Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-1
 - systemd clean up
 * Mon Aug 22 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.93
 - Add validation for read metadata file and rpm install require openldap-clients
