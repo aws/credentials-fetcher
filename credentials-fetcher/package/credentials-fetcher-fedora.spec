@@ -16,7 +16,7 @@ Release:        %{baserelease}%{?relsuf}%{?dist}
 Summary:        credentials-fetcher is a daemon that refreshes tickets or tokens periodically
 
 License:        Apache 2.0
-URL:            tbd-project.com
+URL:            https://github.com/aws/credentials-fetcher
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  cmake3 make chrpath
