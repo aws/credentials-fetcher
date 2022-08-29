@@ -4,7 +4,7 @@ Credentials-fetcher is a Linux daemon that retrieves gMSA credentials from Activ
 It creates and refreshes kerberos tickets from gMSA credentials. <br>
 Kerberos tickets can be used by containers to run apps/services that authenticate using Active Directory.
 
-This daemon is similar to ccg.exe and the gMSA plugin in Windows as described in \[https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts#gmsa-architecture-and-improvements\]
+This daemon is similar to ccg.exe and the gMSA plugin in Windows as described in - https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts#gmsa-architecture-and-improvements
 
 ## Blog
 [Credentials Fetcher documentation](_placeholder_for_the_blog_).
@@ -108,8 +108,7 @@ supported.
 ## Contributing
 
 Contributions and feedback are welcome! Proposals and pull requests will be considered and responded to. For more
-information, see the \[CONTRIBUTING.md\](https://github.
-com/aws/credentials-fetcher/blob/master/CONTRIBUTING.md) file.
+information, see the [CONTRIBUTING.md](https://github.com/aws/credentials-fetcher/blob/master/CONTRIBUTING.md) file.
 If you have a bug/and issue around the behavior of the credentials-fetcher,
 please open it here.
 
@@ -117,9 +116,9 @@ Amazon Web Services does not currently provide support for modified copies of th
 
 ## Security disclosures
 
-If you think you’ve found a potential security issue, please do not post it in the Issues.  Instead, please follow the instructions [here](_https__:__//aws.amazon.com/security/vulnerability-reporting/_) or [email AWS security directly](_mailto:aws-security@amazon.com_).
+If you think you’ve found a potential security issue, please do not post it in the Issues.  Instead, please follow the instructions [here](https://aws.amazon.com/security/vulnerability-reporting/) or [email AWS security directly](mailto:aws-security@amazon.com).
 
 ## License
 
 The Credentials Fetcher is licensed under the Apache 2.0 License.
-See [LICENSE](_./__LICENSE_) and [NOTICE](_./__NOTICE_) for more information.
+See [LICENSE](LICENSE) and [NOTICE](NOTICE) for more information.
