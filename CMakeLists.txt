@@ -129,7 +129,7 @@ install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
 install(FILES ${CMAKE_SOURCE_DIR}/scripts/systemd/credentials-fetcher.service
-        DESTINATION "/etc/systemd/system/")
+        DESTINATION "/usr/lib/systemd/system/")
 install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.exe
         DESTINATION "/usr/sbin/"
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)

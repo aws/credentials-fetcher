@@ -48,7 +48,7 @@ ctest3
 
 %files
 %{_sbindir}/credentials-fetcherd
-%{_sysconfdir}/systemd/system/credentials-fetcher.service
+%{_unitdir}/credentials-fetcher.service
 %license LICENSE
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
 %doc CONTRIBUTING.md NOTICE README.md
