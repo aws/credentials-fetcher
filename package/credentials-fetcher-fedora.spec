@@ -2,24 +2,19 @@
 %global minor_version 0
 %global patch_version 93
 
-# Set to RC version if building RC, else %%{nil}
-%global rcsuf rc2
-%{?rcsuf:%global relsuf .%{rcsuf}}
-%{?rcsuf:%global versuf -%{rcsuf}}
-
 # For handling bump release by rpmdev-bumpspec and mass rebuild
-%global baserelease 0.2
+%global baserelease 1
 
 Name:           credentials-fetcher
 Version:        %{major_version}.%{minor_version}.%{patch_version}
-Release:        %{baserelease}%{?relsuf}%{?dist}
+Release:        %{baserelease}%{?dist}
 Summary:        credentials-fetcher is a daemon that refreshes tickets or tokens periodically
 
 License:        Apache 2.0
 URL:            https://github.com/aws/credentials-fetcher
-Source0:        %{name}-%{version}.tar.gz
+Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/%{version}.tar.gz
 
-BuildRequires:  cmake3 make chrpath
+BuildRequires:  cmake3 make chrpath openldap-devel grpc-devel
 
 Requires: bind-utils openldap mono-core openldap-clients
 
