@@ -1,6 +1,6 @@
 %global major_version 0
 %global minor_version 0
-%global patch_version 93
+%global patch_version 94
 
 # For handling bump release by rpmdev-bumpspec and mass rebuild
 %global baserelease 1
@@ -55,6 +55,8 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 
 %changelog
+* Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94
+- systemd clean up
 * Mon Aug 22 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.93
 - Add validation for read metadata file and rpm install require openldap-clients
 * Wed Aug 10 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.92
