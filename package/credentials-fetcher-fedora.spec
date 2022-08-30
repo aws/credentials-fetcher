@@ -14,7 +14,11 @@ License:        Apache-2.0
 URL:            https://github.com/aws/credentials-fetcher
 Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/%{version}.tar.gz
 
-BuildRequires:  cmake3 make chrpath openldap-devel grpc-devel
+ExcludeArch:    i686
+
+BuildRequires:  cmake3 make chrpath openldap-devel grpc-devel gcc-c++ mono-core
+BuildRequires:  protobuf-devel re2-devel krb5-devel systemd-devel systemd-rpm-macros
+BuildRequires:  glib2-devel boost-devel openssl-devel zlib-devel grpc-cli
 
 Requires: bind-utils openldap mono-core openldap-clients
 
