@@ -14,7 +14,11 @@ License:        Apache-2.0
 URL:            https://github.com/aws/credentials-fetcher
 Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/%{version}.tar.gz
 
-BuildRequires:  cmake3 make chrpath openldap-devel grpc-devel
+ExcludeArch:    i686
+
+BuildRequires:  cmake3 make chrpath openldap-devel grpc-devel gcc-c++ mono-core
+BuildRequires:  protobuf-devel re2-devel krb5-devel systemd-devel systemd-rpm-macros
+BuildRequires:  glib2-devel boost-devel openssl-devel zlib-devel grpc-cli
 
 Requires: bind-utils openldap mono-core openldap-clients
 
@@ -56,7 +60,7 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 
 %changelog
-* Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-1
+* Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-2
 - systemd clean up
 * Mon Aug 22 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.93
 - Add validation for read metadata file and rpm install require openldap-clients
