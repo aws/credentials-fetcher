@@ -60,7 +60,7 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 
 %changelog
-* Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-2
+* Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-1
 - systemd clean up
 * Mon Aug 22 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.93
 - Add validation for read metadata file and rpm install require openldap-clients
