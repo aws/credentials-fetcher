@@ -4,7 +4,7 @@ Credentials-fetcher is a Linux daemon that retrieves gMSA credentials from Activ
 It creates and refreshes kerberos tickets from gMSA credentials. <br>
 Kerberos tickets can be used by containers to run apps/services that authenticate using Active Directory.
 
-This daemon is similar to ccg.exe and the gMSA plugin in Windows as described in - https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts#gmsa-architecture-and-improvements
+This daemon works in a similar way as ccg.exe and the gMSA plugin in Windows as described in - https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts#gmsa-architecture-and-improvements
 
 ## Blog
 [Credentials Fetcher documentation](_placeholder_for_the_blog_).
