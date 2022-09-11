@@ -45,10 +45,8 @@ void* grpc_thread_start( void* arg )
     printf( "Thread %d: top of stack near %p; argv_string=%s\n", tinfo->thread_num, (void*)&tinfo,
             tinfo->argv_string );
 
-#if FEDORA_FOUND
     RunGrpcServer( cf_daemon.unix_socket_dir, cf_daemon.krb_files_dir, cf_daemon.cf_logger,
                    &cf_daemon.got_systemd_shutdown_signal );
-#endif
 
     return tinfo->argv_string;
 }
@@ -65,10 +63,8 @@ void* refresh_krb_tickets_thread_start( void* arg )
     printf( "Thread %d: top of stack near %p; argv_string=%s\n", tinfo->thread_num, (void*)&tinfo,
             tinfo->argv_string );
 
-#if FEDORA_FOUND
     // ticket refresh
     krb_ticket_renew_handler( cf_daemon );
-#endif
 
     return tinfo->argv_string;
 }
@@ -166,13 +162,9 @@ int main( int argc, const char* argv[] )
 
     if ( cf_daemon.run_diagnostic )
     {
-#ifdef FEDORA_FOUND
         exit( test_utf16_decode() || read_meta_data_json_test() ||
               read_meta_data_invalid_json_test() || renewal_failure_krb_dir_not_found_test() ||
               write_meta_data_json_test() );
-#else
-        exit(EXIT_SUCCESS);
-#endif
     }
 
     struct sigaction sa;

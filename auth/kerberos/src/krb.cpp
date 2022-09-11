@@ -84,7 +84,12 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
     if ( realm_name_result.first != 0 )
     {
         result.first = realm_name_result.first;
-        return result;
+        realm_name_result =
+           exec_shell_cmd( "net ads info | grep  'Realm' | cut -f2 -d: | tr -d ' ' | tr -d '\n'" );
+        if ( realm_name_result.first != 0 ) {
+            result.first = realm_name_result.first;
+            return result;
+        }
     }
 
     std::pair<int, std::string> domain_name_result =
@@ -307,7 +312,7 @@ int test_utf16_decode()
 
     // Use decode.exe in build directory
     std::string decode_cmd =
-        std::string( "mono " ) + decode_exe_path + std::string( "  > " ) + decoded_password_file;
+        decode_exe_path + std::string( "  > " ) + decoded_password_file;
     creds_fetcher::blob_t* blob = ( (creds_fetcher::blob_t*)base64_decoded_password_blob.second );
     FILE* fp = popen( decode_cmd.c_str(), "w" );
     if ( fp == nullptr )
@@ -516,7 +521,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     std::string default_principal = "'" + gmsa_account_name + "$'" + "@" + domain_name;
 
     /* Pipe password to the utf16 decoder and kinit */
-    std::string kinit_cmd = std::string( "mono " ) + std::string( install_path_for_decode_exe ) +
+    std::string kinit_cmd = std::string( install_path_for_decode_exe ) +
                             std::string( " | kinit " ) + std::string( " -c " ) + krb_cc_name +
                             " -V " + default_principal;
     std::cout << kinit_cmd << std::endl;
