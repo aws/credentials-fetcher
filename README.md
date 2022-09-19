@@ -6,9 +6,6 @@ Kerberos tickets can be used by containers to run apps/services that authenticat
 
 This daemon works in a similar way as ccg.exe and the gMSA plugin in Windows as described in - https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts#gmsa-architecture-and-improvements
 
-## Blog
-[Credentials Fetcher documentation](_placeholder_for_the_blog_).
-
 ### How to install and run
 
 On [Amazon Linux 2022](_https__:__//aws.amazon.com/amazon-linux-ami/_) and [Fedora 36](_https://alt.fedoraproject.org/cloud/_) and similar distributions, the binary RPM can be installed as
