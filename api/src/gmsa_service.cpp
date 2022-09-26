@@ -1,6 +1,5 @@
 #include "daemon.h"
 
-#if FEDORA_FOUND
 #include <boost/filesystem.hpp>
 #include <credentialsfetcher.grpc.pb.h>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
@@ -598,4 +597,3 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
 
     return 0;
 }
-#endif

@@ -1,70 +1,83 @@
 %global major_version 0
 %global minor_version 0
-%global patch_version 93
-
-# Set to RC version if building RC, else %%{nil}
-%global rcsuf rc2
-%{?rcsuf:%global relsuf .%{rcsuf}}
-%{?rcsuf:%global versuf -%{rcsuf}}
+%global patch_version 94
 
 # For handling bump release by rpmdev-bumpspec and mass rebuild
-%global baserelease 0.2
+%global baserelease 1
 
 Name:           credentials-fetcher
 Version:        %{major_version}.%{minor_version}.%{patch_version}
-Release:        %{baserelease}%{?relsuf}%{?dist}
+Release:        %{baserelease}%{?dist}
 Summary:        credentials-fetcher is a daemon that refreshes tickets or tokens periodically
 
-License:        Apache 2.0
-URL:            tbd-project.com
-Source0:        %{name}-%{version}.tar.gz
+License:        Apache-2.0
+URL:            https://github.com/aws/credentials-fetcher
+Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/credentials-fetcher-%{version}.tar.gz
 
-BuildRequires:  cmake3 make
+BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-devel boost-devel openssl-devel zlib-devel protobuf-devel re2-devel krb5-devel systemd-devel systemd-rpm-macros
 
-Requires: bind-utils openldap mono-core openldap-clients
+Requires: bind-utils openldap openldap-clients
+#Requres: grpc-cli
+
+# No one likes you i686
+ExcludeArch:    i686 armv7hl
+
+# https://docs.fedoraproject.org/en-US/packaging-guidelines/CMake/
 
 %description
-This daemon creates and refreshes kerberos tickets, these tickets can be
-used to launch new containers.
+This daemon creates and refreshes kerberos tickets, these
+tickets can be used to launch new containers.
 The gMSA feature can be implemented using this daemon.
-Kerberos tickets are refreshed when tickets expire or when a gMSA password changes.
+Kerberos tickets are refreshed when tickets expire
+or when a gMSA password changes.
 The same method can be used to refresh other types of security tokens.
+This spec file is specific to Fedora, use this file to rpmbuild on Fedora.
 
 %prep
-%setup -q
+%setup -q -n credentials-fetcher-0.0.94
 
 %build
 %cmake3
-%make_build
+%cmake_build
 
-%make_install
+%install
+
+%cmake_install
+# https://docs.fedoraproject.org/en-US/packaging-guidelines/#_removing_rpath
+# https://docs.fedoraproject.org/en-US/packaging-guidelines/#_rpath_for_internal_libraries
+chrpath --delete %{buildroot}/%{_sbindir}/credentials-fetcherd
 
 %check
 # TBD: Run tests from top-level directory
 ctest3
 
 %files
-/usr/sbin/credentials-fetcherd
-%{_sysconfdir}/systemd/system/credentials-fetcher.service
+%{_sbindir}/credentials-fetcherd
+%{_unitdir}/credentials-fetcher.service
 %license LICENSE
-%config /etc/credentials-fetcher/config.json
-%config /etc/credentials-fetcher/env-file
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
 %doc CONTRIBUTING.md NOTICE README.md
+%attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 
 %changelog
+* Sat Sep 10 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.94-1
+- Replace mono with dotnet
+* Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-1
+- systemd clean up
 * Mon Aug 22 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.93
 - Add validation for read metadata file and rpm install require openldap-clients
-* Tue Aug  9 Samiullah Mohammed <samiull@amazon.com> - 0.0.92
+* Wed Aug 10 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.92
 - Move binaries to standard Linux directories
-* Sat Aug 7 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.91
+- Add directory paths as configurable variables in cmake
+- Generate systemd service file from cmake
+* Sun Aug 7 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.91
 - Relocate binary, library files and change permissions
 * Sat Jul 30 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.90
 - add ctests and bump revision to 0.0.90
 * Thu Jul 28 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Add mono-based utf16 decoder
-* Mon Jul 25 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
-- Add openldap as a requirement, also added crypto lib
+* Tue Jul 12 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
+- Resolve rpath for Fedora and change macros
 * Sat Jun 18 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.1
 - Refactor cmake for all the directories
 * Thu Jun 16 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
