@@ -8,7 +8,7 @@ This daemon works in a similar way as ccg.exe and the gMSA plugin in Windows as 
 
 ### How to install and run
 
-On [Amazon Linux 2022](_https__:__//aws.amazon.com/amazon-linux-ami/_) and [Fedora 36](_https://alt.fedoraproject.org/cloud/_) and similar distributions, the binary RPM can be installed as
+On [Fedora 36](_https://alt.fedoraproject.org/cloud/_) and similar distributions, the binary RPM can be installed as
 `sudo yum install credentials-fetcher`.
 The daemon can be started using `sudo systemctl start credentials-fetcher`.
 For other linux distributions, the daemon binary needs to be built from source code.
