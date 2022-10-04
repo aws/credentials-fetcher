@@ -109,6 +109,7 @@ class CredentialsFetcherImpl final
                 // The actual processing.
                 std::string lease_id = generate_lease_id();
                 std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
+                std::unordered_set<std::string> krb_ticket_dirs;
 
                 std::string err_msg;
                 create_krb_reply_.set_lease_id( lease_id );
@@ -116,16 +117,22 @@ class CredentialsFetcherImpl final
                 {
                     creds_fetcher::krb_ticket_info* krb_ticket_info =
                         new creds_fetcher::krb_ticket_info;
-
                     int parse_result = parse_cred_spec( create_krb_request_.credspec_contents( i ),
                                                         krb_ticket_info );
 
-                    // only add the ticket info if the parsing is succesful
+                    // only add the ticket info if the parsing is successful
                     if ( parse_result == 0 )
                     {
-                        krb_ticket_info->krb_file_path = krb_files_dir + "/" + lease_id;
+                        std::string krb_files_path = krb_files_dir + "/" + lease_id + "/" +
+                                                     krb_ticket_info->service_account_name;
+                        krb_ticket_info->krb_file_path = krb_files_path;
 
-                        krb_ticket_info_list.push_back( krb_ticket_info );
+                        // handle duplicate service accounts
+                        if ( !krb_ticket_dirs.count( krb_files_path ) )
+                        {
+                            krb_ticket_dirs.insert( krb_files_path );
+                            krb_ticket_info_list.push_back( krb_ticket_info );
+                        }
                     }
                     else
                     {
@@ -148,28 +155,25 @@ class CredentialsFetcherImpl final
                             break;
                         }
 
-                        boost::filesystem::create_directories( krb_ticket->krb_file_path );
-                        std::string krb_ccname = krb_ticket->krb_file_path + "/ccname_" +
-                                                 krb_ticket->service_account_name +
-                                                 std::string( "_XXXXXX" );
-                        char krb_ccname_str[PATH_MAX];
-                        strncpy( krb_ccname_str, krb_ccname.c_str(), PATH_MAX );
-                        int fd = mkstemp( krb_ccname_str ); // XXXXXX as per mkstemp man page
-                        krb_ticket->krb_file_path = krb_ccname_str;
-
-                        if ( fd < 0 )
+                        std::string krb_file_path = krb_ticket->krb_file_path;
+                        if ( boost::filesystem::exists( krb_file_path ) )
                         {
-                            cf_logger.logger( LOG_ERR,
-                                              "Error %d: Cannot make "
-                                              "temporary file",
-                                              errno );
-
-                            err_msg = "ERROR: cannot make the temporary file for kerberos ticket";
+                            cf_logger.logger( LOG_INFO,
+                                              "Directory already exists: "
+                                              "%s",
+                                              krb_file_path );
                             break;
                         }
-                        else
+                        boost::filesystem::create_directories( krb_file_path );
+
+                        std::string krb_ccname_str = krb_ticket->krb_file_path + "/krb5cc";
+
+                        if ( !boost::filesystem::exists( krb_ccname_str ) )
                         {
-                            close( fd );
+                            boost::filesystem::ofstream file( krb_ccname_str );
+                            file.close();
+
+                            krb_ticket->krb_file_path = krb_ccname_str;
                         }
 
                         std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
@@ -190,8 +194,7 @@ class CredentialsFetcherImpl final
                             std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
                                       << std::endl;
                         }
-                        create_krb_reply_.add_created_kerberos_file_paths(
-                            krb_ticket->krb_file_path );
+                        create_krb_reply_.add_created_kerberos_file_paths( krb_file_path );
                     }
                 }
                 // And we are done! Let the gRPC runtime know we've finished, using the
@@ -199,6 +202,11 @@ class CredentialsFetcherImpl final
                 // the event.
                 if ( !err_msg.empty() )
                 {
+                    // remove the directories on failure
+                    for ( auto krb_ticket : krb_ticket_info_list )
+                    {
+                        boost::filesystem::remove_all( krb_ticket->krb_file_path );
+                    }
                     status_ = FINISH;
                     create_krb_responder_.Finish(
                         create_krb_reply_, grpc::Status( grpc::StatusCode::INTERNAL, err_msg ),

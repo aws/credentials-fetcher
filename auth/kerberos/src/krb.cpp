@@ -9,7 +9,8 @@
 #define RENEW_TICKET_HOURS 1
 #define SECONDS_IN_HOUR 3600
 
-static const std::string install_path_for_decode_exe = "/usr/sbin/credentials_fetcher_utf16_private.exe";
+static const std::string install_path_for_decode_exe =
+    "/usr/sbin/credentials_fetcher_utf16_private.exe";
 
 /**
  * Check if binary is writable other than root
@@ -85,8 +86,9 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
     {
         result.first = realm_name_result.first;
         realm_name_result =
-           exec_shell_cmd( "net ads info | grep  'Realm' | cut -f2 -d: | tr -d ' ' | tr -d '\n'" );
-        if ( realm_name_result.first != 0 ) {
+            exec_shell_cmd( "net ads info | grep  'Realm' | cut -f2 -d: | tr -d ' ' | tr -d '\n'" );
+        if ( realm_name_result.first != 0 )
+        {
             result.first = realm_name_result.first;
             return result;
         }
@@ -208,7 +210,7 @@ static uint8_t* base64_decode( const std::string& password, gsize* base64_decode
     return (uint8_t*)secure_mem;
 }
 
-static std::pair<size_t, void *> find_password( std::string ldap_search_result )
+static std::pair<size_t, void*> find_password( std::string ldap_search_result )
 {
     size_t base64_decode_len = 0;
     std::vector<std::string> results;
@@ -241,7 +243,7 @@ static std::pair<size_t, void *> find_password( std::string ldap_search_result )
         }
     }
 
-    return std::make_pair(base64_decode_len, blob_base64_decoded);
+    return std::make_pair( base64_decode_len, blob_base64_decoded );
 }
 
 /**
@@ -290,7 +292,7 @@ int test_utf16_decode()
 
     std::string decoded_password_file = "./decoded_password_file";
 
-    std::pair<size_t, void *> base64_decoded_password_blob =
+    std::pair<size_t, void*> base64_decoded_password_blob =
         find_password( test_msds_managed_password );
     if ( base64_decoded_password_blob.first == 0 || base64_decoded_password_blob.second == nullptr )
     {
@@ -311,8 +313,7 @@ int test_utf16_decode()
     }
 
     // Use decode.exe in build directory
-    std::string decode_cmd =
-        decode_exe_path + std::string( "  > " ) + decoded_password_file;
+    std::string decode_cmd = decode_exe_path + std::string( "  > " ) + decoded_password_file;
     creds_fetcher::blob_t* blob = ( (creds_fetcher::blob_t*)base64_decoded_password_blob.second );
     FILE* fp = popen( decode_cmd.c_str(), "w" );
     if ( fp == nullptr )
@@ -505,7 +506,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
         return std::make_pair( -1, std::string( "" ) );
     }
 
-    std::pair<size_t, void *> password_found_result = find_password( ldap_search_result.second );
+    std::pair<size_t, void*> password_found_result = find_password( ldap_search_result.second );
 
     if ( password_found_result.first == 0 || password_found_result.second == nullptr )
     {
@@ -660,25 +661,34 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
     curr_dir = opendir( krb_tickets_path.c_str() );
     try
     {
-
         if ( curr_dir )
         {
             while ( ( file = readdir( curr_dir ) ) != NULL )
             {
-                std::string krb_cc_name = file->d_name;
-                if ( !krb_cc_name.empty() && krb_cc_name.find( "ccname" ) != std::string::npos )
+                std::string filename = file->d_name;
+                if ( !filename.empty() && filename.find( "_metadata" ) != std::string::npos )
                 {
-                    std::string cmd = "export KRB5CCNAME=" + krb_tickets_path + "/" + krb_cc_name +
-                                      " && kdestroy";
+                    std::string file_path = krb_tickets_path + "/" + filename;
+                    std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list =
+                        read_meta_data_json( file_path );
 
-                    std::pair<int, std::string> krb_ticket_destroy_result = exec_shell_cmd( cmd );
-                    if ( krb_ticket_destroy_result.first == 0 )
+                    for ( auto krb_ticket : krb_ticket_info_list )
                     {
-                        delete_krb_ticket_paths.push_back( krb_cc_name );
-                    }
-                    else
-                    {
-                        // log ticket deletion failure
+                        std::string krb_file_path = krb_ticket->krb_file_path;
+                        std::string cmd = "export KRB5CCNAME=" + krb_file_path + " && kdestroy";
+
+                        std::pair<int, std::string> krb_ticket_destroy_result =
+                            exec_shell_cmd( cmd );
+                        if ( krb_ticket_destroy_result.first == 0 )
+                        {
+                            delete_krb_ticket_paths.push_back( krb_file_path );
+                        }
+                        else
+                        {
+                            // log ticket deletion failure
+                            std::cout << "Delete kerberos ticket failed" + krb_file_path
+                                      << std::endl;
+                        }
                     }
                 }
             }
