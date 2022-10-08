@@ -1,8 +1,6 @@
 # Credentials Fetcher
 
-Credentials-fetcher is a Linux daemon that retrieves gMSA credentials from Active Directory over LDAP. <br>
-It creates and refreshes kerberos tickets from gMSA credentials. <br>
-Kerberos tickets can be used by containers to run apps/services that authenticate using Active Directory.
+`credentials-fetcher` is a Linux daemon that retrieves gMSA credentials from Active Directory over LDAP. It creates and refreshes kerberos tickets from gMSA credentials. Kerberos tickets can be used by containers to run apps/services that authenticate using Active Directory.
 
 This daemon works in a similar way as ccg.exe and the gMSA plugin in Windows as described in - https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts#gmsa-architecture-and-improvements
 
@@ -32,7 +30,7 @@ For other linux distributions, the daemon binary needs to be built from source c
 
 #### Standalone mode
 
-To start a local dev environment from scratch.
+To start a local dev environment from scratch:
 
 ```
 * Clone the Git repository.
@@ -46,7 +44,7 @@ To start a local dev environment from scratch.
 To communicate with the daemon over gRPC, install grpc-cli. For example
 `sudo yum install grpc-cli`
 
-##### AddkerberosLease API:
+##### AddKerberosLease API:
 Note: APIs use unix domain socket
 ```
 Invoke the AddkerberosLease API with the credentialsspec input as shown:
@@ -64,7 +62,7 @@ AddKerberosLease "credspec_contents: '{\"CmsPlugins\":[\"ActiveDirectory\"],\"Do
   created_kerberos_file_paths - Paths associated to the Kerberos tickets created corresponding to the gMSA accounts
 ```
 
-##### DeletekerberosLease API:
+##### DeleteKerberosLease API:
 
 ```
 Invoke the Delete kerberosLease API with lease id input as shown:
