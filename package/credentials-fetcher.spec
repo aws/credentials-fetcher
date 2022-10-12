@@ -12,7 +12,7 @@ Summary:        credentials-fetcher is a daemon that refreshes tickets or tokens
 
 License:        Apache-2.0
 URL:            https://github.com/aws/credentials-fetcher
-Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/credentials-fetcher-%{version}.tar.gz
+Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/%{version}.tar.gz
 
 BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-devel boost-devel openssl-devel zlib-devel protobuf-devel re2-devel krb5-devel systemd-devel systemd-rpm-macros
 
@@ -34,7 +34,7 @@ The same method can be used to refresh other types of security tokens.
 This spec file is specific to Fedora, use this file to rpmbuild on Fedora.
 
 %prep
-%setup -q -n credentials-fetcher-1.0.0
+%setup -q
 
 %build
 %cmake3
@@ -62,6 +62,8 @@ ctest3
 %changelog
 * Wed Oct 12 2022 Sai Kiran Akula <saakla@amazon.com> - 1.0.0
 - Create 1.0 release
+* Mon Sep 19 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-2
+- rebuild for rawhide
 * Sat Sep 10 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.94-1
 - Replace mono with dotnet
 * Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-1
