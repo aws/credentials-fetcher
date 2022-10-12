@@ -60,7 +60,7 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 
 %changelog
-* Sat Sep 10 2022 Sai Kiran Akula <saakla@amazon.com> - 1.0.0
+* Wed Oct 12 2022 Sai Kiran Akula <saakla@amazon.com> - 1.0.0
 - Update the major version for the release
 * Sat Sep 10 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.94-1
 - Replace mono with dotnet
