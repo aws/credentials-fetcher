@@ -1,6 +1,6 @@
-%global major_version 0
+%global major_version 1
 %global minor_version 0
-%global patch_version 94
+%global patch_version 0
 
 # For handling bump release by rpmdev-bumpspec and mass rebuild
 %global baserelease 1
@@ -34,7 +34,7 @@ The same method can be used to refresh other types of security tokens.
 This spec file is specific to Fedora, use this file to rpmbuild on Fedora.
 
 %prep
-%setup -q -n credentials-fetcher-0.0.94
+%setup -q -n credentials-fetcher-1.0.0
 
 %build
 %cmake3
@@ -60,6 +60,8 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 
 %changelog
+* Sat Sep 10 2022 Sai Kiran Akula <saakla@amazon.com> - 1.0.0
+- Update the major version for the release
 * Sat Sep 10 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.94-1
 - Replace mono with dotnet
 * Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-1
