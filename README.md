@@ -19,6 +19,7 @@ For other linux distributions, the daemon binary needs to be built from source c
 - Linux instances or hosts that are domain-joined to Active Directory
 - gMSA account(s) in Active Directory - Follow instructions provided to create service accounts - https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts
 - Required packages as mentioned in RPM spec file.
+- Create username ec2-user or modify the systemd unit file.
 
 #### Create credentialspec associated with gMSA account:
 
