@@ -94,7 +94,7 @@ target_include_directories(credentials-fetcherd
         ${GLIB_CONFIG_DIR}
 	    ${CMAKE_CURRENT_BINARY_DIR})
 
-find_program(DOTNET dotnet ~/.dotnet)
+find_program(DOTNET dotnet ~/.dotnet /usr/bin)
 if (NOT DOTNET)
     message(FATAL_ERROR ".NET compiler is not found")
 endif()
@@ -102,7 +102,7 @@ endif()
 add_custom_command(
     TARGET credentials-fetcherd
     PRE_LINK
-    COMMAND bash -c  "CURR_DIR=$PWD && echo $CURR_DIR && cd ${CMAKE_CURRENT_SOURCE_DIR}/auth/kerberos/src/utf16_decode && ~/.dotnet/dotnet publish -c Release && cp bin/Release/net6.0/linux-x64/publish/utf16_decode $CURR_DIR/credentials_fetcher_utf16_private.exe"
+    COMMAND bash -c  "CURR_DIR=$PWD && echo $CURR_DIR && cd ${CMAKE_CURRENT_SOURCE_DIR}/auth/kerberos/src/utf16_decode && dotnet publish -c Release && cp bin/Release/net6.0/linux-x64/publish/utf16_decode $CURR_DIR/credentials_fetcher_utf16_private.exe"
     VERBATIM)
 
 target_include_directories(credentials-fetcherd PUBLIC common)
