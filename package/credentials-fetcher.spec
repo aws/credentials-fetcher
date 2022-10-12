@@ -61,7 +61,7 @@ ctest3
 
 %changelog
 * Wed Oct 12 2022 Sai Kiran Akula <saakla@amazon.com> - 1.0.0
-- Update the major version for the release
+- Create 1.0 release
 * Sat Sep 10 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.94-1
 - Replace mono with dotnet
 * Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-1
