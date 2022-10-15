@@ -20,7 +20,7 @@ Requires: bind-utils openldap openldap-clients
 #Requres: grpc-cli
 
 # No one likes you i686
-ExcludeArch:    i686 armv7hl
+ExcludeArch:    i686 armv7hl ppc64le
 
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/CMake/
 

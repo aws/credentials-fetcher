@@ -522,7 +522,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     std::string default_principal = "'" + gmsa_account_name + "$'" + "@" + domain_name;
 
     /* Pipe password to the utf16 decoder and kinit */
-    std::string kinit_cmd = std::string( install_path_for_decode_exe ) +
+    std::string kinit_cmd = std::string("dotnet ") + std::string( install_path_for_decode_exe ) +
                             std::string( " | kinit " ) + std::string( " -c " ) + krb_cc_name +
                             " -V " + default_principal;
     std::cout << kinit_cmd << std::endl;
