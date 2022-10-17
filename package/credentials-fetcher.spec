@@ -20,7 +20,7 @@ Requires: bind-utils openldap openldap-clients
 #Requres: grpc-cli
 
 # No one likes you i686
-ExcludeArch:    i686 armv7hl
+ExcludeArch:    i686 armv7hl ppc64le
 
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/CMake/
 
@@ -58,6 +58,7 @@ ctest3
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
 %doc CONTRIBUTING.md NOTICE README.md
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
+%attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
 
 %changelog
 * Wed Oct 12 2022 Sai Kiran Akula <saakla@amazon.com> - 1.0.0

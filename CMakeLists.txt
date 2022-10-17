@@ -100,7 +100,7 @@ endif()
 add_custom_command(
     TARGET credentials-fetcherd
     PRE_LINK
-    COMMAND bash -c  "CURR_DIR=$PWD && echo $CURR_DIR && cd ${CMAKE_CURRENT_SOURCE_DIR}/auth/kerberos/src/utf16_decode && dotnet build && dotnet publish -c Release && cp bin/Release/net6.0/linux-x64/publish/utf16_decode $CURR_DIR/credentials_fetcher_utf16_private.exe"
+    COMMAND bash -c  "CURR_DIR=$PWD && echo $CURR_DIR && cd ${CMAKE_CURRENT_SOURCE_DIR}/auth/kerberos/src/utf16_decode && ./build-using-csc.sh Program.cs && cp Program.exe $CURR_DIR/credentials_fetcher_utf16_private.exe && cp Program.runtimeconfig.json $CURR_DIR/credentials_fetcher_utf16_private.runtimeconfig.json"
     VERBATIM)
 
 target_include_directories(credentials-fetcherd PUBLIC common)
@@ -120,6 +120,9 @@ install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
 install(FILES ${CMAKE_SOURCE_DIR}/scripts/systemd/credentials-fetcher.service
         DESTINATION "/usr/lib/systemd/system/")
 install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.exe
+        DESTINATION "/usr/sbin/"
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
+install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.runtimeconfig.json
         DESTINATION "/usr/sbin/"
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
 
