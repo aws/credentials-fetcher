@@ -1,3 +1,4 @@
+#include "config.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -16,7 +17,6 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
-#include "config.h"
 
 #ifndef _daemon_h_
 #define _daemon_h_
@@ -81,6 +81,7 @@ namespace creds_fetcher
         std::string gmsa_account_name;
         CF_logger cf_logger;
         bool run_diagnostic = false;
+        std::string aws_sm_secret_name; /* TBD:: Extend to other secret stores */
         // run ticket renewal every 10 minutes
         uint64_t krb_ticket_handle_interval = 10;
         volatile sig_atomic_t got_systemd_shutdown_signal;
@@ -111,6 +112,8 @@ namespace creds_fetcher
 int generate_host_machine_krb_ticket( const char* krb_ccname = "" );
 
 int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger );
+int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name,
+                         creds_fetcher::CF_logger& cf_logger );
 
 std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
                                                  const std::string& gmsa_account_name,
@@ -149,7 +152,8 @@ int parse_config_file( creds_fetcher::Daemon& cf_daemon );
  * Methods in api module
  */
 int RunGrpcServer( std::string unix_socket_dir, std::string krb_file_path,
-                   creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t* shutdown_signal );
+                   creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t* shutdown_signal,
+                   std::string aws_sm_secret_name );
 
 int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info );
 
@@ -163,7 +167,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon );
 /**
  * Methods in metadata module
  */
-bool contains_invalid_characters(const std::string & path);
+bool contains_invalid_characters( const std::string& path );
 std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path );
 
 int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list,

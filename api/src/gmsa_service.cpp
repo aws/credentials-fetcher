@@ -32,7 +32,7 @@ class CredentialsFetcherImpl final
      * @param cf_logger : log to systemd
      */
     void RunServer( std::string unix_socket_dir, std::string krb_files_dir,
-                    creds_fetcher::CF_logger& cf_logger )
+                    creds_fetcher::CF_logger& cf_logger, std::string aws_sm_secret_name )
     {
         std::string unix_socket_address =
             std::string( "unix:" ) + unix_socket_dir + "/" + std::string( UNIX_SOCKET_NAME );
@@ -52,7 +52,7 @@ class CredentialsFetcherImpl final
         std::cout << "Server listening on " << server_address << std::endl;
 
         // Proceed to the server's main loop.
-        HandleRpcs( krb_files_dir, cf_logger );
+        HandleRpcs( krb_files_dir, cf_logger, aws_sm_secret_name );
     }
 
   private:
@@ -78,7 +78,8 @@ class CredentialsFetcherImpl final
             Proceed();
         }
 
-        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger )
+        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
+                      std::string aws_sm_secret_name )
         {
             if ( cookie.compare( CLASS_NAME_CallDataCreateKerberosLease ) != 0 )
             {
@@ -146,7 +147,16 @@ class CredentialsFetcherImpl final
                     for ( auto krb_ticket : krb_ticket_info_list )
                     {
                         // invoke to get machine ticket
-                        int status = get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
+                        int status = 0;
+                        if ( aws_sm_secret_name.length() != 0 )
+                        {
+                            status = get_user_krb_ticket( krb_ticket->domain_name,
+                                                          aws_sm_secret_name, cf_logger );
+                        }
+                        else
+                        {
+                            status = get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
+                        }
                         if ( status < 0 )
                         {
                             cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
@@ -311,6 +321,8 @@ class CredentialsFetcherImpl final
     {
       public:
         std::string cookie;
+        std::string aws_sm_secret_name;
+
 #define CLASS_NAME_CallDataDeleteKerberosLease "CallDataDeleteKerberosLease"
         // Take in the "service" instance (in this case representing an asynchronous
         // server) and the completion queue "cq" used for asynchronous communication
@@ -328,7 +340,8 @@ class CredentialsFetcherImpl final
             Proceed();
         }
 
-        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger )
+        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
+                      std::string aws_sm_secret_name )
         {
             if ( cookie.compare( CLASS_NAME_CallDataDeleteKerberosLease ) != 0 )
             {
@@ -479,7 +492,8 @@ class CredentialsFetcherImpl final
     };
 
     // This can be run in multiple threads if needed.
-    void HandleRpcs( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger )
+    void HandleRpcs( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
+                     std::string aws_sm_secret_name )
     {
         void* got_tag; // uniquely identifies a request.
         bool ok;
@@ -498,10 +512,10 @@ class CredentialsFetcherImpl final
             GPR_ASSERT( cq_->Next( &got_tag, &ok ) );
             GPR_ASSERT( ok );
 
-            static_cast<CallDataCreateKerberosLease*>( got_tag )->Proceed( krb_files_dir,
-                                                                           cf_logger );
-            static_cast<CallDataDeleteKerberosLease*>( got_tag )->Proceed( krb_files_dir,
-                                                                           cf_logger );
+            static_cast<CallDataCreateKerberosLease*>( got_tag )->Proceed( krb_files_dir, cf_logger,
+                                                                           aws_sm_secret_name );
+            static_cast<CallDataDeleteKerberosLease*>( got_tag )->Proceed( krb_files_dir, cf_logger,
+                                                                           aws_sm_secret_name );
         }
     }
 
@@ -518,13 +532,14 @@ class CredentialsFetcherImpl final
  * @return - return 0 when server exits
  */
 int RunGrpcServer( std::string unix_socket_dir, std::string krb_files_dir,
-                   creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t* shutdown_signal )
+                   creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t* shutdown_signal,
+                   std::string aws_sm_secret_name )
 {
     CredentialsFetcherImpl creds_fetcher_grpc;
 
     pthread_shutdown_signal = shutdown_signal;
 
-    creds_fetcher_grpc.RunServer( unix_socket_dir, krb_files_dir, cf_logger );
+    creds_fetcher_grpc.RunServer( unix_socket_dir, krb_files_dir, cf_logger, aws_sm_secret_name );
 
     // TBD:: Add return status for errors
     return 0;

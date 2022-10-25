@@ -8,6 +8,7 @@
  * @param cf_daemon - credentials fetcher parent object
  * @return status - 0 if successful
  */
+
 int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemon )
 {
     try
@@ -17,8 +18,11 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         /* Declare the supported options */
         po::options_description desc( "Allowed options" );
         desc.add_options()( "help", "produce help message" ) /* TBD: Add help message description */
-                ("self_test",  "Run tests such as utf16 decode" )
-                ("verbosity", po::value<int>(), "set verbosity level" );
+            ( "self_test", "Run tests such as utf16 decode" )( "verbosity", po::value<int>(),
+                                                               "set verbosity level" )(
+                "aws_sm_secret_name", po::value<std::string>(), // TBD:: Extend to other stores
+                "Name of secret containing username/password in AWS Secrets Manager (in same "
+                "region)" );
 
         /**
          * Calls to store, parse_command_line and notify functions
@@ -43,6 +47,14 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         {
             std::cout << "run diagnostic set" << std::endl;
             cf_daemon.run_diagnostic = true;
+        }
+
+        if ( vm.count( "aws_sm_secret_name" ) ) // TBD:: Extend to other stores
+        {
+            cf_daemon.aws_sm_secret_name = vm["aws_sm_secret_name"].as<std::string>();
+            std::cout
+                << "Option selected for domainless operation, AWS secrets manager secret-name = "
+                << cf_daemon.aws_sm_secret_name << std::endl;
         }
     }
     catch ( const boost::program_options::error& ex )

@@ -11,6 +11,7 @@
 
 static const std::string install_path_for_decode_exe =
     "/usr/sbin/credentials_fetcher_utf16_private.exe";
+static const std::string install_path_for_aws_cli = "/usr/bin/aws";
 
 /**
  * Check if binary is writable other than root
@@ -168,6 +169,82 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
                     []( unsigned char c ) { return std::toupper( c ); } );
     std::string kinit_cmd = "kinit -kt /etc/krb5.keytab '" + result.second + "'";
     result = exec_shell_cmd( kinit_cmd );
+
+    return result.first;
+}
+
+/**
+ * This function generates kerberos ticket with user credentials
+ * User credentials must have adequate privileges to read gMSA passwords
+ * This is an alternative to the machine credentials approach above
+ * @param cf_daemon - parent daemon object
+ * @return error-code - 0 if successful
+ */
+int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name,
+                         creds_fetcher::CF_logger& cf_logger )
+{
+    std::pair<int, std::string> result;
+
+    std::pair<int, std::string> cmd = exec_shell_cmd( "which hostname" );
+    rtrim( cmd.second );
+    if ( !check_file_permissions( cmd.second ) )
+    {
+        return -1;
+    }
+
+    cmd = exec_shell_cmd( "which realm" );
+    rtrim( cmd.second );
+    if ( !check_file_permissions( cmd.second ) )
+    {
+        return -1;
+    }
+
+    cmd = exec_shell_cmd( "which kinit" );
+    rtrim( cmd.second );
+    if ( !check_file_permissions( cmd.second ) )
+    {
+        return -1;
+    }
+
+    cmd = exec_shell_cmd( "which ldapsearch" );
+    rtrim( cmd.second );
+    if ( !check_file_permissions( cmd.second ) )
+    {
+        return -1;
+    }
+
+    if ( !check_file_permissions( install_path_for_decode_exe ) )
+    {
+        return -1;
+    }
+
+    if ( !check_file_permissions( install_path_for_aws_cli ) )
+    {
+        return -1;
+    }
+
+    std::string command =
+        install_path_for_aws_cli + std::string( " secretsmanager get-secret-value --secret-id " ) + aws_sm_secret_name + " --query 'SecretString' --output text";
+    // /usr/bin/aws secretsmanager get-secret-value --secret-id aws/directoryservices/d-xxxxxxxxxx/gmsa --query 'SecretString' --output text
+    result = exec_shell_cmd( command );
+
+    // deserialize json to krb_ticket_info object
+    namespace pt = boost::property_tree;
+    pt::ptree root;
+    // {"username":"user","password":"passw0rd"}
+    std::stringstream ss;
+    ss << result.second;
+    pt::read_json( ss, root );
+    std::string username = root.get<std::string>( "username" );
+    std::string password = root.get<std::string>( "password" );
+
+    std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
+                    []( unsigned char c ) { return std::toupper( c ); } );
+    std::string kinit_cmd = "echo " + password + " | kinit -V " + username + "@" + domain_name;
+    username = "xxxx";
+    password = "xxxx";
+    result = exec_shell_cmd( kinit_cmd );
+    kinit_cmd = "xxxx";
 
     return result.first;
 }
