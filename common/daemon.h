@@ -79,6 +79,7 @@ namespace creds_fetcher
         std::string logging_dir;
         std::string domain_name;
         std::string gmsa_account_name;
+        std::string aws_sm_secret_name;
         CF_logger cf_logger;
         bool run_diagnostic = false;
         std::string aws_sm_secret_name; /* TBD:: Extend to other secret stores */
