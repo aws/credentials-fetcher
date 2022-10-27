@@ -62,7 +62,7 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
 
 %changelog
-* Thurs Oct 27 2022 Sai Kiran Akula <saakla@amazon.com> - 1.1.0
+* Thu Oct 27 2022 Sai Kiran Akula <saakla@amazon.com> - 1.1.0
 - Create 1.1 release
 * Mon Oct 24 2022 Samiullah Mohammed <samiull@amazon.com> - 1.0.0
 - Add domainless gmsa
