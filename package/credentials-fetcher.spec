@@ -18,7 +18,7 @@ BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-de
 BuildRequires:  openssl-devel zlib-devel protobuf-devel re2-devel krb5-devel systemd-devel
 BuildRequires:  systemd-rpm-macros dotnet grpc-plugins
 
-Requires: bind-utils openldap openldap-clients
+Requires: bind-utils openldap openldap-clients awscli
 
 # No one likes you i686
 ExcludeArch:    i686 armv7hl ppc64le
@@ -62,6 +62,8 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
 
 %changelog
+* Mon Oct 24 2022 Samiullah Mohammed <samiull@amazon.com> - 1.0.0
+- Add domainless gmsa
 * Wed Oct 12 2022 Sai Kiran Akula <saakla@amazon.com> - 1.0.0
 - Create 1.0 release
 * Mon Sep 19 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-2

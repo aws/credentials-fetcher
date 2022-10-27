@@ -1,8 +1,8 @@
 #include "daemon.h"
 #include <iostream>
+#include <libgen.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <libgen.h>
 
 creds_fetcher::Daemon cf_daemon;
 
@@ -46,7 +46,7 @@ void* grpc_thread_start( void* arg )
             tinfo->argv_string );
 
     RunGrpcServer( cf_daemon.unix_socket_dir, cf_daemon.krb_files_dir, cf_daemon.cf_logger,
-                   &cf_daemon.got_systemd_shutdown_signal );
+                   &cf_daemon.got_systemd_shutdown_signal, cf_daemon.aws_sm_secret_name );
 
     return tinfo->argv_string;
 }
@@ -152,7 +152,7 @@ int main( int argc, const char* argv[] )
     /**
      * Domain name and gmsa account are usually set in APIs.
      * The options below can be used as a test.
-    */
+     */
     cf_daemon.domain_name = CF_TEST_DOMAIN_NAME;
     cf_daemon.gmsa_account_name = CF_TEST_GMSA_ACCOUNT;
 
@@ -187,7 +187,8 @@ int main( int argc, const char* argv[] )
         create_pthread( grpc_thread_start, grpc_thread_name, -1 );
     if ( pthread_status.first < 0 )
     {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads", pthread_status.first );
+        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
+                                    pthread_status.first );
         exit( EXIT_FAILURE );
     }
     grpc_pthread = pthread_status.second;
@@ -198,7 +199,8 @@ int main( int argc, const char* argv[] )
         create_pthread( refresh_krb_tickets_thread_start, "krb_ticket_refresh_thread", -1 );
     if ( pthread_status.first < 0 )
     {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads", pthread_status.first );
+        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
+                                    pthread_status.first );
         exit( EXIT_FAILURE );
     }
     krb_refresh_pthread = pthread_status.second;
