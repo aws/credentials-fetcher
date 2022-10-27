@@ -1,5 +1,5 @@
 %global major_version 1
-%global minor_version 0
+%global minor_version 1
 %global patch_version 0
 
 # For handling bump release by rpmdev-bumpspec and mass rebuild
@@ -62,6 +62,8 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
 
 %changelog
+* Thu Oct 27 2022 Sai Kiran Akula <saakla@amazon.com> - 1.1.0
+- Create 1.1 release
 * Mon Oct 24 2022 Samiullah Mohammed <samiull@amazon.com> - 1.0.0
 - Add domainless gmsa
 * Wed Oct 12 2022 Sai Kiran Akula <saakla@amazon.com> - 1.0.0
