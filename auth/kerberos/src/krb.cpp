@@ -240,7 +240,8 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
 
     std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
                     []( unsigned char c ) { return std::toupper( c ); } );
-    std::string kinit_cmd = "echo " + password + " | kinit -V " + username + "@" + domain_name;
+    std::string kinit_cmd = "echo '"  + password +  "' | kinit -V " + username + "@" +
+                            domain_name;
     username = "xxxx";
     password = "xxxx";
     result = exec_shell_cmd( kinit_cmd );
