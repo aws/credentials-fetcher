@@ -14,6 +14,8 @@ set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
 set(_REFLECTION gRPC::grpc++_reflection)
 find_program(_PROTOBUF_PROTOC protoc)
 find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
+file(STRINGS /etc/os-release DISTRO REGEX "^NAME=")
+string(REGEX REPLACE "NAME=\"(.*)\"" "\\1" DISTRO "${DISTRO}")
 
 set(config)
 add_subdirectory(config)
@@ -49,6 +51,7 @@ endif()
 configure_file(${CMAKE_SOURCE_DIR}/config/config.h.in
 	${CMAKE_BINARY_DIR}/config.h @ONLY)
 
+if(DISTRO MATCHES "^(Amazon Linux)$")
 file(WRITE scripts/systemd/credentials-fetcher.service
   "[Unit]\n"
   "Description=credentials-fetcher systemd service unit file.\n\n"
@@ -67,6 +70,22 @@ file(WRITE scripts/systemd/credentials-fetcher.service
   "[Install]\n"
   "WantedBy=multi-user.target\n"
 )
+else()
+    file(WRITE scripts/systemd/credentials-fetcher.service
+            "[Unit]\n"
+            "Description=credentials-fetcher systemd service unit file.\n\n"
+            "[Service]\n"
+            "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+            "ExecStart=/usr/sbin/credentials-fetcherd\n"
+            "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
+            "Type=notify\n"
+            "NotifyAccess=main\n"
+            "WatchdogSec=5s\n"
+            "Restart=on-failure\n\n"
+            "[Install]\n"
+            "WantedBy=multi-user.target\n"
+            )
+endif()
 
 set(sources ${auth} ${daemon} ${config} ${renewal})
 

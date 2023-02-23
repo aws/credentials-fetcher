@@ -250,7 +250,6 @@ int main( int argc, const char* argv[] )
          * arguments. */
         sd_notifyf( 0, "STATUS=Watchdog notify count = %d",
                     i ); // TBD: Remove later, visible in systemctl status
-        cf_daemon.cf_logger.logger( LOG_NOTICE, "log count %d", i ); // TBD: Remove later
         ++i;
     }
 
