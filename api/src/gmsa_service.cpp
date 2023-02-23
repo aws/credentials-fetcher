@@ -2,6 +2,7 @@
 
 #include <boost/filesystem.hpp>
 #include <credentialsfetcher.grpc.pb.h>
+#include <fstream>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
@@ -180,7 +181,7 @@ class CredentialsFetcherImpl final
 
                         if ( !boost::filesystem::exists( krb_ccname_str ) )
                         {
-                            boost::filesystem::ofstream file( krb_ccname_str );
+                            std::ofstream file( krb_ccname_str );
                             file.close();
 
                             krb_ticket->krb_file_path = krb_ccname_str;
