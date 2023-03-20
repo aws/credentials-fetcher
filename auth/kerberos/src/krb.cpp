@@ -8,6 +8,9 @@
 // renew the ticket 1 hrs before the expiration
 #define RENEW_TICKET_HOURS 1
 #define SECONDS_IN_HOUR 3600
+// Windows doesn't permit computer names that exceed 15 characters, and you can't specify a DNS host name that differs from the NetBIOS host name.
+//https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/naming-conventions-for-computer-domain-site-ou
+#define HOST_NAME_LENGTH_LIMIT 15
 
 static const std::string install_path_for_decode_exe =
     "/usr/sbin/credentials_fetcher_utf16_private.exe";
@@ -105,11 +108,18 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
         return result;
     }
 
+    std::string host_name = hostname_result.second;
+
+    // truncate the hostname to the host name size limit defined by microsoft
+    if(host_name.length() > HOST_NAME_LENGTH_LIMIT){
+        host_name = host_name.substr(0,HOST_NAME_LENGTH_LIMIT);
+    }
+
     /**
      * Machine principal is of the format EC2AMAZ-Q5VJZQ$@CONTOSO.COM'
      */
     result.first = 0;
-    result.second = hostname_result.second + "$@" + realm_name_result.second;
+    result.second = host_name + "$@" + realm_name_result.second;
 
     return result;
 }
