@@ -8,8 +8,8 @@
 // renew the ticket 1 hrs before the expiration
 #define RENEW_TICKET_HOURS 1
 #define SECONDS_IN_HOUR 3600
-// Windows doesn't permit computer names that exceed 15 characters, and you can't specify a DNS host name that differs from the NetBIOS host name.
-//https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/naming-conventions-for-computer-domain-site-ou
+// Active Directory uses NetBIOS computer names that do not exceed 15 characters.
+// https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/naming-conventions-for-computer-domain-site-ou
 #define HOST_NAME_LENGTH_LIMIT 15
 
 static const std::string install_path_for_decode_exe =
@@ -112,6 +112,9 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
 
     // truncate the hostname to the host name size limit defined by microsoft
     if(host_name.length() > HOST_NAME_LENGTH_LIMIT){
+        cf_logger.logger( LOG_ERR, "WARNING: %s:%d hostname exceeds 15 characters, "
+             "this can cause problems in getting kerberos tickets, please reduce hostname length",
+             __func__, __LINE__ );
         host_name = host_name.substr(0,HOST_NAME_LENGTH_LIMIT);
     }
 
