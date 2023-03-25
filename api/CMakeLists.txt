@@ -29,23 +29,26 @@ list(APPEND SRC_FILES ${credentialsfetcher_grpc_sources})
 list(APPEND SRC_FILES ${credentialsfetcher_grpc_headers})
 
 add_library(cf_gmsa_service_private OBJECT
-	${SRC_FILES}
-	${credentialsfetcher_proto_sources}
-	${credentialsfetcher_proto_headers}
-	${credentialsfetcher_grpc_sources}
-	${credentialsfetcher_grpc_headers}
-	${CMAKE_CURRENT_SOURCE_DIR}/../auth/kerberos/src/krb.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/../metadata/src/metadata.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/../metadata/tests/metadata_test.cpp)
+    ${SRC_FILES}
+    ${credentialsfetcher_proto_sources}
+    ${credentialsfetcher_proto_headers}
+    ${credentialsfetcher_grpc_sources}
+    ${credentialsfetcher_grpc_headers}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../auth/kerberos/src/krb.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../auth/kinit_client/kinit.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../auth/kinit_client/kinit_kdb.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../metadata/src/metadata.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../metadata/tests/metadata_test.cpp)
 
 find_path(GLIB_INCLUDE_DIR glib.h "/usr/include" "/usr/include/glib-2.0")
 find_path(GLIB_CONFIG_DIR glibconfig.h "/usr/include" "/usr/lib64/glib-2.0/include")
 
 target_include_directories(cf_gmsa_service_private
         PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../common
+        PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../auth/kinit_client
         ${GLIB_INCLUDE_DIR}
         ${GLIB_CONFIG_DIR}
-	    ${CMAKE_BINARY_DIR})
+        ${CMAKE_BINARY_DIR})
 
 target_link_libraries(cf_gmsa_service_private
         ${_PROTOBUF_LIBPROTOBUF}
@@ -53,8 +56,9 @@ target_link_libraries(cf_gmsa_service_private
         ${_GRPC_GRPCPP}
         systemd
         glib-2.0
-        boost_filesystem)
-
+        boost_filesystem
+        krb5 kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
+        com_err krb5support resolv)
 
 enable_testing()
 add_subdirectory(tests)

@@ -16,6 +16,8 @@ static const std::string install_path_for_decode_exe =
     "/usr/sbin/credentials_fetcher_utf16_private.exe";
 static const std::string install_path_for_aws_cli = "/usr/bin/aws";
 
+extern "C" int my_kinit_main(int, char **);
+
 /**
  * Check if binary is writable other than root
  * @param filename - must be owned and writable only by root
@@ -197,6 +199,7 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
                          creds_fetcher::CF_logger& cf_logger )
 {
     std::pair<int, std::string> result;
+    int ret;
 
     std::pair<int, std::string> cmd = exec_shell_cmd( "which hostname" );
     rtrim( cmd.second );
@@ -253,14 +256,27 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
 
     std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
                     []( unsigned char c ) { return std::toupper( c ); } );
+
+    // kinit using api interface
+    char *kinit_argv[2];
+
+    kinit_argv[0] = (char *)"my_kinit";
+    username = username + "@" + domain_name;
+    kinit_argv[1] = (char *)username.c_str();
+    kinit_argv[2] = (char *)password.c_str();
+    ret = my_kinit_main(2, kinit_argv);
+#if 0
+    /* The old way */
     std::string kinit_cmd = "echo '"  + password +  "' | kinit -V " + username + "@" +
                             domain_name;
     username = "xxxx";
     password = "xxxx";
     result = exec_shell_cmd( kinit_cmd );
     kinit_cmd = "xxxx";
-
     return result.first;
+#endif
+
+    return ret;
 }
 
 /**
