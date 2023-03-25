@@ -112,7 +112,7 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
 
     // truncate the hostname to the host name size limit defined by microsoft
     if(host_name.length() > HOST_NAME_LENGTH_LIMIT){
-        cf_logger.logger( LOG_ERR, "WARNING: %s:%d hostname exceeds 15 characters, "
+        cf_logger.logger( LOG_ERR, "WARNING: %s:%d hostname exceeds 15 characters,
              "this can cause problems in getting kerberos tickets, please reduce hostname length",
              __func__, __LINE__ );
         host_name = host_name.substr(0,HOST_NAME_LENGTH_LIMIT);
