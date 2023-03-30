@@ -73,7 +73,7 @@ static std::pair<int, std::string> exec_shell_cmd( std::string cmd )
  * @return result pair<int, std::string> (error-code - 0 if successful
  *                          string of the form EC2AMAZ-Q5VJZQ$@CONTOSO .COM')
  */
-static std::pair<int, std::string> get_machine_principal( std::string domain_name )
+static std::pair<int, std::string> get_machine_principal( std::string domain_name, creds_fetcher::CF_logger& cf_logger )
 {
     std::pair<int, std::string> result;
 
@@ -112,7 +112,7 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
 
     // truncate the hostname to the host name size limit defined by microsoft
     if(host_name.length() > HOST_NAME_LENGTH_LIMIT){
-        cf_logger.logger( LOG_ERR, "WARNING: %s:%d hostname exceeds 15 characters,
+        cf_logger.logger( LOG_ERR, "WARNING: %s:%d hostname exceeds 15 characters,"
              "this can cause problems in getting kerberos tickets, please reduce hostname length",
              __func__, __LINE__ );
         host_name = host_name.substr(0,HOST_NAME_LENGTH_LIMIT);
@@ -170,7 +170,7 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
         return -1;
     }
 
-    result = get_machine_principal( std::move( domain_name ) );
+    result = get_machine_principal( std::move( domain_name ), cf_logger );
     if ( result.first != 0 )
     {
         cf_logger.logger( LOG_ERR, "ERROR: %s:%d invalid machine principal", __func__, __LINE__ );
