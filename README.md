@@ -7,8 +7,14 @@ This daemon works in a similar way as ccg.exe and the gMSA plugin in Windows as 
 ### How to install and run
 
 On [Fedora 36](_https://alt.fedoraproject.org/cloud/_) and similar distributions, the binary RPM can be installed as
-`sudo yum install credentials-fetcher`.
+`sudo dnf install credentials-fetcher`.
+You can also use yum if dnf is not present.
 The daemon can be started using `sudo systemctl start credentials-fetcher`.
+
+On Enterprise Linux 9 ( RHEL | CentOS | AlmaLinux ), the binary can be installed from EPEL. To add EPEL, see the [EPEL Quickstart](_https://docs.fedoraproject.org/en-US/epel/#_quickstart_).
+Once EPEL is enabled, install credentials-fetcher with 
+`sudo dnf install credentials-fetcher`.
+
 For other linux distributions, the daemon binary needs to be built from source code.
 
 ## Development
