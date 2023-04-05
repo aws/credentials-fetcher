@@ -318,6 +318,308 @@ class CredentialsFetcherImpl final
     };
 
     // Class encompasing the state and logic needed to serve a request.
+    class CallDataAddNonDomainJoinedKerberosLease
+    {
+      public:
+        std::string cookie;
+#define CLASS_NAME_CallDataAddNonDomainJoinedKerberosLease \
+    "CallDataAddNonDomainJoinedKerberosLease"
+        // Take in the "service" instance (in this case representing an asynchronous
+        // server) and the completion queue "cq" used for asynchronous communication
+        // with the gRPC runtime.
+        CallDataAddNonDomainJoinedKerberosLease(
+            credentialsfetcher::CredentialsFetcherService::AsyncService* service,
+            grpc::ServerCompletionQueue* cq )
+            : service_( service )
+            , cq_( cq )
+            , handle_krb_responder_( &add_krb_ctx_ )
+            , status_( CREATE )
+        {
+            cookie = CLASS_NAME_CallDataAddNonDomainJoinedKerberosLease;
+            // Invoke the serving logic right away.
+            Proceed();
+        }
+
+        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
+                      std::string aws_sm_secret_name )
+        {
+            if ( cookie.compare( CLASS_NAME_CallDataAddNonDomainJoinedKerberosLease ) != 0 )
+            {
+                return;
+            }
+
+            printf( "AddNonDomainJoinedKerberosLease %p status: %d\n", this, status_ );
+            if ( status_ == CREATE )
+            {
+                // Make this instance progress to the PROCESS state.
+                status_ = PROCESS;
+
+                // As part of the initial CREATE state, we *request* that the system
+                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this request, "this" acts
+                // are the tag uniquely identifying the request (so that different CallData
+                // instances can serve different requests concurrently), in this case
+                // the memory address of this CallData instance.
+
+                service_->RequestAddNonDomainJoinedKerberosLease( &add_krb_ctx_,
+                                                                 &handle_krb_request_,
+                                                   &handle_krb_responder_, cq_, cq_, this );
+            }
+            else if ( status_ == PROCESS )
+            {
+                // Spawn a new CallData instance to serve new clients while we process
+                // the one for this CallData. The instance will deallocate itself as
+                // part of its FINISH state.
+                new CallDataAddNonDomainJoinedKerberosLease(service_, cq_ );
+                // The actual processing.
+                handle_krb_reply_.set_lease_id( "12345" );
+
+                // And we are done! Let the gRPC runtime know we've finished, using the
+                // memory address of this instance as the uniquely identifying tag for
+                // the event.
+                status_ = FINISH;
+                handle_krb_responder_.Finish( handle_krb_reply_, grpc::Status::OK, this );
+            }
+            else
+            {
+                GPR_ASSERT( status_ == FINISH );
+                // Once in the FINISH state, deallocate ourselves (CallData).
+                delete this;
+            }
+
+            return;
+        }
+
+        void Proceed()
+        {
+            if ( cookie.compare( CLASS_NAME_CallDataAddNonDomainJoinedKerberosLease ) != 0 )
+            {
+                return;
+            }
+            printf( "AddNonDomainJoinedKerberosLease %p status: %d\n", this, status_ );
+            if ( status_ == CREATE )
+            {
+                // Make this instance progress to the PROCESS state.
+                status_ = PROCESS;
+
+                // As part of the initial CREATE state, we *request* that the system
+                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this request, "this" acts
+                // are the tag uniquely identifying the request (so that different CallData
+                // instances can serve different requests concurrently), in this case
+                // the memory address of this CallData instance.
+
+                service_->RequestAddNonDomainJoinedKerberosLease( &add_krb_ctx_,
+                                                                 &handle_krb_request_,
+                                                   &handle_krb_responder_, cq_, cq_, this );
+            }
+            else if ( status_ == PROCESS )
+            {
+                // Spawn a new CallData instance to serve new clients while we process
+                // the one for this CallData. The instance will deallocate itself as
+                // part of its FINISH state.
+                new CallDataAddNonDomainJoinedKerberosLease(service_, cq_ );
+                // The actual processing.
+                handle_krb_reply_.set_lease_id( "12345" );
+
+                // And we are done! Let the gRPC runtime know we've finished, using the
+                // memory address of this instance as the uniquely identifying tag for
+                // the event.
+                status_ = FINISH;
+                handle_krb_responder_.Finish( handle_krb_reply_, grpc::Status::OK, this );
+            }
+            else
+            {
+                GPR_ASSERT( status_ == FINISH );
+                // Once in the FINISH state, deallocate ourselves (CallData).
+                delete this;
+            }
+
+            return;
+        }
+
+      private:
+        // The means of communication with the gRPC runtime for an asynchronous
+        // server.
+        credentialsfetcher::CredentialsFetcherService::AsyncService* service_;
+        // The producer-consumer queue where for asynchronous server notifications.
+        grpc::ServerCompletionQueue* cq_;
+        // Context for the rpc, allowing to tweak aspects of it such as the use
+        // of compression, authentication, as well as to send metadata back to the
+        // client.
+        grpc::ServerContext add_krb_ctx_;
+
+        // What we get from the client.
+        credentialsfetcher::CreateNonDomainJoinedKerberosLeaseRequest handle_krb_request_;
+        // What we send back to the client.
+        credentialsfetcher::CreateNonDomainJoinedKerberosLeaseResponse handle_krb_reply_;
+
+        // The means to get back to the client.
+        grpc::ServerAsyncResponseWriter<credentialsfetcher
+                                        ::CreateNonDomainJoinedKerberosLeaseResponse>
+            handle_krb_responder_;
+
+        // Let's implement a tiny state machine with the following states.
+        enum CallStatus
+        {
+            CREATE,
+            PROCESS,
+            FINISH
+        };
+        CallStatus status_; // The current serving state.
+    };
+
+    // Class encompasing the state and logic needed to serve a request.
+    class CallDataRenewNonDomainJoinedKerberosLease
+    {
+      public:
+        std::string cookie;
+#define CLASS_NAME_CallDataRenewNonDomainJoinedKerberosLease \
+    "CallDataRenewNonDomainJoinedKerberosLease"
+        // Take in the "service" instance (in this case representing an asynchronous
+        // server) and the completion queue "cq" used for asynchronous communication
+        // with the gRPC runtime.
+        CallDataRenewNonDomainJoinedKerberosLease(
+            credentialsfetcher::CredentialsFetcherService::AsyncService* service,
+            grpc::ServerCompletionQueue* cq )
+            : service_( service )
+            , cq_( cq )
+            , handle_krb_responder_( &add_krb_ctx_ )
+            , status_( CREATE )
+        {
+            cookie = CLASS_NAME_CallDataRenewNonDomainJoinedKerberosLease;
+            // Invoke the serving logic right away.
+            Proceed();
+        }
+
+        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
+                      std::string aws_sm_secret_name )
+        {
+            if ( cookie.compare( CLASS_NAME_CallDataRenewNonDomainJoinedKerberosLease ) != 0 )
+            {
+                return;
+            }
+
+            printf( "RenewNonDomainJoinedKerberosLease %p status: %d\n", this, status_ );
+            if ( status_ == CREATE )
+            {
+                // Make this instance progress to the PROCESS state.
+                status_ = PROCESS;
+
+                // As part of the initial CREATE state, we *request* that the system
+                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this request, "this" acts
+                // are the tag uniquely identifying the request (so that different CallData
+                // instances can serve different requests concurrently), in this case
+                // the memory address of this CallData instance.
+
+                service_->RequestRenewNonDomainJoinedKerberosLease( &add_krb_ctx_,
+                                                                  &handle_krb_request_,
+                                                                  &handle_krb_responder_, cq_, cq_, this );
+            }
+            else if ( status_ == PROCESS )
+            {
+                // Spawn a new CallData instance to serve new clients while we process
+                // the one for this CallData. The instance will deallocate itself as
+                // part of its FINISH state.
+                new CallDataRenewNonDomainJoinedKerberosLease(service_, cq_ );
+                // The actual processing.
+                handle_krb_reply_.add_renewed_kerberos_file_paths(
+                    "/var/credentials-fetcher/krb5cc" );
+
+                // And we are done! Let the gRPC runtime know we've finished, using the
+                // memory address of this instance as the uniquely identifying tag for
+                // the event.
+                status_ = FINISH;
+                handle_krb_responder_.Finish( handle_krb_reply_, grpc::Status::OK, this );
+            }
+            else
+            {
+                GPR_ASSERT( status_ == FINISH );
+                // Once in the FINISH state, deallocate ourselves (CallData).
+                delete this;
+            }
+
+            return;
+        }
+
+        void Proceed()
+        {
+            if ( cookie.compare( CLASS_NAME_CallDataRenewNonDomainJoinedKerberosLease ) != 0 )
+            {
+                return;
+            }
+            printf( "RenewNonDomainJoinedKerberosLease %p status: %d\n", this, status_ );
+            if ( status_ == CREATE )
+            {
+                // Make this instance progress to the PROCESS state.
+                status_ = PROCESS;
+
+                // As part of the initial CREATE state, we *request* that the system
+                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this request, "this" acts
+                // are the tag uniquely identifying the request (so that different CallData
+                // instances can serve different requests concurrently), in this case
+                // the memory address of this CallData instance.
+
+                service_->RequestRenewNonDomainJoinedKerberosLease( &add_krb_ctx_,
+                                                                  &handle_krb_request_,
+                                                                  &handle_krb_responder_, cq_, cq_, this );
+            }
+            else if ( status_ == PROCESS )
+            {
+                // Spawn a new CallData instance to serve new clients while we process
+                // the one for this CallData. The instance will deallocate itself as
+                // part of its FINISH state.
+                new CallDataRenewNonDomainJoinedKerberosLease(service_, cq_ );
+                // The actual processing.
+                handle_krb_reply_.add_renewed_kerberos_file_paths(
+                    "/var/credentials-fetcher/krb5cc" );
+
+                // And we are done! Let the gRPC runtime know we've finished, using the
+                // memory address of this instance as the uniquely identifying tag for
+                // the event.
+                status_ = FINISH;
+                handle_krb_responder_.Finish( handle_krb_reply_, grpc::Status::OK, this );
+            }
+            else
+            {
+                GPR_ASSERT( status_ == FINISH );
+                // Once in the FINISH state, deallocate ourselves (CallData).
+                delete this;
+            }
+
+            return;
+        }
+
+      private:
+        // The means of communication with the gRPC runtime for an asynchronous
+        // server.
+        credentialsfetcher::CredentialsFetcherService::AsyncService* service_;
+        // The producer-consumer queue where for asynchronous server notifications.
+        grpc::ServerCompletionQueue* cq_;
+        // Context for the rpc, allowing to tweak aspects of it such as the use
+        // of compression, authentication, as well as to send metadata back to the
+        // client.
+        grpc::ServerContext add_krb_ctx_;
+
+        // What we get from the client.
+        credentialsfetcher::RenewNonDomainJoinedKerberosLeaseRequest handle_krb_request_;
+        // What we send back to the client.
+        credentialsfetcher::RenewNonDomainJoinedKerberosLeaseResponse handle_krb_reply_;
+
+        // The means to get back to the client.
+        grpc::ServerAsyncResponseWriter<credentialsfetcher
+                                        ::RenewNonDomainJoinedKerberosLeaseResponse>
+            handle_krb_responder_;
+
+        // Let's implement a tiny state machine with the following states.
+        enum CallStatus
+        {
+            CREATE,
+            PROCESS,
+            FINISH
+        };
+        CallStatus status_; // The current serving state.
+    };
+
+    // Class encompasing the state and logic needed to serve a request.
     class CallDataDeleteKerberosLease
     {
       public:
@@ -500,6 +802,8 @@ class CredentialsFetcherImpl final
         bool ok;
 
         new CallDataCreateKerberosLease( &service_, cq_.get() );
+        new CallDataAddNonDomainJoinedKerberosLease ( &service_, cq_.get() );
+        new CallDataRenewNonDomainJoinedKerberosLease ( &service_, cq_.get() );
         new CallDataDeleteKerberosLease( &service_, cq_.get() );
 
         while ( pthread_shutdown_signal != nullptr && !( *pthread_shutdown_signal ) )
@@ -515,6 +819,12 @@ class CredentialsFetcherImpl final
 
             static_cast<CallDataCreateKerberosLease*>( got_tag )->Proceed( krb_files_dir, cf_logger,
                                                                            aws_sm_secret_name );
+            static_cast<CallDataAddNonDomainJoinedKerberosLease*>( got_tag )->Proceed(
+                krb_files_dir, cf_logger,
+                                                                           aws_sm_secret_name );
+            static_cast<CallDataRenewNonDomainJoinedKerberosLease*>( got_tag )->Proceed(
+                krb_files_dir, cf_logger,
+                aws_sm_secret_name );
             static_cast<CallDataDeleteKerberosLease*>( got_tag )->Proceed( krb_files_dir, cf_logger,
                                                                            aws_sm_secret_name );
         }
