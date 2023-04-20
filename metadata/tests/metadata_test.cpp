@@ -14,6 +14,12 @@ int read_meta_data_json_test()
         // create the meta file in the lease directory
         boost::filesystem::path dirPath( file_path );
         boost::filesystem::create_directories( dirPath.parent_path() );
+
+        if ( !boost::filesystem::exists( file_path ) )
+        {
+            std::ofstream file( file_path );
+            file.close();
+        }
     }
 
     std::list<creds_fetcher::krb_ticket_info*> result = read_meta_data_json( metadata_file_path );
@@ -23,7 +29,7 @@ int read_meta_data_json_test()
         std::cout << "reading meta data file test is failed" << std::endl;
         for ( auto file_path : paths )
         {
-            boost::filesystem::remove_all(file_path );
+           boost::filesystem::remove_all(file_path );
         }
         return EXIT_FAILURE;
     }
@@ -64,6 +70,12 @@ int write_meta_data_json_test()
         // create the meta file in the lease directory
         boost::filesystem::path dirPath( file_path );
         boost::filesystem::create_directories( dirPath.parent_path() );
+
+        if ( !boost::filesystem::exists( file_path ) )
+        {
+            std::ofstream file( file_path );
+            file.close();
+        }
     }
 
     std::list<creds_fetcher::krb_ticket_info*> test_ticket_info =

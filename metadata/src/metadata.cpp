@@ -70,6 +70,7 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
                 krb_ticket_info->service_account_name =
                     kv.second.get<std::string>( "service_account_name" );
                 krb_ticket_info->domain_name = kv.second.get<std::string>( "domain_name" );
+                krb_ticket_info->domainless_user = kv.second.get<std::string>( "domainless_user" );
 
                 krb_ticket_info_list.push_back( krb_ticket_info );
             }
@@ -94,7 +95,8 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
             "krb_file_path":
 "\/usr\/share\/credentials-fetcher\/krbdir\/3e1ff0bb9f966192c440\/ccname_WebApp01_OPMsbZ",
             "service_account_name": "WebApp01",
-            "domain_name": "contoso.com"
+            "domain_name": "contoso.com",
+            "domainless_user": "user1"
         }
     ]
 }
@@ -126,6 +128,7 @@ int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_
             ticket_info.put( "krb_file_path", krb_ticket_info->krb_file_path );
             ticket_info.put( "service_account_name", krb_ticket_info->service_account_name );
             ticket_info.put( "domain_name", krb_ticket_info->domain_name );
+            ticket_info.put( "domainless_user", krb_ticket_info->domainless_user );
 
             krb_ticket_info_parent.push_back( std::make_pair( "", ticket_info ) );
         }
