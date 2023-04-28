@@ -494,8 +494,17 @@ int main( int argc, char** argv )
         }
         else if ( arg == "--create" )
         {
-            std::cout << "krb tickets will get created" << std::endl;
-            create_krb_ticket( client, credspec_contents );
+            if ( i + 1 < argc )
+            {
+                std::list<std::string> credspecs = {argv[i + 1]};
+                create_krb_ticket( client, credspecs );
+                i++;
+            }
+            else
+            {
+                std::cout << "krb tickets will get created" << std::endl;
+                create_krb_ticket( client, credspec_contents );
+            }
         }
         else if ( arg == "--invalidargs" )
         {
