@@ -263,6 +263,54 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
     return result.first;
 }
 
+
+/**
+ * This function generates kerberos ticket with user with access to gMSA password credentials
+ * User credentials must have adequate privileges to read gMSA passwords
+ * This is an alternative to the machine credentials approach above
+ * @param cf_daemon - parent daemon object
+ * @return error-code - 0 if successful
+ */
+int get_domainless_user_krb_ticket( std::string domain_name, std::string username, std::string
+                                                                                       password,
+                         creds_fetcher::CF_logger& cf_logger )
+{
+    std::pair<int, std::string> result;
+
+    std::pair<int, std::string> cmd = exec_shell_cmd( "which hostname" );
+    rtrim( cmd.second );
+    if ( !check_file_permissions( cmd.second ) )
+    {
+        return -1;
+    }
+
+    cmd = exec_shell_cmd( "which kinit" );
+    rtrim( cmd.second );
+    if ( !check_file_permissions( cmd.second ) )
+    {
+        return -1;
+    }
+
+    cmd = exec_shell_cmd( "which ldapsearch" );
+    rtrim( cmd.second );
+    if ( !check_file_permissions( cmd.second ) )
+    {
+        return -1;
+    }
+
+    std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
+                    []( unsigned char c ) { return std::toupper( c ); } );
+    std::string kinit_cmd = "echo '"  + password +  "' | kinit -V " + username + "@" +
+                            domain_name;
+    username = "xxxx";
+    password = "xxxx";
+    result = exec_shell_cmd( kinit_cmd );
+    kinit_cmd = "xxxx";
+
+    return result.first;
+}
+
+
 /**
  * base64_decode - Decodes base64 encoded string
  * @param password - base64 encoded password
@@ -708,28 +756,97 @@ bool is_ticket_ready_for_renewal( std::string krb_cc_name )
 }
 
 /**
- * This function does the ticket renewal.
- * TBD:: update the in memory db about the status of the ticket.
- * @param principal
- * @param krb_ccname
+ * This function does the ticket renewal in domainless mode.
+ * @param krb_files_dir
+ * @param domain_name
+ * @param username
+ * @param password
  */
-void krb_ticket_renewal( std::string principal, const std::string& krb_ccname )
+std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_dir, std::string
+                                                                                         domain_name,
+                                               std::string username, std::string password,
+                                               creds_fetcher::CF_logger& cf_logger )
 {
-    std::string set_krb_ccname_cmd;
-
-    // set krb cache location krb5ccname
-    if ( not krb_ccname.empty() )
+    std::list<std::string> renewed_krb_ticket_paths;
+    // identify the metadata files in the krb directory
+    std::vector<std::string> metadatafiles;
+    for ( boost::filesystem::recursive_directory_iterator end, dir( krb_files_dir );
+          dir != end; ++dir )
     {
-        set_krb_ccname_cmd = std::string( "export KRB5CCNAME=" ) + krb_ccname;
+        auto path = dir->path();
+        if ( boost::filesystem::is_regular_file( path ) )
+        {
+            // find the file with metadata extension
+            std::string filename = path.filename().string();
+            if ( !filename.empty() && filename.find( "_metadata" ) != std::string::npos )
+            {
+                std::string filepath = path.parent_path().string() + "/" + filename;
+                metadatafiles.push_back( filepath );
+            }
+        }
     }
 
-    std::string krb_ticket_refresh = set_krb_ccname_cmd + " && " + std::string( "kinit -R " ) +
-                                     std::string( std::move( principal ) );
+    // read the information of service account from the files
+    for ( auto file_path : metadatafiles )
+    {
+        std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list =
+            read_meta_data_json( file_path );
 
-    // TBD: replace with exec_shell_cmd()
-    system( krb_ticket_refresh.c_str() );
+        // refresh the kerberos tickets for the service accounts, if tickets ready for
+        // renewal
+        for ( auto krb_ticket : krb_ticket_info_list )
+        {
+            std::pair<int, std::string> gmsa_ticket_result;
+            std::string krb_cc_name = krb_ticket->krb_file_path;
+            // check if the ticket is ready for renewal
+            if ( is_ticket_ready_for_renewal( krb_cc_name ) )
+            {
+                int num_retries = 1;
+                for ( int i = 0; i <= num_retries; i++ )
+                {
+                    gmsa_ticket_result = get_gmsa_krb_ticket(
+                        krb_ticket->domain_name, krb_ticket->service_account_name,
+                        krb_cc_name, cf_logger );
+                    if ( gmsa_ticket_result.first != 0 )
+                    {
+                        cf_logger.logger( LOG_ERR,
+                                          "ERROR: Cannot get gMSA krb ticket" );
+                        // if tickets are created in domainless mode
+                        std::string domainless_user = krb_ticket->domainless_user;
+                        if(domainless_user != "" && domainless_user == username)
+                        {
+                            int status = get_domainless_user_krb_ticket( domain_name, username,
+                                                                         password, cf_logger );
 
-    // TBD: Add error handling
+                            if ( status < 0 )
+                            {
+                                cf_logger.logger( LOG_ERR,
+                                                  "Error %d: Cannot get user krb ticket",
+                                                  status );
+                            }
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            else
+            {
+
+                renewed_krb_ticket_paths.push_back( krb_cc_name );
+
+                cf_logger.logger( LOG_INFO, "gMSA ticket is at %s", krb_cc_name );
+                std::cout << "gMSA ticket is at " + krb_cc_name +
+                                 " is not yet ready for "
+                                 "renewal"
+                          << std::endl;
+            }
+        }
+    }
+
+    return renewed_krb_ticket_paths;
 }
 
 /**

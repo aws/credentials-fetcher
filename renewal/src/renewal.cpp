@@ -53,8 +53,9 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                 {
                     std::pair<int, std::string> gmsa_ticket_result;
                     std::string krb_cc_name = krb_ticket->krb_file_path;
-                    // check if the ticket is ready for renewal
-                    if ( is_ticket_ready_for_renewal( krb_cc_name ) )
+                    std::string domainless_user = krb_ticket->domainless_user;
+                    // check if the ticket is ready for renewal and not created in domainless mode
+                    if ( is_ticket_ready_for_renewal( krb_cc_name ) && domainless_user == "")
                     {
                         int num_retries = 1;
                         for ( int i = 0; i <= num_retries; i++ )
