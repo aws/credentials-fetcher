@@ -644,11 +644,10 @@ class CredentialsFetcherImpl final
             }
             else if ( status_ == PROCESS )
             {
-                // The actual processing.
                 // Spawn a new CallData instance to serve new clients while we process
                 // the one for this CallData. The instance will deallocate itself as
                 // part of its FINISH state.
-                new CallDataCreateKerberosLease( service_, cq_ );
+                new CallDataRenewNonDomainJoinedKerberosLease( service_, cq_ );
                 // The actual processing.
                 std::string lease_id = generate_lease_id();
                 std::string username = renew_domainless_krb_request_.username();
@@ -720,8 +719,8 @@ class CredentialsFetcherImpl final
                 // the memory address of this CallData instance.
 
                 service_->RequestRenewNonDomainJoinedKerberosLease( &add_krb_ctx_,
-                                                                  &renew_domainless_krb_request_,
-                                                                  &handle_krb_responder_, cq_, cq_, this );
+                                                                    &renew_domainless_krb_request_,
+                                                                    &handle_krb_responder_, cq_, cq_, this );
             }
             else if ( status_ == PROCESS )
             {
@@ -737,7 +736,8 @@ class CredentialsFetcherImpl final
                 // memory address of this instance as the uniquely identifying tag for
                 // the event.
                 status_ = FINISH;
-                handle_krb_responder_.Finish( renew_domainless_krb_reply_, grpc::Status::OK, this );
+                handle_krb_responder_.Finish( renew_domainless_krb_reply_, grpc::Status::OK,
+                                              this );
             }
             else
             {
@@ -761,7 +761,8 @@ class CredentialsFetcherImpl final
         grpc::ServerContext add_krb_ctx_;
 
         // What we get from the client.
-        credentialsfetcher::RenewNonDomainJoinedKerberosLeaseRequest renew_domainless_krb_request_;
+        credentialsfetcher::RenewNonDomainJoinedKerberosLeaseRequest
+            renew_domainless_krb_request_;
         // What we send back to the client.
         credentialsfetcher::RenewNonDomainJoinedKerberosLeaseResponse renew_domainless_krb_reply_;
 
