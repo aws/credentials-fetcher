@@ -830,12 +830,13 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
                             break;
                         }
                     }
+                    else{
+                        renewed_krb_ticket_paths.push_back( krb_cc_name );
+                    }
                 }
             }
             else
             {
-
-                renewed_krb_ticket_paths.push_back( krb_cc_name );
 
                 cf_logger.logger( LOG_INFO, "gMSA ticket is at %s", krb_cc_name );
                 std::cout << "gMSA ticket is at " + krb_cc_name +
