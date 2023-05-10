@@ -86,6 +86,104 @@ class CredentialsFetcherClient
     }
 
     /**
+     * Test method to create kerberos tickets in non domain joined mode
+     * @param credspec_contents - information of service account
+     * @param username - username for the AD user
+     * @param password - password for the AD user
+     * @param domain - domain associated to gMSA account
+     * @return
+     */
+
+    std::pair<std::string, std::list<std::string>> AddNonDomainJoinedKerberosLeaseMethod(
+        std::list<std::string> credspec_contents, std::string username, std::string password, std::string domain )
+    {
+        // Prepare request
+        std::list<std::string> krb_ticket_paths;
+        credentialsfetcher::CreateNonDomainJoinedKerberosLeaseRequest request;
+        std::pair<std::string, std::list<std::string>> result;
+        for ( std::list<std::string>::const_iterator i = credspec_contents.begin();
+              i != credspec_contents.end(); ++i )
+        {
+            request.add_credspec_contents( i->c_str() );
+        }
+        request.set_username(username);
+        request.set_password(password);
+        request.set_domain(domain);
+
+        credentialsfetcher::CreateNonDomainJoinedKerberosLeaseResponse response;
+        grpc::ClientContext context;
+        grpc::Status status;
+
+        // Send request
+        status = _stub->AddNonDomainJoinedKerberosLease( &context, request, &response );
+
+        // Handle response
+        if ( status.ok() )
+        {
+            for ( int i = 0; i < response.created_kerberos_file_paths_size(); i++ )
+            {
+                std::string msg =
+                    "created ticket for non domain joined gMSA " + response.created_kerberos_file_paths( i );
+                krb_ticket_paths.push_back( msg );
+                std::cout << msg << std::endl;
+            }
+            result = std::pair<std::string, std::list<std::string>>( response.lease_id(),
+                                                                     krb_ticket_paths );
+        }
+        else
+        {
+            std::cerr << status.error_code() << ": " << status.error_message() << std::endl;
+            result =
+                std::pair<std::string, std::list<std::string>>( "RPC failed", krb_ticket_paths );
+            return result;
+        }
+
+        return result;
+    }
+
+    /**
+     * Test method to renew kerberos tickets in non domain joined mode
+     * @param username - username for the AD user
+     * @param password - password for the AD user
+     * @param domain - domain associated to gMSA account
+     * @return
+     */
+
+    std::list<std::string> RenewNonDomainJoinedKerberosLeaseMethod(std::string username, std::string password, std::string
+                                                                                          domain )
+    {
+        // Prepare request
+        std::list<std::string> krb_ticket_paths;
+        credentialsfetcher::RenewNonDomainJoinedKerberosLeaseRequest request;
+        request.set_username(username);
+        request.set_password(password);
+        request.set_domain(domain);
+
+        credentialsfetcher::RenewNonDomainJoinedKerberosLeaseResponse response;
+        grpc::ClientContext context;
+        grpc::Status status;
+
+        // Send request
+        status = _stub->RenewNonDomainJoinedKerberosLease( &context, request, &response );
+
+        // Handle response
+        if ( status.ok() )
+        {
+            std::cout << "kerberos ticket renewal successful" <<
+                std::endl;
+            for ( int i = 0; i < response.renewed_kerberos_file_paths_size(); i++ )
+            {
+                std::string msg =
+                    "renewed ticket file " + response.renewed_kerberos_file_paths( i );
+                krb_ticket_paths.push_back( msg );
+                std::cout << msg << std::endl;
+            }
+        }
+        return krb_ticket_paths;
+    }
+
+
+    /**
      * Test method to delete kerberos tickets
      * @param credspec_contents - lease_id corresponding to the tickets created
      * @return
@@ -141,6 +239,11 @@ static void show_usage( std::string name )
               << "\t --create \t\tcreate krb tickets for service account\n"
               << "\t --delete \t\tdelete krb tickets for a given lease_id\tprovide lease_id to be "
                  "deleted\n"
+              << "\t --create_kerberos_tickets_non_domain_joined \t\t create tickets for non domain joined gMSA \tprovide"
+                 " username, password, domain"
+              << "\t --renew_kerberos_tickets_non_domain_joined \t\t create tickets for non domain "
+                 "joined gMSA \tprovide"
+                 "username, password, domain"
               << "\t --invalidargs \t\ttest with invalid args, failure scenario\n"
               << "\t --run_stress_test \t\tstress test with multiple accounts and leases\n"
               << std::endl;
@@ -155,6 +258,30 @@ std::pair<std::string, std::list<std::string>> create_krb_ticket(
     std::cout << "Client received output for add kerberos lease: "
               << add_kerberos_lease_response.first << std::endl;
     return add_kerberos_lease_response;
+}
+
+// create kerberos tickets non domain-joined
+std::pair<std::string, std::list<std::string>> create_krb_ticket_non_domain_joined(
+    CredentialsFetcherClient& client, std::list<std::string> credspec_contents,
+    std::string username, std::string password, std::string domain )
+{
+    std::pair<std::string, std::list<std::string>> non_domain_joined_kerberos_lease_response =
+        client.AddNonDomainJoinedKerberosLeaseMethod( credspec_contents, username, password,
+                                                      domain );
+    std::cout << "Client received output for add kerberos lease non domain joined: "
+              << non_domain_joined_kerberos_lease_response.first << std::endl;
+    return non_domain_joined_kerberos_lease_response;
+}
+
+// renew kerberos tickets non domain-joined
+ std::list<std::string> renew_krb_ticket_non_domain_joined(
+    CredentialsFetcherClient& client, std::string username,
+    std::string password, std::string domain )
+{
+    std::list<std::string> non_domain_joined_kerberos_lease_response =
+        client.RenewNonDomainJoinedKerberosLeaseMethod( username, password, domain );
+    std::cout << "Client received output for renew kerberos lease non domain joined" << std::endl;
+    return non_domain_joined_kerberos_lease_response;
 }
 
 // delete kerberos tickets
@@ -258,6 +385,10 @@ int run_stress_test( CredentialsFetcherClient& client, int num_of_leases,
 int main( int argc, char** argv )
 {
     std::string lease_id;
+    std::string username;
+    std::string password;
+    std::string domain;
+    std::string is_renewal;
     int number_of_leases;
     int number_of_service_acounts;
     std::string server_address{ unix_socket_address };
@@ -290,6 +421,7 @@ int main( int argc, char** argv )
         "\"MachineAccountName\":\"WebApp01\",\"Guid\":\"af602f85-d754-4eea-9fa8-fd76810485f1\","
         "\"DnsTreeName\":\"contoso.com\",\"NetBiosName\":\"contoso\"}," };
 
+    std::list<std::string> lease_ids = {"12345", "34567", "45678"};
     // create and delete krb tickets
     if ( argc == 1 )
     {
@@ -321,10 +453,58 @@ int main( int argc, char** argv )
             delete_krb_ticket( client, lease_id );
             i++;
         }
+        else if(arg == "--create_kerberos_tickets_non_domain_joined" ){
+            if ( i + 2 < argc )
+            {
+                username = argv[i + 1];
+                password = argv[i + 2];
+                domain = argv[i + 3];
+            }
+            else
+            {
+                std::cout << "--create_kerberos_tickets_non_domain_joined option requires username, "
+                             "password, domain"
+                             "argument." << std::endl;
+                return 0;
+            }
+            std::cout << "krb tickets will get created" << std::endl;
+            create_krb_ticket_non_domain_joined( client, credspec_contents, username, password,
+                                                 domain );
+            i++;
+        }
+        else if(arg == "--renew_kerberos_tickets_non_domain_joined" ){
+            if ( i + 2 < argc )
+            {
+                username = argv[i + 1];
+                password = argv[i + 2];
+                domain = argv[i + 3];
+            }
+            else
+            {
+                std::cout << "--renew_kerberos_tickets_non_domain_joined option requires "
+                             "username, "
+                             "password, domain"
+                             "argument." << std::endl;
+                return 0;
+            }
+            std::cout << "krb tickets will get renewed" << std::endl;
+            renew_krb_ticket_non_domain_joined( client, username, password,
+                                                 domain );
+            i++;
+        }
         else if ( arg == "--create" )
         {
-            std::cout << "krb tickets will get created" << std::endl;
-            create_krb_ticket( client, credspec_contents );
+            if ( i + 1 < argc )
+            {
+                std::list<std::string> credspecs = {argv[i + 1]};
+                create_krb_ticket( client, credspecs );
+                i++;
+            }
+            else
+            {
+                std::cout << "krb tickets will get created" << std::endl;
+                create_krb_ticket( client, credspec_contents );
+            }
         }
         else if ( arg == "--invalidargs" )
         {

@@ -40,6 +40,7 @@ namespace creds_fetcher
         std::string krb_file_path;
         std::string service_account_name;
         std::string domain_name;
+        std::string domainless_user;
     };
 
     /*
@@ -114,13 +115,19 @@ int generate_host_machine_krb_ticket( const char* krb_ccname = "" );
 int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger );
 int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name,
                          creds_fetcher::CF_logger& cf_logger );
+int get_domainless_user_krb_ticket( std::string domain_name, std::string username, std::string
+                                                                                   password,
+                                creds_fetcher::CF_logger& cf_logger );
 
 std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
                                                  const std::string& gmsa_account_name,
                                                  const std::string& krb_cc_name,
                                                  creds_fetcher::CF_logger& cf_logger );
 
-void krb_ticket_renewal( std::string principal, const std::string& krb_ccname );
+std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_dir, std::string
+                                                                                         domain_name,
+                                                          std::string username, std::string password,
+                                                          creds_fetcher::CF_logger& cf_logger );
 
 void krb_ticket_creation( const char* ldap_uri_arg, const char* gmsa_account_name_arg,
                           const char* krb_ccname = "" );
