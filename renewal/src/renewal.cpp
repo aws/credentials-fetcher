@@ -65,9 +65,20 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                                 krb_cc_name, cf_logger );
                             if ( gmsa_ticket_result.first != 0 )
                             {
+                                int status = -1;
                                 cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket" );
-                                int status =
-                                    get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
+                                if (domainless_user.find("awsdomainlessusersecret") !=
+                                                           std::string::npos) {
+                                    int pos = domainless_user.find(":");
+                                    std::string domainlessUser = domainless_user.substr(pos + 1);
+                                    status = get_user_krb_ticket(krb_ticket->domain_name,
+                                                                  domainlessUser, cf_logger );
+                                }
+                                else
+                                {
+                                    status = get_machine_krb_ticket( krb_ticket->domain_name,
+                                                                         cf_logger );
+                                }
                                 if ( status < 0 )
                                 {
                                     cf_logger.logger( LOG_ERR,

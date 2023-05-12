@@ -154,6 +154,8 @@ class CredentialsFetcherImpl final
                         {
                             status = get_user_krb_ticket( krb_ticket->domain_name,
                                                           aws_sm_secret_name, cf_logger );
+                            krb_ticket->domainless_user =
+                                "awsdomainlessusersecret:"+aws_sm_secret_name;
                         }
                         else
                         {
