@@ -17,6 +17,8 @@ find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
 file(STRINGS /etc/os-release DISTRO REGEX "^NAME=")
 string(REGEX REPLACE "NAME=\"(.*)\"" "\\1" DISTRO "${DISTRO}")
 
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
 set(config)
 add_subdirectory(config)
 set(api)
@@ -49,7 +51,7 @@ if (NOT CF_TEST_GMSA_ACCOUNT)
 endif()
 
 configure_file(${CMAKE_SOURCE_DIR}/config/config.h.in
-	${CMAKE_BINARY_DIR}/config.h @ONLY)
+    ${CMAKE_BINARY_DIR}/config.h @ONLY)
 
 if(DISTRO MATCHES "^(Amazon Linux)$")
 file(WRITE scripts/systemd/credentials-fetcher.service
@@ -87,7 +89,7 @@ else()
             )
 endif()
 
-set(sources ${auth} ${daemon} ${config} ${renewal})
+set(sources ${daemon} ${config} ${renewal})
 
 add_executable(credentials-fetcherd ${sources})
 
@@ -109,7 +111,7 @@ target_include_directories(credentials-fetcherd
         common
         ${GLIB_INCLUDE_DIR}
         ${GLIB_CONFIG_DIR}
-	    ${CMAKE_CURRENT_BINARY_DIR})
+        ${CMAKE_CURRENT_BINARY_DIR})
 
 find_program(DOTNET dotnet ~/.dotnet /usr/bin)
 if (NOT DOTNET)
@@ -125,8 +127,10 @@ add_custom_command(
 target_include_directories(credentials-fetcherd PUBLIC common)
 
 target_link_libraries(credentials-fetcherd
-        PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private boost_filesystem boost_system crypto)
-
+        PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private
+        boost_filesystem boost_system crypto
+        kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
+        com_err krb5support resolv)
 
 target_link_libraries(credentials-fetcherd
             PUBLIC
