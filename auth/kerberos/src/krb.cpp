@@ -812,49 +812,55 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
         // renewal
         for ( auto krb_ticket : krb_ticket_info_list )
         {
-            std::pair<int, std::string> gmsa_ticket_result;
-            std::string krb_cc_name = krb_ticket->krb_file_path;
-            // gMSA kerberos ticket generation needs to have ldap over kerberos
-            // if the ticket exists for the machine/user already reuse it for getting gMSA password
-            // else retry the ticket creation again after generating user/machine kerberos ticket
-            int num_retries = 2;
-            for ( int i = 0; i < num_retries; i++ )
+            std::string domainlessuser = krb_ticket->domainless_user;
+            if(!username.empty()  && username == domainlessuser)
             {
-                gmsa_ticket_result = get_gmsa_krb_ticket( krb_ticket->domain_name,
+                std::pair<int, std::string> gmsa_ticket_result;
+                std::string krb_cc_name = krb_ticket->krb_file_path;
+                // gMSA kerberos ticket generation needs to have ldap over kerberos
+                // if the ticket exists for the machine/user already reuse it for getting gMSA password else retry the ticket creation again after generating user/machine kerberos ticket
+                int num_retries = 2;
+                for ( int i = 0; i < num_retries; i++ )
+                {
+                    gmsa_ticket_result = get_gmsa_krb_ticket( krb_ticket->domain_name,
                                                               krb_ticket->service_account_name,
                                                               krb_cc_name, cf_logger );
-                if ( gmsa_ticket_result.first != 0 )
-                {
-                    if(num_retries == 0)
+                    if ( gmsa_ticket_result.first != 0 )
                     {
-                        cf_logger.logger( LOG_WARNING, "WARNING: Cannot get gMSA krb ticket "
-                                                       "because of expired user/machine ticket, "
-                                                       "will be retried automatically");
-                    }
-                    else{
-                        cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket" );
-                    }
-                    // if tickets are created in domainless mode
-                    std::string domainless_user = krb_ticket->domainless_user;
-                    if ( !domainless_user.empty() && domainless_user == username )
-                    {
-                        int status = get_domainless_user_krb_ticket( domain_name, username,
+                        if ( num_retries == 0 )
+                        {
+                            cf_logger.logger( LOG_WARNING,
+                                              "WARNING: Cannot get gMSA krb ticket "
+                                              "because of expired user/machine ticket, "
+                                              "will be retried automatically" );
+                        }
+                        else
+                        {
+                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket" );
+                        }
+                        // if tickets are created in domainless mode
+                        std::string domainless_user = krb_ticket->domainless_user;
+                        if ( !domainless_user.empty() && domainless_user == username )
+                        {
+                            int status = get_domainless_user_krb_ticket( domain_name, username,
                                                                          password, cf_logger );
 
-                        if ( status < 0 )
-                        {
-                            cf_logger.logger( LOG_ERR, "Error %d: Cannot get user krb ticket",
+                            if ( status < 0 )
+                            {
+                                cf_logger.logger( LOG_ERR, "Error %d: Cannot get user krb ticket",
                                                   status );
+                            }
+                        }
+                        else
+                        {
+                            break;
                         }
                     }
                     else
                     {
-                        break;
+                        renewed_krb_ticket_paths.push_back( krb_cc_name );
+                        i++;
                     }
-                }
-                else
-                {
-                    renewed_krb_ticket_paths.push_back( krb_cc_name );
                 }
             }
         }
