@@ -1,5 +1,5 @@
 %global major_version 1
-%global minor_version 1
+%global minor_version 2
 %global patch_version 0
 
 # For handling bump release by rpmdev-bumpspec and mass rebuild
@@ -14,14 +14,14 @@ License:        Apache-2.0
 URL:            https://github.com/aws/credentials-fetcher
 Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/%{version}.tar.gz
 
-BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-devel boost-devel 
+BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-devel boost-devel
 BuildRequires:  openssl-devel zlib-devel protobuf-devel re2-devel krb5-devel systemd-devel
 BuildRequires:  systemd-rpm-macros dotnet-sdk-6.0 grpc-plugins
 
 Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0
 
 # No one likes you i686
-ExcludeArch:    i686 armv7hl ppc64le
+ExcludeArch:    i686 armv7hl
 
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/CMake/
 
@@ -36,11 +36,12 @@ This spec file is specific to Fedora, use this file to rpmbuild on Fedora.
 
 %prep
 %setup -q
+# abseil-cpp LTS 20230125 requires at least C++14; string_view requires C++17:
+sed -r -i 's/(std=c\+\+)11/\117/' CMakeLists.txt
 
 %build
 %cmake3
 %cmake_build
-
 %install
 
 %cmake_install
@@ -62,6 +63,28 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
 
 %changelog
+* Thu May 15 2023 Sai Kiran Akula <saakla@amazon.com> - 1.2.0
+- Create 1.2.0 release
+
+* Thu Mar 23 2023 Tom Callaway <spot@fedoraproject.org> - 1.1.0-7
+- rebuild for new abseil-cpp
+
+* Tue Mar 07 2023 Benjamin A. Beasley <code@musicinmybrain.net> - 1.1.0-6
+- Build as C++14, required by abseil-cpp 20230125
+
+* Thu Feb 23 2023 Tom Callaway <spotaws@amazon.com> - 1.1.0-5
+- fix build against boost 1.81 (bz2172636)
+
+* Mon Feb 20 2023 Jonathan Wakely <jwakely@redhat.com> - 1.1.0-4
+- Rebuilt for Boost 1.81
+
+* Thu Feb 09 2023 Benjamin A. Beasley <code@musicinmybrain.net> - 1.1.0-3
+- Depend on dotnet-sdk-7.0; there is no longer an unversioned “dotnet” package
+- Restore ppc64le support
+
+* Thu Jan 19 2023 Fedora Release Engineering <releng@fedoraproject.org> - 1.1.0-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_38_Mass_Rebuild
+
 * Thu Oct 27 2022 Sai Kiran Akula <saakla@amazon.com> - 1.1.0
 - Create 1.1 release
 * Mon Oct 24 2022 Samiullah Mohammed <samiull@amazon.com> - 1.0.0
