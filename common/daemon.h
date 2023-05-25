@@ -158,6 +158,7 @@ int parse_config_file( creds_fetcher::Daemon& cf_daemon );
 /**
  * Methods in api module
  */
+bool contains_invalid_characters_in_credentials( const std::string& value );
 int RunGrpcServer( std::string unix_socket_dir, std::string krb_file_path,
                    creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t* shutdown_signal,
                    std::string aws_sm_secret_name );
