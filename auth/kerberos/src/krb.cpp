@@ -73,7 +73,7 @@ static std::pair<int, std::string> exec_shell_cmd( std::string cmd )
  * If the host is domain-joined, the result is of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM'
  * @param domain_name: Expected domain name as per configuration
  * @return result pair<int, std::string> (error-code - 0 if successful
- *                          string of the form EC2AMAZ-Q5VJZQ$@CONTOSO .COM')
+ *                          string of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM')
  */
 static std::pair<int, std::string> get_machine_principal( std::string domain_name, creds_fetcher::CF_logger& cf_logger )
 {
@@ -258,7 +258,7 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
                     []( unsigned char c ) { return std::toupper( c ); } );
 
     // kinit using api interface
-    char *kinit_argv[2];
+    char *kinit_argv[3];
 
     kinit_argv[0] = (char *)"my_kinit";
     username = username + "@" + domain_name;
@@ -292,6 +292,7 @@ int get_domainless_user_krb_ticket( std::string domain_name, std::string usernam
                          creds_fetcher::CF_logger& cf_logger )
 {
     std::pair<int, std::string> result;
+    int ret;
 
     std::pair<int, std::string> cmd = exec_shell_cmd( "which hostname" );
     rtrim( cmd.second );
@@ -316,14 +317,19 @@ int get_domainless_user_krb_ticket( std::string domain_name, std::string usernam
 
     std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
                     []( unsigned char c ) { return std::toupper( c ); } );
-    std::string kinit_cmd = "echo '"  + password +  "' | kinit -V " + username + "@" +
-                            domain_name;
+
+    // kinit using api interface
+    char *kinit_argv[3];
+
+    kinit_argv[0] = (char *)"my_kinit";
+    username = username + "@" + domain_name;
+    kinit_argv[1] = (char *)username.c_str();
+    kinit_argv[2] = (char *)password.c_str();
+    ret = my_kinit_main(2, kinit_argv);
     username = "xxxx";
     password = "xxxx";
-    result = exec_shell_cmd( kinit_cmd );
-    kinit_cmd = "xxxx";
 
-    return result.first;
+    return ret;
 }
 
 
