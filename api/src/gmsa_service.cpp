@@ -10,6 +10,7 @@
 
 #define LEASE_ID_LENGTH 10
 #define UNIX_SOCKET_NAME "credentials_fetcher.sock"
+#define INPUT_CREDENTIALS_LENGTH 256
 
 static const std::vector<char> invalid_characters = {
     '&', '|', ';', '$', '*', '?', '<', '>', '!',' '};
@@ -409,34 +410,46 @@ class CredentialsFetcherImpl final
                 std::string err_msg;
                 if(!contains_invalid_characters_in_credentials(domain))
                 {
-                    create_domainless_krb_reply_.set_lease_id( lease_id );
-                    for ( int i = 0; i < create_domainless_krb_request_.credspec_contents_size(); i++ )
+                    if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
+                                                                                                                                          INPUT_CREDENTIALS_LENGTH )
                     {
-                        creds_fetcher::krb_ticket_info* krb_ticket_info =
-                            new creds_fetcher::krb_ticket_info;
-                        int parse_result = parse_cred_spec(
-                        create_domainless_krb_request_.credspec_contents( i ), krb_ticket_info );
-
-                         // only add the ticket info if the parsing is successful
-                        if ( parse_result == 0 )
+                        create_domainless_krb_reply_.set_lease_id( lease_id );
+                        for ( int i = 0;
+                              i < create_domainless_krb_request_.credspec_contents_size(); i++ )
                         {
-                            std::string krb_files_path = krb_files_dir + "/" + lease_id + "/" +
-                                                     krb_ticket_info->service_account_name;
-                            krb_ticket_info->krb_file_path = krb_files_path;
-                            krb_ticket_info->domainless_user = username;
+                            creds_fetcher::krb_ticket_info* krb_ticket_info =
+                                new creds_fetcher::krb_ticket_info;
+                            int parse_result = parse_cred_spec(
+                                create_domainless_krb_request_.credspec_contents( i ),
+                                krb_ticket_info );
 
-                            // handle duplicate service accounts
-                            if ( !krb_ticket_dirs.count( krb_files_path ) )
+                            // only add the ticket info if the parsing is successful
+                            if ( parse_result == 0 )
                             {
-                                krb_ticket_dirs.insert( krb_files_path );
-                                krb_ticket_info_list.push_back( krb_ticket_info );
+                                std::string krb_files_path = krb_files_dir + "/" + lease_id + "/" +
+                                                             krb_ticket_info->service_account_name;
+                                krb_ticket_info->krb_file_path = krb_files_path;
+                                krb_ticket_info->domainless_user = username;
+
+                                // handle duplicate service accounts
+                                if ( !krb_ticket_dirs.count( krb_files_path ) )
+                                {
+                                    krb_ticket_dirs.insert( krb_files_path );
+                                    krb_ticket_info_list.push_back( krb_ticket_info );
+                                }
+                            }
+                            else
+                            {
+                                err_msg = "Error: credential spec provided is not properly "
+                                          "formatted";
+                                break;
                             }
                         }
-                        else
-                        {
-                            err_msg = "Error: credential spec provided is not properly formatted";
-                            break;
-                        }
+                    }
+                    else
+                    {
+                        err_msg = "Error: domainless AD user credentials is not valid/ "
+                                  "credentials should not be more than 256 charaters";
                     }
                 }
                 else
@@ -690,7 +703,8 @@ class CredentialsFetcherImpl final
                 std::string err_msg;
                 if(!contains_invalid_characters_in_credentials(domain))
                 {
-                    if ( !username.empty() && !password.empty() && !domain.empty() )
+                    if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
+                                                                                                                                          INPUT_CREDENTIALS_LENGTH )
                     {
                         std::list<std::string> renewed_krb_file_paths =
                             renew_kerberos_tickets_domainless( krb_files_dir, domain, username,
@@ -704,7 +718,8 @@ class CredentialsFetcherImpl final
                     }
                     else
                     {
-                        err_msg = "Error: domainless AD user credentials is not valid";
+                        err_msg = "Error: domainless AD user credentials is not valid/ "
+                                  "credentials should not be more than 256 charaters";
                     }
                 }
                 else
