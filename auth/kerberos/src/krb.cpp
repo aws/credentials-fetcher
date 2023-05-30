@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+
 // renew the ticket 1 hrs before the expiration
 #define RENEW_TICKET_HOURS 1
 #define SECONDS_IN_HOUR 3600
@@ -15,6 +16,7 @@
 static const std::string install_path_for_decode_exe =
     "/usr/sbin/credentials_fetcher_utf16_private.exe";
 static const std::string install_path_for_aws_cli = "/usr/bin/aws";
+static const std::string install_path_for_py_script_base_64_decoding = "/usr/sbin/kube2krb.py";
 
 extern "C" int my_kinit_main(int, char **);
 
@@ -202,13 +204,6 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
     int ret;
 
     std::pair<int, std::string> cmd = exec_shell_cmd( "which hostname" );
-    rtrim( cmd.second );
-    if ( !check_file_permissions( cmd.second ) )
-    {
-        return -1;
-    }
-
-    cmd = exec_shell_cmd( "which realm" );
     rtrim( cmd.second );
     if ( !check_file_permissions( cmd.second ) )
     {
@@ -963,4 +958,98 @@ void rtrim( std::string& s )
         std::find_if( s.rbegin(), s.rend(), []( unsigned char ch ) { return !std::isspace( ch ); } )
             .base(),
         s.end() );
+}
+
+/** All kubernetes gMSA support work **/
+/**
+ * This function parses the kube config file
+ * The cred spec file is in json format.
+ * @param kubeconfigpath - kubeconfig path
+ * @param krb_ticket_info - return service account info
+ * @return
+ */
+std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeFilePath,
+                                                              std::string krbdir )
+{
+    std::list<creds_fetcher::kube_config_info*> kube_config_info_list;
+    try
+    {
+        if ( kubeFilePath.empty() )
+        {
+            fprintf( stderr, SD_CRIT "kube file is empty" );
+            return kube_config_info_list;
+        }
+
+        namespace pt = boost::property_tree;
+        pt::ptree root;
+        std::istringstream credspec_stream( kubeFilePath );
+        pt::read_json( kubeFilePath, root );
+
+        std::string lease_id = generate_lease_id();
+        const pt::ptree& child_tree_gmsa =
+            root.get_child( "gmsa_secrets_to_kube_secrets_mappings.ServiceAccountMappings" );
+        for ( auto& kv : child_tree_gmsa )
+        {
+            creds_fetcher::kube_config_info* kube_config_info =  new creds_fetcher::kube_config_info;
+            creds_fetcher::krb_ticket_info* krb_ticket_info =
+                new creds_fetcher::krb_ticket_info;
+            std::string credentialspecpath = kv.second.get<std::string>( "path_to_cred_spec_json" );
+
+            int status = parse_cred_spec( credentialspecpath, krb_ticket_info, true );
+            if(status != -1)
+            {
+                if(!krb_ticket_info->krb_file_path.empty())
+                {
+                    krb_ticket_info->krb_file_path =
+                        krbdir + "/" + lease_id + "/" + krb_ticket_info->service_account_name;
+                }
+                krb_ticket_info->domainless_user = kv.second.get<std::string>( "domainless_user" );
+            }
+            //kv.second.put<std::string>("krb_ticket_location", krb_ticket_info->krb_file_path);
+            kube_config_info->krb_ticket_info = krb_ticket_info;
+
+            std::list<std::string> secret_yaml_paths;
+            for ( const auto& sv : kv.second)
+            {
+                secret_yaml_paths.push_back(sv.second.get<std::string>("path_to_kube_secret_yaml"));
+            }
+            kube_config_info->secret_yaml_paths = secret_yaml_paths;
+            kube_config_info_list.push_back(kube_config_info);
+        }
+        pt::write_json( kubeFilePath, root );
+    }
+    catch ( ... )
+    {
+        fprintf( stderr, SD_CRIT "kubeconfig file is not properly formatted" );
+        return kube_config_info_list;
+    }
+    return kube_config_info_list;
+}
+
+/*
+ * #f=open("/var/credentials-fetcher/krbdir/434d760fade0559999d6/WebApp01/krb5cc","rb")
+ */
+/*
+ * convert_secret_krb2kube : Update secret in kube file for secret by importing from krb ticket
+ */
+std::pair<int, std::string> convert_secret_krb2kube(const std::string kube_secrets_yaml_file,
+                                                     const std::string krb_ticket_file )
+{
+    FILE* fp = fopen( install_path_for_py_script_base_64_decoding.c_str(), "w" );
+    if ( fp == NULL || kube_secrets_yaml_file.empty() || krb_ticket_file.empty() )
+    {
+        return std::make_pair( -1, std::string( "ERROR: parameters" ) );
+    }
+    //fwrite( kube2krb_script, sizeof( char ), strlen(kube2krb_script), fp );
+    fclose( fp );
+
+    std::pair<int, std::string> cmd_result =
+        exec_shell_cmd( std::string( "chmod +x " ) + install_path_for_py_script_base_64_decoding );
+    if ( cmd_result.first != 0 )
+    {
+        return std::make_pair( -1, std::string( "ERROR: chmod" ) );
+    }
+
+    std::string cmd = "python3 " + install_path_for_py_script_base_64_decoding + " " + kube_secrets_yaml_file + " " + krb_ticket_file;
+    return exec_shell_cmd( cmd );
 }

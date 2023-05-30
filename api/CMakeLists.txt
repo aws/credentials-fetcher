@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(api)
 
-FILE(GLOB SRC_FILES src/*.cpp)
+FILE(GLOB SRC_FILES src/*.cpp tests/gmsa_service_test.cpp)
 
 get_filename_component(credentialsfetcher_proto "../protos/credentialsfetcher.proto" ABSOLUTE)
 get_filename_component(credentialsfetcher_proto_path "${credentialsfetcher_proto}" PATH)

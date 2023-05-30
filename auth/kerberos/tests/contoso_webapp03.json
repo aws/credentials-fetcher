@@ -1,0 +1,25 @@
+{
+  "CmsPlugins":  [
+    "ActiveDirectory"
+  ],
+  "DomainJoinConfig":  {
+    "Sid":  "S-1-5-21-4217655605-3681839426-3493040985",
+    "MachineAccountName":  "webapp03",
+    "Guid":  "af602f85-d754-4eea-9fa8-fd76810485f1",
+    "DnsTreeName":  "contoso.com",
+    "DnsName":  "contoso.com",
+    "NetBiosName":  "contoso"
+  },
+  "ActiveDirectoryConfig":  {
+    "GroupManagedServiceAccounts":  [
+      {
+        "Name":  "webapp03",
+        "Scope":  "contoso.com"
+      },
+      {
+        "Name":  "webapp03",
+        "Scope":  "contoso"
+      }
+    ]
+  }
+}

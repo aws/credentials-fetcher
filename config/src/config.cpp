@@ -60,6 +60,15 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
                 << cf_daemon.aws_sm_secret_name << std::endl;
         }
 
+        if ( vm.count( "kube_config_file_path" ) )
+        {
+            cf_daemon.kube_config_file_path = vm["kube_config_file_path"].as<std::string>();
+            std::cout
+                << "Option kubeconfig domainlees config file is selected"
+                << cf_daemon.kube_config_file_path << std::endl;
+        }
+
+
         std::ifstream config_file( ecs_config_file_name );
         std::string line;
         std::vector<std::string> results;

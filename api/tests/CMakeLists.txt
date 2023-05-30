@@ -5,7 +5,6 @@ project(api-tests)
 
 enable_testing()
 
-
 file(
         COPY ${CMAKE_CURRENT_SOURCE_DIR}/stress_test_scripts/credspec_stress_test.txt
         DESTINATION ${CMAKE_CURRENT_BINARY_DIR}

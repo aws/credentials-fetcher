@@ -146,7 +146,7 @@ class CredentialsFetcherImpl final
                     creds_fetcher::krb_ticket_info* krb_ticket_info =
                         new creds_fetcher::krb_ticket_info;
                     int parse_result = parse_cred_spec( create_krb_request_.credspec_contents( i ),
-                                                        krb_ticket_info );
+                                                        krb_ticket_info, false );
 
                     // only add the ticket info if the parsing is successful
                     if ( parse_result == 0 )
@@ -412,6 +412,14 @@ class CredentialsFetcherImpl final
                 {
                     if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
                                                                                                                                           INPUT_CREDENTIALS_LENGTH )
+                    creds_fetcher::krb_ticket_info* krb_ticket_info =
+                        new creds_fetcher::krb_ticket_info;
+                    int parse_result = parse_cred_spec( create_domainless_krb_request_
+                                                            .credspec_contents( i ),
+                                                        krb_ticket_info, false );
+
+                    // only add the ticket info if the parsing is successful
+                    if ( parse_result == 0 )
                     {
                         create_domainless_krb_reply_.set_lease_id( lease_id );
                         for ( int i = 0;
@@ -1105,7 +1113,8 @@ std::string generate_lease_id()
  * @param krb_ticket_info - return service account info
  * @return
  */
-int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info )
+int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info,
+                     bool is_file )
 {
     try
     {
@@ -1117,12 +1126,17 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
 
         namespace pt = boost::property_tree;
         pt::ptree root;
-        std::istringstream credspec_stream( credspec_data );
-        pt::read_json( credspec_stream, root );
+        if(!is_file)
+        {
+            std::istringstream credspec_stream( credspec_data );
+            pt::read_json( credspec_stream, root );
+        }
+        else{
+            pt::read_json( credspec_data, root );
+        }
 
         // get domain name from credspec
         std::string domain_name = root.get<std::string>( "DomainJoinConfig.DnsName" );
-
         // get service account name from credspec
         std::string service_account_name;
         const pt::ptree& child_tree_gmsa =
