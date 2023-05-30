@@ -58,7 +58,7 @@ target_link_libraries(cf_gmsa_service_private
         glib-2.0
         boost_filesystem
         krb5 kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
-        com_err krb5support resolv)
+        com_err krb5support resolv jsoncpp)
 
 enable_testing()
 add_subdirectory(tests)

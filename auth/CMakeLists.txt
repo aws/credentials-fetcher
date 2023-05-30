@@ -4,7 +4,7 @@ project(auth)
 add_subdirectory (kerberos)
 
 FILE(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS kerberos/src/*.cpp
-        kerberos/src/*.c kinit_client/*.c  kerberos/tests/kerberos_test.cpp)
+        kerberos/src/*.c kinit_client/*.c)
 
 set(auth "${SRC_FILES}" PARENT_SCOPE)
 

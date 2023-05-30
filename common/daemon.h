@@ -18,6 +18,8 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#include <json/json.h>
+#include <json/writer.h>
 
 #ifndef _daemon_h_
 #define _daemon_h_
@@ -52,6 +54,7 @@ namespace creds_fetcher
       public:
         std::list<std::string> secret_yaml_paths;
         creds_fetcher::krb_ticket_info* krb_ticket_info;
+        std::map<std::string,std::list<std::string>> secret_yaml_map;
     };
 
     /*
@@ -156,9 +159,9 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
 std::pair<int, std::string> convert_secret_krb2kube(const std::string kube_secrets_yaml_file,
                                                      const std::string krb_ticket_file );
 // unit tests
+int parse_kube_config_json_test();
 int test_utf16_decode();
 int config_parse_test();
-int parse_kube_config_json_test();
 int read_meta_data_json_test();
 int read_meta_data_invalid_json_test();
 int write_meta_data_json_test();

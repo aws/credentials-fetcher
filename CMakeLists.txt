@@ -128,7 +128,7 @@ target_include_directories(credentials-fetcherd PUBLIC common)
 
 target_link_libraries(credentials-fetcherd
         PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private
-        boost_filesystem boost_system crypto
+        boost_filesystem boost_system crypto jsoncpp
         kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
         com_err krb5support resolv)
 

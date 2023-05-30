@@ -412,15 +412,7 @@ class CredentialsFetcherImpl final
                 {
                     if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
                                                                                                                                           INPUT_CREDENTIALS_LENGTH )
-                    creds_fetcher::krb_ticket_info* krb_ticket_info =
-                        new creds_fetcher::krb_ticket_info;
-                    int parse_result = parse_cred_spec( create_domainless_krb_request_
-                                                            .credspec_contents( i ),
-                                                        krb_ticket_info, false );
-
-                    // only add the ticket info if the parsing is successful
-                    if ( parse_result == 0 )
-                    {
+                       {
                         create_domainless_krb_reply_.set_lease_id( lease_id );
                         for ( int i = 0;
                               i < create_domainless_krb_request_.credspec_contents_size(); i++ )
@@ -429,7 +421,7 @@ class CredentialsFetcherImpl final
                                 new creds_fetcher::krb_ticket_info;
                             int parse_result = parse_cred_spec(
                                 create_domainless_krb_request_.credspec_contents( i ),
-                                krb_ticket_info );
+                                krb_ticket_info, false );
 
                             // only add the ticket info if the parsing is successful
                             if ( parse_result == 0 )
@@ -1162,4 +1154,94 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
     }
 
     return 0;
+}
+
+/** All kubernetes gMSA support work **/
+/**
+ * * This function parses the kube config file
+ * The cred spec file is in json format.
+ * @param kubeconfigpath - kubeconfig path
+ * @param krb_ticket_info - return service account info
+ * @return
+*/
+std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeFilePath,
+                                                                          std::string krbdir )
+{
+    std::list<creds_fetcher::kube_config_info*> kube_config_info_list;
+    try
+    {
+        if ( kubeFilePath.empty() )
+        {
+            fprintf( stderr, SD_CRIT "kube file is empty" );
+            return kube_config_info_list;
+        }
+
+        Json::Value root;
+        Json::CharReaderBuilder rbuilder;
+        std::ifstream credspec_stream( kubeFilePath );
+
+        // write to file
+        Json::StreamWriterBuilder wbuilder;
+        wbuilder["commentStyle"] = "None";
+        wbuilder["indentation"] = "";
+        std::unique_ptr<Json::StreamWriter> writer(wbuilder.newStreamWriter());
+
+        std::string errors;
+
+        bool parsingSuccessful = Json::parseFromStream(rbuilder, credspec_stream, &root, &errors);
+
+        if (!parsingSuccessful) {
+            std::cout << "Failed to parse the JSON, errors:" << std::endl;
+            std::cout << errors << std::endl;
+            return kube_config_info_list;
+        }
+
+        std::string lease_id = generate_lease_id();
+
+        Json::Value &array1 = root["ServiceAccountMappings"];
+        for (int i = 0; i < (int)array1.size(); i++)
+        {
+            creds_fetcher::kube_config_info* kube_config_info = new creds_fetcher::kube_config_info;
+            creds_fetcher::krb_ticket_info* krb_ticket_info = new creds_fetcher::krb_ticket_info;
+            std::string credentialspecpath = array1[i]["path_to_cred_spec_json"].asString();
+            int status = parse_cred_spec( credentialspecpath, krb_ticket_info, true );
+            if ( status != -1 )
+            {
+                if ( krb_ticket_info->krb_file_path.empty())
+                {
+                    std::string ticket_path = krbdir + "/" + lease_id + "/" +
+                                              krb_ticket_info->service_account_name;
+                    krb_ticket_info->krb_file_path = ticket_path;
+                    array1[i]["krb_ticket_location"] = krb_ticket_info->krb_file_path;
+                }
+                krb_ticket_info->domainless_user = array1[i]["domainless_user"].asString();
+            }
+            kube_config_info->krb_ticket_info = krb_ticket_info;
+
+            std::list<std::string> secret_yaml_paths;
+            Json::Value& array2 = array1[i]["kube_context"];
+            for ( int j = 0; j < (int)array2.size(); j++ )
+            {
+                std::string secret_yaml_path = array1[i]["path_to_kube_secret_yaml"].asString();
+                secret_yaml_paths.push_back( secret_yaml_path );
+            }
+            if(!kube_config_info->secret_yaml_map.count(kube_config_info->krb_ticket_info->krb_file_path))
+            {
+                kube_config_info->secret_yaml_map[kube_config_info->krb_ticket_info->krb_file_path]
+                    = secret_yaml_paths;
+            }
+            root["ServiceAccountMappings"] = array1;
+            kube_config_info->secret_yaml_paths = secret_yaml_paths;
+            kube_config_info_list.push_back( kube_config_info );
+        }
+
+        std::ofstream outputFileStream(kubeFilePath);
+        writer -> write(root, &outputFileStream);
+    }
+    catch ( ... )
+    {
+        fprintf( stderr, SD_CRIT "kubeconfig file is not properly formatted" );
+        return kube_config_info_list;
+    }
+    return kube_config_info_list;
 }

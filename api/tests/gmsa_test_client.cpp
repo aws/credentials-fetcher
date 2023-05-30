@@ -170,7 +170,7 @@ class CredentialsFetcherClient
         if ( status.ok() )
         {
             std::cout << "kerberos ticket renewal successful" <<
-                std::endl;
+                 std::endl;
             for ( int i = 0; i < response.renewed_kerberos_file_paths_size(); i++ )
             {
                 std::string msg =
@@ -178,6 +178,9 @@ class CredentialsFetcherClient
                 krb_ticket_paths.push_back( msg );
                 std::cout << msg << std::endl;
             }
+        }
+        else{
+            std::cout << "Failed to renew tickets" << std::endl;
         }
         return krb_ticket_paths;
     }
