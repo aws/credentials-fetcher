@@ -134,6 +134,40 @@ std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthrea
     return std::make_pair( EXIT_SUCCESS, tinfo );
 }
 
+/**
+ * Self test function to parse input kube config file and modify it in-place.
+ * @param func - pthread function
+ * @param pthread_arg - pthread function parameter
+ * @param stack_size - pthread stack defaults to -1
+ * @return pair of return code and pointer to pthread
+ */
+int parse_kube_config_json_test()
+{
+    std::string kubeconfig_file_path = "kubeconfig.json";
+
+    std::list<creds_fetcher::kube_config_info*> result = parse_kube_config( kubeconfig_file_path,
+                                                                            "/var/credentials-fetcher/krbdir" );
+
+    if ( result.empty() || result.size() != 2 )
+    {
+        std::cout << "parsing kube config test failed" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    for ( auto kube_config_info : result )
+    {
+        std::cout << kube_config_info->krb_ticket_info->service_account_name << std::endl;
+        std::map<std::string, std::list<std::string>>::iterator it;
+        for(it = kube_config_info->secret_yaml_map.begin(); it != kube_config_info->secret_yaml_map
+                                                                        .end(); ++it){
+            std::cout << it->first << '\n';
+        }
+    }
+
+    std::cout << "parsing kube config test successful" << std::endl;
+    return EXIT_SUCCESS;
+}
+
 int main( int argc, const char* argv[] )
 {
     void* grpc_pthread;
@@ -239,9 +273,9 @@ int main( int argc, const char* argv[] )
 
     if ( cf_daemon.run_diagnostic )
     {
-        exit(  read_meta_data_json_test() ||
+        exit( read_meta_data_json_test() ||
               read_meta_data_invalid_json_test() || renewal_failure_krb_dir_not_found_test() ||
-              write_meta_data_json_test() ||parse_kube_config_json_test());
+              write_meta_data_json_test() || parse_kube_config_json_test() );
     }
 
     struct sigaction sa;

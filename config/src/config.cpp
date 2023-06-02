@@ -21,8 +21,9 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         /* Declare the supported options */
         po::options_description desc( "Allowed options" );
         desc.add_options()( "help", "produce help message" ) /* TBD: Add help message description */
-            ( "self_test", "Run tests such as utf16 decode" )( "verbosity", po::value<int>(),
-                                                               "set verbosity level" )(
+            ( "self_test", "Run tests such as utf16 decode, "
+	                   "kube_config (needs /var/credentials-fetcher/kubeconfig.json)" )
+	    ( "verbosity", po::value<int>(), "set verbosity level" )(
                 "aws_sm_secret_name", po::value<std::string>(), // TBD:: Extend to other stores
                 "Name of secret containing username/password in AWS Secrets Manager (in same "
                 "region)" );
@@ -64,10 +65,9 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         {
             cf_daemon.kube_config_file_path = vm["kube_config_file_path"].as<std::string>();
             std::cout
-                << "Option kubeconfig domainlees config file is selected"
+                << "Option kubeconfig domainless config file is selected"
                 << cf_daemon.kube_config_file_path << std::endl;
         }
-
 
         std::ifstream config_file( ecs_config_file_name );
         std::string line;

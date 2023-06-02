@@ -1158,9 +1158,9 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
 
 /** All kubernetes gMSA support work **/
 /**
- * * This function parses the kube config file
+ * * This function parses the input kube config file and modifies it.
  * The cred spec file is in json format.
- * @param kubeconfigpath - kubeconfig path
+ * @param kubeconfigpath - path to kubeconfig file
  * @param krb_ticket_info - return service account info
  * @return
 */
