@@ -1168,6 +1168,8 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
                                                                           std::string krbdir )
 {
     std::list<creds_fetcher::kube_config_info*> kube_config_info_list;
+    std::list<creds_fetcher::kube_meta_mapping*> kube_meta_mapping_list;
+    std::string metadata_file_path;
     try
     {
         if ( kubeFilePath.empty() )
@@ -1180,12 +1182,6 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
         Json::CharReaderBuilder rbuilder;
         std::ifstream credspec_stream( kubeFilePath );
 
-        // write to file
-        Json::StreamWriterBuilder wbuilder;
-        wbuilder["commentStyle"] = "None";
-        wbuilder["indentation"] = "";
-        std::unique_ptr<Json::StreamWriter> writer(wbuilder.newStreamWriter());
-
         std::string errors;
 
         bool parsingSuccessful = Json::parseFromStream(rbuilder, credspec_stream, &root, &errors);
@@ -1197,6 +1193,8 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
         }
 
         std::string lease_id = generate_lease_id();
+        std::string meta_file_name = lease_id + "_kube_metadata.json";
+        metadata_file_path = krbdir + "/" + lease_id + "/" + meta_file_name;
 
         Json::Value &array1 = root["ServiceAccountMappings"];
         for (int i = 0; i < (int)array1.size(); i++)
@@ -1211,32 +1209,38 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
                 {
                     std::string ticket_path = krbdir + "/" + lease_id + "/" +
                                               krb_ticket_info->service_account_name;
+
+                    //create ticket paths
                     krb_ticket_info->krb_file_path = ticket_path;
-                    array1[i]["krb_ticket_location"] = krb_ticket_info->krb_file_path;
+                    boost::filesystem::create_directories( ticket_path );
                 }
                 krb_ticket_info->domainless_user = array1[i]["domainless_user"].asString();
             }
             kube_config_info->krb_ticket_info = krb_ticket_info;
 
+            creds_fetcher::kube_meta_mapping* kube_meta_mapping  = new creds_fetcher::kube_meta_mapping;;
             std::list<std::string> secret_yaml_paths;
             Json::Value& array2 = array1[i]["kube_context"];
             for ( int j = 0; j < (int)array2.size(); j++ )
             {
-                std::string secret_yaml_path = array1[i]["path_to_kube_secret_yaml"].asString();
+                std::string secret_yaml_path = array2[i]["path_to_kube_secret_yaml"].asString();
                 secret_yaml_paths.push_back( secret_yaml_path );
             }
+
             if(!kube_config_info->secret_yaml_map.count(kube_config_info->krb_ticket_info->krb_file_path))
             {
                 kube_config_info->secret_yaml_map[kube_config_info->krb_ticket_info->krb_file_path]
                     = secret_yaml_paths;
             }
-            root["ServiceAccountMappings"] = array1;
+            kube_meta_mapping->secret_yaml_paths = secret_yaml_paths;
+            kube_meta_mapping->krb_file_path =  krb_ticket_info->krb_file_path;
             kube_config_info->secret_yaml_paths = secret_yaml_paths;
             kube_config_info_list.push_back( kube_config_info );
+            kube_meta_mapping_list.push_back(kube_meta_mapping);
         }
 
-        std::ofstream outputFileStream(kubeFilePath);
-        writer -> write(root, &outputFileStream);
+
+        writeKubeJsonCache(metadata_file_path,kube_meta_mapping_list);
     }
     catch ( ... )
     {
@@ -1244,4 +1248,38 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
         return kube_config_info_list;
     }
     return kube_config_info_list;
+}
+
+void writeKubeJsonCache(std::string metadataFilePath, std::list<creds_fetcher::kube_meta_mapping*>
+    kubeMappings){
+    try
+    {
+        // create the meta file in the lease directory
+        Json::StreamWriterBuilder wbuilder;
+        wbuilder["commentStyle"] = "None";
+        wbuilder["indentation"] = "";
+        std::unique_ptr<Json::StreamWriter> writer( wbuilder.newStreamWriter() );
+
+        Json::Value root;
+        for ( const auto& mapping : kubeMappings )
+        {
+            Json::Value child;
+            Json::Value vec( Json::arrayValue );
+            for ( const auto& path : mapping->secret_yaml_paths )
+            {
+                vec.append( Json::Value( path ) );
+            }
+            child["secret_yaml_mappings"] = vec;
+
+            child["krb_ticket_path"] = mapping->krb_file_path;
+            root.append( child );
+        }
+
+        std::ofstream outputFileStream( metadataFilePath );
+        writer->write( root, &outputFileStream );
+    }
+    catch ( ... )
+    {
+        fprintf( stderr, SD_CRIT "write to kube mapping failed " );
+    }
 }

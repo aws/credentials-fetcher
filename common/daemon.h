@@ -57,6 +57,16 @@ namespace creds_fetcher
         std::map<std::string,std::list<std::string>> secret_yaml_map;
     };
 
+    /**
+     * kube_meta_mapping information
+     */
+    class kube_meta_mapping
+    {
+      public:
+        std::string krb_file_path;
+        std::list<std::string> secret_yaml_paths;
+    };
+
     /*
      * Log the info/error logs with journalctl
      */
@@ -158,6 +168,8 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
                                                                std::string krbdir );
 std::pair<int, std::string> convert_secret_krb2kube(const std::string kube_secrets_yaml_file,
                                                      const std::string krb_ticket_file );
+void writeKubeJsonCache(std::string metadataFilePath, std::list<creds_fetcher::kube_meta_mapping*>
+                                                  kubeMappings);
 // unit tests
 int parse_kube_config_json_test();
 int test_utf16_decode();

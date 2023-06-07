@@ -200,6 +200,7 @@ int main( int argc, const char* argv[] )
 
         std::list<creds_fetcher::kube_config_info*> kube_config_info_list =
             parse_kube_config(cf_daemon.kube_config_file_path, cf_daemon.krb_files_dir);
+
         // create the kerberos tickets for the service accounts
         for ( auto kube_config_info : kube_config_info_list )
         {
