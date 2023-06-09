@@ -1269,7 +1269,7 @@ void writeKubeJsonCache(std::string metadataFilePath, std::list<creds_fetcher::k
             {
                 vec.append( Json::Value( path ) );
             }
-            child["secret_yaml_mappings"] = vec;
+            child["path_to_kube_secret_yaml"] = vec;
 
             child["krb_ticket_path"] = mapping->krb_file_path;
             root.append( child );

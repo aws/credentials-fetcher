@@ -16,7 +16,7 @@
 static const std::string install_path_for_decode_exe =
     "/usr/sbin/credentials_fetcher_utf16_private.exe";
 static const std::string install_path_for_aws_cli = "/usr/bin/aws";
-static const std::string install_path_for_py_script_base_64_decoding = "/usr/sbin/kube2krb.py";
+static const std::string install_path_for_py_script_base_64_decoding = "/usr/sbin/credentials_fetcher_krbsecret_to_kubesecret.py";
 
 extern "C" int my_kinit_main(int, char **);
 
