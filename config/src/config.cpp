@@ -11,11 +11,9 @@
 
 int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemon )
 {
-    const char* ecs_config_file_name = "/etc/ecs/ecs.config"; // TBD:: Add commandline if needed
-    std::string domainless_gmsa_field( "CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA" );
-
     try
     {
+        std::string domainless_gmsa_field( "CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA" );
         namespace po = boost::program_options;
 
         /* Declare the supported options */
@@ -59,24 +57,8 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
                 << "Option selected for domainless operation, AWS secrets manager secret-name = "
                 << cf_daemon.aws_sm_secret_name << std::endl;
         }
-
-        std::ifstream config_file( ecs_config_file_name );
-        std::string line;
-        std::vector<std::string> results;
-
-        while ( std::getline( config_file, line ) )
-        {
-            // TBD: Error handling for incorrectly formatted /etc/ecs/ecs.config
-            boost::split( results, line, []( char c ) { return c == '='; } );
-            std::string key = results[0];
-            std::string value = results[1];
-            if ( domainless_gmsa_field.compare( key ) == 0 )
-            {
-                value.erase( std::remove( value.begin(), value.end(), '"' ), value.end() );
-                std::cout << "Using " << value << " for domainless gMSA" << std::endl;
-                cf_daemon.aws_sm_secret_name = value;
-            }
-        }
+        std::string aws_sm_secret_name = retrieve_secret_from_ecs_config(domainless_gmsa_field);
+        cf_daemon.aws_sm_secret_name = aws_sm_secret_name;
     }
     catch ( const boost::program_options::error& ex )
     {
