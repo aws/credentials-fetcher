@@ -16,7 +16,8 @@
 static const std::string install_path_for_decode_exe =
     "/usr/sbin/credentials_fetcher_utf16_private.exe";
 static const std::string install_path_for_aws_cli = "/usr/bin/aws";
-static const std::string install_path_for_py_script_base_64_decoding = "/usr/sbin/credentials_fetcher_krbsecret_to_kubesecret.py";
+static const std::string install_path_for_kube_apply_script =
+    "/usr/sbin/credentials_fetcher_krbsecret_to_kubesecret.py";
 
 extern "C" int my_kinit_main(int, char **);
 
@@ -970,24 +971,22 @@ void rtrim( std::string& s )
 std::pair<int, std::string> convert_secret_krb2kube(const std::string kube_secrets_yaml_file,
                                                      const std::string krb_ticket_file )
 {
-    FILE* fp = fopen( install_path_for_py_script_base_64_decoding.c_str(), "w" );
+    /*FILE* fp = fopen( install_path_for_py_script_base_64_decoding.c_str(), "w" );
     if ( fp == NULL || kube_secrets_yaml_file.empty() || krb_ticket_file.empty() )
     {
         return std::make_pair( -1, std::string( "ERROR: parameters" ) );
-    }
+    }*/
     //fwrite( kube2krb_script, sizeof( char ), strlen(kube2krb_script), fp );
-    fclose( fp );
+    //fclose( fp );
 
-    std::pair<int, std::string> cmd_result =
-        exec_shell_cmd( std::string( "chmod +x " ) + install_path_for_py_script_base_64_decoding );
+   /* std::pair<int, std::string> cmd_result =
+        exec_shell_cmd( std::string( "chmod +x " ) + install_path_for_kube_apply_script );
     if ( cmd_result.first != 0 )
     {
         return std::make_pair( -1, std::string( "ERROR: chmod" ) );
-    }
+    }*/
 
-    std::string cmd = "python3 " + install_path_for_py_script_base_64_decoding + " " + kube_secrets_yaml_file + " " + krb_ticket_file;
-    exec_shell_cmd( cmd );
-    //apply kubectl
-    std::string kubecmd = "kubectl apply -f " + kube_secrets_yaml_file ;
-    return exec_shell_cmd(kubecmd);
+    std::string cmd = "python3 " + install_path_for_kube_apply_script + " -s " +
+                      kube_secrets_yaml_file + " -k " + krb_ticket_file;
+    return exec_shell_cmd( cmd );
 }

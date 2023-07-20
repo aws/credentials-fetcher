@@ -1,3 +1,5 @@
+#!/usr/sbin python3
+
 import json
 import os
 import yaml
@@ -37,7 +39,7 @@ def main(argv):
     krb_ticket = f.read()
     f.close()
     base64_enc_string = b64encode(krb_ticket).decode("utf-8")
-    #print(base64_enc_string)
+    print(base64_enc_string)
     json_dict["data"]["password"] = str(base64_enc_string)
     json_string=json.dumps(json_dict)
     python_dict=json.loads(json_string)
@@ -45,13 +47,21 @@ def main(argv):
     yaml.dump(python_dict,f)
     f.close()
     print("secret pod yaml file saved" + kube_secrets_yaml_file)
-    #command = "./kubectl apply -f " + yaml_string
-    #f = os.popen(command)
-    #line = f.readline()
-    #status = f.close()
-    #if status:
-    #       print("exit status = " + str(os.waitstatus_to_exitcode(status)))
+    command = "kubectl apply -f " + kube_secrets_yaml_file
+    print("kubectl command = " + command)
+    f = os.popen(command)
+    line = f.readline()
+    status = f.close()
+    if status:
+       print("exit status = " + str(os.waitstatus_to_exitcode(status)))
 
+  #  command2 = "kubectl apply -f pod_with_secret1.yaml"
+  #  print("kubectl command = " + command2)
+  #  f = os.popen(command2)
+  #   line = f.readline()
+  #  status = f.close()
+  #  if status:
+  #      print("exit status = " + str(os.waitstatus_to_exitcode(status)))
 
 if __name__ == "__main__":
     main(sys.argv[1:])

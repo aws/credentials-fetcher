@@ -170,6 +170,8 @@ std::pair<int, std::string> convert_secret_krb2kube(const std::string kube_secre
                                                      const std::string krb_ticket_file );
 void writeKubeJsonCache(std::string metadataFilePath, std::list<creds_fetcher::kube_meta_mapping*>
                                                   kubeMappings);
+
+void handle_tickets_kube();
 // unit tests
 int parse_kube_config_json_test();
 int test_utf16_decode();
@@ -178,6 +180,7 @@ int read_meta_data_json_test();
 int read_meta_data_invalid_json_test();
 int write_meta_data_json_test();
 int renewal_failure_krb_dir_not_found_test();
+int handle_tickets_kube_test();
 
 /**
  * Methods in config module

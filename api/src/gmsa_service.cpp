@@ -1223,7 +1223,7 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
             Json::Value& array2 = array1[i]["kube_context"];
             for ( int j = 0; j < (int)array2.size(); j++ )
             {
-                std::string secret_yaml_path = array2[i]["path_to_kube_secret_yaml"].asString();
+                std::string secret_yaml_path = array2[i]["path_to_kube_secret_yaml_file"].asString();
                 secret_yaml_paths.push_back( secret_yaml_path );
             }
 
