@@ -140,6 +140,11 @@ install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
         DESTINATION "/usr/sbin/"
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/kubeconfig.json
+        DESTINATION /var/credentials-fetcher
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+)
+
 install(FILES ${CMAKE_SOURCE_DIR}/scripts/systemd/credentials-fetcher.service
         DESTINATION "/usr/lib/systemd/system/")
 install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.exe

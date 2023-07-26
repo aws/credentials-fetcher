@@ -148,7 +148,7 @@ int parse_kube_config_json_test()
     std::list<creds_fetcher::kube_config_info*> result = parse_kube_config( kubeconfig_file_path,
                                                                             "/var/credentials-fetcher/krbdir" );
 
-    if ( result.empty() || result.size() != 2 )
+    if ( result.empty() || result.size() != 1 )
     {
         std::cout << "parsing kube config test failed" << std::endl;
         return EXIT_FAILURE;
@@ -207,7 +207,6 @@ void handle_tickets_kube()
         {
             status = get_machine_krb_ticket( kube_config_info->krb_ticket_info->domain_name,
                                              cf_daemon.cf_logger );
-            std::cout << status << std::endl;
         }
         if ( status < 0 )
         {
@@ -261,6 +260,7 @@ void handle_tickets_kube()
         {
             convert_secret_krb2kube( secret_yaml_path, krb_ccname_str );
         }
+        std::cout << "kube apply completed" << std::endl;
     }
 }
 

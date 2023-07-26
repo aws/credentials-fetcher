@@ -21,9 +21,10 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         /* Declare the supported options */
         po::options_description desc( "Allowed options" );
         desc.add_options()( "help", "produce help message" ) /* TBD: Add help message description */
-            ( "self_test", "Run tests such as utf16 decode, "
-	                   "kube_config (needs /var/credentials-fetcher/kubeconfig.json)" )
-	    ( "verbosity", po::value<int>(), "set verbosity level" )(
+            ( "self_test", "Run tests such as utf16 decode")
+                ("kube_apply",  "update the config file located /var/credentials-fetcher/kubeconfig"
+                               ".json" )
+	        ( "verbosity", po::value<int>(), "set verbosity level" )(
                 "aws_sm_secret_name", po::value<std::string>(), // TBD:: Extend to other stores
                 "Name of secret containing username/password in AWS Secrets Manager (in same "
                 "region)" );
@@ -47,6 +48,14 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
             std::cout << "verbosity level was set to " << vm["verbosity"].as<int>() << std::endl;
         }
 
+        if ( vm.count( "kube_apply" ) )
+        {
+            cf_daemon.kube_config_file_path = "/var/credentials-fetcher/kubeconfig.json";
+            cf_daemon.krb_files_dir = "/var/credentials-fetcher/krbdir";
+            handle_tickets_kube();
+            return EXIT_FAILURE;
+        }
+
         if ( vm.count( "self_test" ) )
         {
             std::cout << "run diagnostic set" << std::endl;
@@ -59,14 +68,6 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
             std::cout
                 << "Option selected for domainless operation, AWS secrets manager secret-name = "
                 << cf_daemon.aws_sm_secret_name << std::endl;
-        }
-
-        if ( vm.count( "kube_config_file_path" ) )
-        {
-            cf_daemon.kube_config_file_path = vm["kube_config_file_path"].as<std::string>();
-            std::cout
-                << "Option kubeconfig domainless config file is selected"
-                << cf_daemon.kube_config_file_path << std::endl;
         }
 
         std::ifstream config_file( ecs_config_file_name );
