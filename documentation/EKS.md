@@ -45,6 +45,9 @@ eksctl creates a new VPC, subnets and IAM roles as well as 2 instances as mentio
 
 ## Step 3. Setup Managed Active Directory domain using AWS console.
 
+**NOTE:**
+Please make sure Active Directory and EKS use the same VPC and subnets or setup VPC peering and routes for connectivity between Active Directory and EKS.
+
 Click on 'Setup directory'
 
 ![Alt text](image-directory-service.png)
@@ -78,72 +81,115 @@ metadata:
 
 ### Yaml file for the pod is as follows
 
+If you have a [custom DHCP option set that sets the DNS](https://docs.aws.amazon.com/vpc/latest/userguide/DHCPOptionSetConcepts.html#CustomDHCPOptionSet) in your VPC, you can skip the `dnsConfig` step in the yaml file below.
+
 Create a pod with DNS pointing to the AD domain above.
-For example, `192.168.102.60` is the IP address of the AD domain `mycorp.local` in the pod.yaml below.
+For example, `192.168.102.60` is the IP address of the AD domain `customertest.local` in the pod.yaml below.
 
 ```yaml
-% cat pod.yaml
 apiVersion: v1
 kind: Pod
 metadata:
-  namespace: default
-  name: dns-example
+  name: secret-test-pod
 spec:
+  nodeSelector:
+     kubernetes.io/os: Linux
   containers:
-    - name: test
-      image: nginx
+    - name: test-container1
+      image:  ubuntu
+      command:
+        # Add your app here instead of sleep and the large number parameter
+        - "sleep"
+        - "4453645654757"
+      volumeMounts:
+        # name must match the volume name below
+        - name: secret-volume
+          mountPath: /etc/secret-volume
+          readOnly: true
   dnsPolicy: "ClusterFirstWithHostNet"
   hostNetwork: true
   dnsConfig:
     nameservers:
       - 192.168.102.60 # this is an example
     searches:
-      - mycorp.local
+      - customertest.local
+  # The secret data is exposed to Containers in the Pod through a Volume.
   volumes:
     - name: secret-volume
       secret:
         secretName: krb-ticket1
 ```
 
-
-## Step 7. Start Credentials-fetcher with EKS config file as below
+## Step 7. Start Credentials-fetcher with kube config json file as below
+kube_context below refers to the kubectl context, this allows a gMSA account to be used in multiple node-groups.
 
 ```bash
-% credentials_fetcher --kube-config MyEKSConfig.yaml
+% credentials_fetcher --kube-config kube_config.json
 
-% cat MyEKSConfig.yaml
+% cat kubeconfig.json
 {
   "ServiceAccountMappings": [
     {
       "ServiceAccountName": "webapp01",
-      "path_to_cred_spec_json": "contoso_webapp01.json",
+      "path_to_cred_spec_json": "customertest_webapp01.json",
       "domainless_user": "",
       "kube_context": [
         {
           "kube_context_name": "name",
-          "path_to_kube_folder": "path",
+          "path_to_kube_folder": "/home/ec2-user/credentials-fetcher/build",
           "path_to_kube_secret_yaml_file": "/home/ec2-user/credentials-fetcher/build/secret1.yaml"
         }
       ]
     },
     {
-      "ServiceAccountName": "webapp02",
-      "path_to_cred_spec_json": "contoso_webapp02.json",
+      "ServiceAccountName": "webapp01",
+      "path_to_cred_spec_json": "customertest_webapp01.json",
       "domainless_user": "",
       "kube_context": [
         {
           "kube_context_name": "name",
-          "path_to_kube_folder": "path",
-          "path_to_kube_secret_yaml_file": "/home/ec2-user/credentials-fetcher/build/secret2.yaml"
+          "path_to_kube_folder": "/home/ec2-user/credentials-fetcher/build",
+          "path_to_kube_secret_yaml_file": "/home/ec2-user/credentials-fetcher/build/secret1.yaml"
         }
       ]
     }
-  ]
+   ]
 }
+
 ```
 
 
+## Step 8. Secrets in the pod
+Secrets are available in the `mountPath` specified in the container yaml, please name the `mountPath` as needed.
 
+      volumeMounts:
+        - name: secret-volume
+          mountPath: /etc/secret-volume
+          readOnly: true
+
+The secret can be seen under `mountPath` as below.
+
+```bash
+[ec2-user@EC2AMAZ-3UYjZe ~]$ kubectl get pods
+NAME              READY   STATUS    RESTARTS      AGE
+secret-test-pod   1/1     Running   1 (14h ago)   14d
+[ec2-user@EC2AMAZ-3UYjZe ~]$ kubectl exec -it secret-test-pod -- /bin/bash
+root@ip-192-168-5-114:/# ls /etc/secret-volume/
+password
+root@ip-192-168-5-114:/#
+```
+
+The kerberos ticket can be seen as below.
+```
+root@ip-192-168-5-114:/# export KRB5CCNAME=/etc/secret-volume/password
+root@ip-192-168-5-114:/# klist
+Ticket cache: FILE:/etc/secret-volume/password
+Default principal: webapp01$@CUSTOMERTEST.LOCAL
+
+Valid starting     Expires            Service principal
+07/26/23 18:56:51  07/27/23 04:56:51  krbtgt/CUSTOMERTEST.LOCAL@CUSTOMERTEST.LOCAL
+        renew until 08/02/23 18:56:50
+```
 ##
 
 
