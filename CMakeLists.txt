@@ -5,7 +5,7 @@ include(GNUInstallDirs)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall -Werror -pthread")
+set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall -Werror -pthread")
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf REQUIRED)
@@ -140,11 +140,6 @@ install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
         DESTINATION "/usr/sbin/"
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/kubeconfig.json
-        DESTINATION /var/credentials-fetcher
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-)
-
 install(FILES ${CMAKE_SOURCE_DIR}/scripts/systemd/credentials-fetcher.service
         DESTINATION "/usr/lib/systemd/system/")
 install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.exe
@@ -152,7 +147,11 @@ install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.exe
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
 install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.runtimeconfig.json
         DESTINATION "/usr/sbin/"
-        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
+        PERMISSIONS OWNER_WRITE OWNER_READ)
+install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_kubeconfig.json
+        DESTINATION "/etc/"
+        PERMISSIONS OWNER_WRITE OWNER_READ)
+
 
 enable_testing()
 

@@ -44,6 +44,8 @@ sed -r -i 's/(std=c\+\+)11/\117/' CMakeLists.txt
 %cmake_build
 %install
 
+install -m 0755 build/credentials_fetcher_kubeconfig.json %{buildroot}%{_sysconfdir}/credentials_fetcher_kube_config.json
+
 %cmake_install
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_removing_rpath
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_rpath_for_internal_libraries
@@ -55,15 +57,20 @@ ctest3
 
 %files
 %{_sbindir}/credentials-fetcherd
+%{_sysconfdir}/credentials_fetcher_kubeconfig.json
 %{_unitdir}/credentials-fetcher.service
 %license LICENSE
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
 %doc CONTRIBUTING.md NOTICE README.md
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
+%attr(0700, -, -) %{_sysconfdir}/credentials_fetcher_kubeconfig.json
 
 %changelog
-* Thu May 15 2023 Sai Kiran Akula <saakla@amazon.com> - 1.2.0
+* Fri Aug 11 2023 Samiullah Mohammed <samiull@amazon.com> - 1.2.0
+- Add credentials_fetcher_kubeconfig.json
+
+* Mon May 15 2023 Sai Kiran Akula <saakla@amazon.com> - 1.2.0
 - Create 1.2.0 release
 
 * Thu Mar 23 2023 Tom Callaway <spot@fedoraproject.org> - 1.1.0-7
