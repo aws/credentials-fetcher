@@ -196,12 +196,11 @@ void handle_tickets_kube()
         std::string aws_sm_secret_name = kube_config_info->krb_ticket_info->domainless_user;
         // invoke to get machine ticket
         int status = 0;
-        if ( aws_sm_secret_name.length() != 0 )
+        if ( aws_sm_secret_name.length() != 0 && aws_sm_secret_name != "kubehostprincipal")
         {
             status = get_user_krb_ticket( kube_config_info->krb_ticket_info->domain_name,
                                           aws_sm_secret_name, cf_daemon.cf_logger );
-            kube_config_info->krb_ticket_info->domainless_user =
-                "kubedomainlessusersecret:" + aws_sm_secret_name;
+            kube_config_info->krb_ticket_info->domainless_user = aws_sm_secret_name ;
         }
         else
         {

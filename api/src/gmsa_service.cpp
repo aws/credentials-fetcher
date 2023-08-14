@@ -1169,6 +1169,7 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
 {
     std::list<creds_fetcher::kube_config_info*> kube_config_info_list;
     std::list<creds_fetcher::kube_meta_mapping*> kube_meta_mapping_list;
+    std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
     std::string metadata_file_path;
     try
     {
@@ -1214,7 +1215,15 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
                     krb_ticket_info->krb_file_path = ticket_path;
                     boost::filesystem::create_directories( ticket_path );
                 }
-                krb_ticket_info->domainless_user = array1[i]["domainless_user"].asString();
+                std::string domainlessUser = array1[i]["domainless_user"].asString();
+                if(domainlessUser.length() != 0 )
+                {
+                    krb_ticket_info->domainless_user =
+                       "kubedomainlessusersecret:"+domainlessUser;
+                }
+                else{
+                    krb_ticket_info->domainless_user = "kubehostprincipal" ;
+                }
             }
             kube_config_info->krb_ticket_info = krb_ticket_info;
 
@@ -1237,9 +1246,10 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
             kube_config_info->secret_yaml_paths = secret_yaml_paths;
             kube_config_info_list.push_back( kube_config_info );
             kube_meta_mapping_list.push_back(kube_meta_mapping);
+            krb_ticket_info_list.push_back( krb_ticket_info );
         }
 
-
+        write_meta_data_json(krb_ticket_info_list, lease_id,krbdir);
         writeKubeJsonCache(metadata_file_path,kube_meta_mapping_list);
     }
     catch ( ... )

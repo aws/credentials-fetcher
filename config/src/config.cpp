@@ -52,7 +52,9 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         {
             cf_daemon.kube_config_file_path = vm["kube_apply"].as<std::string>();;
             cf_daemon.krb_files_dir = "/var/credentials-fetcher/krbdir";
-            handle_tickets_kube();
+            std::cout
+                << "Option selected for kube apply, path to kube config"
+                <<  cf_daemon.kube_config_file_path << std::endl;
         }
 
         if ( vm.count( "self_test" ) )

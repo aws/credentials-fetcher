@@ -57,7 +57,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                     std::string krb_cc_name = krb_ticket->krb_file_path;
                     std::string domainless_user = krb_ticket->domainless_user;
                     // check if the ticket is ready for renewal and not created in domainless mode
-                    if ( is_ticket_ready_for_renewal( krb_cc_name ) && domainless_user == "")
+                    if ( is_ticket_ready_for_renewal( krb_cc_name ) )
                     {
                         int num_retries = 1;
                         for ( int i = 0; i <= num_retries; i++ )
@@ -102,7 +102,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                                 {
                                     status = get_machine_krb_ticket( krb_ticket->domain_name,
                                                                          cf_logger );
-                                    if (domainless_user.find("kubedomainlessusersecret") !=
+                                    if (domainless_user.find("kubehostprincipal") !=
                                          std::string::npos)
                                     {
                                         for ( auto kube_config_info : kube_config_info_list )
