@@ -43,6 +43,12 @@ add_library(cf_gmsa_service_private OBJECT
 find_path(GLIB_INCLUDE_DIR glib.h "/usr/include" "/usr/include/glib-2.0")
 find_path(GLIB_CONFIG_DIR glibconfig.h "/usr/include" "/usr/lib64/glib-2.0/include")
 
+file(
+        COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/credentials_fetcher_krbsecret_to_kubesecret.py
+        DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/../
+        FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+)
+
 target_include_directories(cf_gmsa_service_private
         PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../common
         PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../auth/kinit_client

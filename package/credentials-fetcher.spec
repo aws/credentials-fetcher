@@ -56,13 +56,15 @@ ctest3
 %files
 %{_sbindir}/credentials-fetcherd
 %{_sysconfdir}/credentials_fetcher_kubeconfig.json
+%{_sbindir}/credentials_fetcher_krbsecret_to_kubesecret.py
 %{_unitdir}/credentials-fetcher.service
 %license LICENSE
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
 %doc CONTRIBUTING.md NOTICE README.md
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
-%attr(0700, -, -) %{_sysconfdir}/credentials_fetcher_kubeconfig.json
+%attr(0400, -, -) %{_sysconfdir}/credentials_fetcher_kubeconfig.json
+%attr(0700, -, -) %{_sbindir}/credentials_fetcher_krbsecret_to_kubesecret.py
 
 %changelog
 * Mon Aug 14 2023 Sai Kiran Akula <saakla@amazon.com> - 1.3.0
