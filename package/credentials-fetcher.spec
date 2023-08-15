@@ -44,8 +44,6 @@ sed -r -i 's/(std=c\+\+)11/\117/' CMakeLists.txt
 %cmake_build
 %install
 
-install -m 0755 build/credentials_fetcher_kubeconfig.json %{buildroot}%{_sysconfdir}/credentials_fetcher_kube_config.json
-
 %cmake_install
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_removing_rpath
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_rpath_for_internal_libraries
