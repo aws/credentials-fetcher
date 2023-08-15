@@ -1,4 +1,5 @@
-The contents of kinit_client directory is from the https://github.com/krb5/krb5/tree/master and the associated readme - https://github.com/krb5/krb5/blob/master/README
+The contents of kinit_client directory are from https://github.com/krb5/krb5/tree/master 
+and the associated readme is at https://github.com/krb5/krb5/blob/master/README
 
 Kerberos Version 5, Release 1.22
 
