@@ -1,5 +1,5 @@
 %global major_version 1
-%global minor_version 2
+%global minor_version 3
 %global patch_version 0
 
 # For handling bump release by rpmdev-bumpspec and mass rebuild
@@ -67,6 +67,9 @@ ctest3
 %attr(0700, -, -) %{_sysconfdir}/credentials_fetcher_kubeconfig.json
 
 %changelog
+* Mon Aug 14 2023 Sai Kiran Akula <saakla@amazon.com> - 1.3.0
+- Add EKS support
+
 * Fri Aug 11 2023 Samiullah Mohammed <samiull@amazon.com> - 1.2.0
 - Add credentials_fetcher_kubeconfig.json
 
