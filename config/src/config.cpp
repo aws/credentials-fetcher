@@ -22,7 +22,7 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         po::options_description desc( "Allowed options" );
         desc.add_options()( "help", "produce help message" ) /* TBD: Add help message description */
             ( "self_test", "Run tests such as utf16 decode")
-                ("kube_apply", po::value<std::string>(), "update the config file located /etc/credentials_fetcher_kubeconfig.json"
+                ("use_kube", po::value<std::string>(), "update the config file located /etc/credentials_fetcher_kubeconfig.json"
                                ".json" )
 	        ( "verbosity", po::value<int>(), "set verbosity level" )(
                 "aws_sm_secret_name", po::value<std::string>(), // TBD:: Extend to other stores
@@ -48,9 +48,9 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
             std::cout << "verbosity level was set to " << vm["verbosity"].as<int>() << std::endl;
         }
 
-        if ( vm.count( "kube_apply" ) )
+        if ( vm.count( "use_kube" ) )
         {
-            cf_daemon.kube_config_file_path = vm["kube_apply"].as<std::string>();;
+            cf_daemon.kube_config_file_path = vm["use_kube"].as<std::string>();;
             cf_daemon.krb_files_dir = "/var/credentials-fetcher/krbdir";
             std::cout
                 << "Option selected for kube apply, path to kube config"

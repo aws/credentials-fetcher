@@ -969,10 +969,12 @@ void rtrim( std::string& s )
  * convert_secret_krb2kube : Update secret in kube file for secret by importing from krb ticket
  */
 std::pair<int, std::string> convert_secret_krb2kube(const std::string kube_secrets_yaml_file,
+                                                     const std::string kube_pod_yaml_file,
                                                      const std::string krb_ticket_file )
 {
 
     std::string cmd = "python3 " + install_path_for_kube_apply_script + " -s " +
-                      kube_secrets_yaml_file + " -k " + krb_ticket_file;
+                      kube_secrets_yaml_file + " -p " + kube_pod_yaml_file  + " -k " +
+                      krb_ticket_file;
     return exec_shell_cmd( cmd );
 }

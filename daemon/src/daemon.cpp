@@ -185,6 +185,7 @@ int handle_tickets_kube_test()
 
 void handle_tickets_kube()
 {
+    std::string lease_dir_path;
     std::string err_msg;
 
     std::list<creds_fetcher::kube_config_info*> kube_config_info_list =
@@ -212,18 +213,14 @@ void handle_tickets_kube()
             cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
                                         status );
             err_msg = "ERROR: cannot get machine krb ticket";
+            std::cout << "kube apply failed " + err_msg << std::endl;
+            lease_dir_path = cf_daemon.krb_files_dir+"/"+kube_config_info->lease_id;
+            // delete associated directories, since the ticket creation failed
+            std::filesystem::remove_all(lease_dir_path);
             break;
         }
 
         std::string krb_file_path = kube_config_info->krb_ticket_info->krb_file_path;
-   /*     if ( boost::filesystem::exists( krb_file_path ) )
-        {
-            cf_daemon.cf_logger.logger( LOG_INFO,
-                                        "Directory already exists: "
-                                        "%s",
-                                        krb_file_path );
-            break;
-        }*/
         boost::filesystem::create_directories( krb_file_path );
 
         std::string krb_ccname_str = kube_config_info->krb_ticket_info->krb_file_path + "/krb5cc";
@@ -244,8 +241,12 @@ void handle_tickets_kube()
         if ( gmsa_ticket_result.first != 0 )
         {
             err_msg = "ERROR: Cannot get gMSA krb ticket";
-            std::cout << err_msg << std::endl;
             cf_daemon.cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket", status );
+
+            std::cout << "kube apply failed " + err_msg << std::endl;
+            lease_dir_path = cf_daemon.krb_files_dir+"/"+kube_config_info->lease_id;
+            // delete associated directories, since the ticket creation failed
+            std::filesystem::remove_all(lease_dir_path);
             break;
         }
         else
@@ -255,9 +256,10 @@ void handle_tickets_kube()
             std::cout << "gMSA ticket is at " << gmsa_ticket_result.second << std::endl;
         }
         // convert_secret_krb2kube()
-        for ( auto const& secret_yaml_path : kube_config_info->secret_yaml_paths )
+        for ( auto const& kube_yaml_path : kube_config_info->kube_yaml_paths )
         {
-            convert_secret_krb2kube( secret_yaml_path, krb_ccname_str );
+            convert_secret_krb2kube( kube_yaml_path->secret_yaml_path,
+                                     kube_yaml_path->pod_yaml_path ,krb_ccname_str );
         }
         std::cout << "kube apply completed" << std::endl;
     }

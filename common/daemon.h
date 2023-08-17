@@ -20,6 +20,7 @@
 #include <vector>
 #include <json/json.h>
 #include <json/writer.h>
+#include <filesystem>
 
 #ifndef _daemon_h_
 #define _daemon_h_
@@ -47,14 +48,25 @@ namespace creds_fetcher
     };
 
     /**
+     * secret/pod yaml paths
+     */
+    class kube_yaml_path
+    {
+      public:
+        std::string secret_yaml_path;
+        std::string pod_yaml_path;
+    };
+
+    /**
      * kube_config information
      */
     class kube_config_info
     {
       public:
-        std::list<std::string> secret_yaml_paths;
+        std::list<creds_fetcher::kube_yaml_path*> kube_yaml_paths;
         creds_fetcher::krb_ticket_info* krb_ticket_info;
         std::map<std::string,std::list<std::string>> secret_yaml_map;
+        std::string lease_id;
     };
 
     /**
@@ -167,6 +179,7 @@ void rtrim( std::string& s );
 std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeFilePath,
                                                                std::string krbdir );
 std::pair<int, std::string> convert_secret_krb2kube(const std::string kube_secrets_yaml_file,
+                                                     const std::string kube_pod_yaml_file,
                                                      const std::string krb_ticket_file );
 void writeKubeJsonCache(std::string metadataFilePath, std::list<creds_fetcher::kube_meta_mapping*>
                                                   kubeMappings);

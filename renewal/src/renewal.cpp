@@ -91,7 +91,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                                             for(kube_it=kube_config_info->secret_yaml_map.begin(); kube_it!=kube_config_info->secret_yaml_map
                                                                                                             .end(); ++kube_it){
                                                 for (auto const& secret_path : kube_it->second) {
-                                                    convert_secret_krb2kube(secret_path,
+                                                    convert_secret_krb2kube(secret_path, "",
                                                                              krb_ticket->krb_file_path + "/krb5cc");
                                                 }
                                             }
@@ -123,7 +123,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                                                           kube_it->second )
                                                     {
                                                         convert_secret_krb2kube(
-                                                            secret_path,
+                                                            secret_path, "",
                                                             krb_ticket->krb_file_path + "/krb5cc" );
                                                     }
                                                 }

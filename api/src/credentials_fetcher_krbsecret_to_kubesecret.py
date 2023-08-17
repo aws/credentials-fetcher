@@ -11,7 +11,7 @@
 # See yaml examples of secret and pod in the credentials-fetcher code-base.
 #
 # Example invocation:
-#  sudo python3 credentials_fetcher_krbsecret_to_kubesecret.py -s secret-1.yaml -k /var/credentials-fetcher/krbdir/434d760fade0559999d6/WebApp01/krb5cc
+#  sudo python3 credentials_fetcher_krbsecret_to_kubesecret.py -s secret-1.yaml -p pod_with_secret.yaml -k /var/credentials-fetcher/krbdir/434d760fade0559999d6/WebApp01/krb5cc
 #  Note: In above example, secret-1.yaml is modified with a new base64 secret.
 #
 
@@ -35,26 +35,35 @@ def check_kubectl_permissions():
 def main(argv):
 
     kube_secrets_yaml_file = ''
+    kube_pod_yaml_file = ''
     krb_ticket_file = ''
-    opts, args = getopt.getopt(argv,"hs:k:",["kube_secrets_yaml_file=","krb_ticket_file="])
+    opts, args = getopt.getopt(argv,"hs:p:k:",["kube_secrets_yaml_file=",
+                                             "kube_pod_yaml_file=",
+                                              "krb_ticket_file="])
 
     for opt, arg in opts:
         if opt == '-h':
-            syslog.syslog ('credentials_fetcher_krbsecret_to_kubesecret.py -s <kube_secrets_yaml_file> -k <krb_ticket_file>')
+            syslog.syslog ('credentials_fetcher_krbsecret_to_kubesecret.py -s <kube_secrets_yaml_file> -p <kube_pod_yaml_file> -k <krb_ticket_file>')
             sys.exit(1)
         elif opt in ("-s", "--kube_secrets_yaml_file"):
             kube_secrets_yaml_file = arg
+        elif opt in ("-p", "--kube_pod_yaml_file"):
+            kube_pod_yaml_file = arg
         elif opt in ("-k", "--krb_ticket_file"):
             krb_ticket_file = arg
 
+    print(kube_secrets_yaml_file)
+    print(kube_pod_yaml_file)
+    print(krb_ticket_file)
     msg = 'kube secrets file is '+ kube_secrets_yaml_file
+    syslog.syslog(msg)
+    msg = 'kube pod file is '+ kube_pod_yaml_file
     syslog.syslog(msg)
     msg = 'krb ticket file is ' + krb_ticket_file
     syslog.syslog(msg)
     if not kube_secrets_yaml_file or not krb_ticket_file:
         syslog.syslog("Please run with -h to see usage")
         sys.exit(1)
-
     try:
        f = open(kube_secrets_yaml_file, "r")
        yaml_string = f.read()
@@ -94,6 +103,12 @@ def main(argv):
     args = ["kubectl", "--kubeconfig", "/root/.kube/config", "apply", "-f", kube_secrets_yaml_file]
     completion = subprocess.run(args, capture_output=True)
     syslog.syslog(str(completion))
+
+    if kube_pod_yaml_file is not None:
+        args = ["kubectl", "--kubeconfig", "/root/.kube/config", "apply", "-f",
+            kube_pod_yaml_file]
+        completion = subprocess.run(args, capture_output=True)
+        syslog.syslog(str(completion))
 
 if __name__ == "__main__":
     main(sys.argv[1:])

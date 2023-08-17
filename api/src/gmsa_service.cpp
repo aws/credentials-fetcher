@@ -1227,13 +1227,19 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
             }
             kube_config_info->krb_ticket_info = krb_ticket_info;
 
-            creds_fetcher::kube_meta_mapping* kube_meta_mapping  = new creds_fetcher::kube_meta_mapping;;
+            creds_fetcher::kube_meta_mapping* kube_meta_mapping  = new creds_fetcher::kube_meta_mapping;
+            std::list<creds_fetcher::kube_yaml_path*> kube_yaml_paths_list;
             std::list<std::string> secret_yaml_paths;
+            std::list<std::string> pod_yaml_paths;
             Json::Value& array2 = array1[i]["kube_context"];
             for ( int j = 0; j < (int)array2.size(); j++ )
             {
+                creds_fetcher::kube_yaml_path* kube_yaml_path = new creds_fetcher::kube_yaml_path;
                 std::string secret_yaml_path = array2[i]["path_to_kube_secret_yaml_file"].asString();
-                secret_yaml_paths.push_back( secret_yaml_path );
+                kube_yaml_path->secret_yaml_path = secret_yaml_path;
+                std::string pod_yaml_path = array2[i]["path_to_kube_pod_yaml_file"].asString();
+                kube_yaml_path->pod_yaml_path = pod_yaml_path;
+                kube_yaml_paths_list.push_back(kube_yaml_path);
             }
 
             if(!kube_config_info->secret_yaml_map.count(kube_config_info->krb_ticket_info->krb_file_path))
@@ -1241,9 +1247,10 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
                 kube_config_info->secret_yaml_map[kube_config_info->krb_ticket_info->krb_file_path]
                     = secret_yaml_paths;
             }
+            kube_config_info->lease_id = lease_id;
             kube_meta_mapping->secret_yaml_paths = secret_yaml_paths;
             kube_meta_mapping->krb_file_path =  krb_ticket_info->krb_file_path;
-            kube_config_info->secret_yaml_paths = secret_yaml_paths;
+            kube_config_info->kube_yaml_paths = kube_yaml_paths_list;
             kube_config_info_list.push_back( kube_config_info );
             kube_meta_mapping_list.push_back(kube_meta_mapping);
             krb_ticket_info_list.push_back( krb_ticket_info );
