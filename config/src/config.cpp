@@ -1,5 +1,53 @@
 #include "daemon.h"
 
+static std::string global_config_file_name( "/etc/credentials_fetcher.conf" );
+static std::string credentials_fetcher_mode_key( "credentials_fetcher_mode" );
+static std::string domain_joined_and_grpc_mode( "domain_joined_and_grpc_mode" );
+static std::string domain_joined_and_eks_mode( "domain_joined_and_eks_mode" );
+static std::string kubeconfig_path_key( "credentials_fetcher_kubeconfig_path" );
+static std::string krbdir( "/var/credentials-fetcher/krbdir" );
+
+/* Reads global config from /etc/credentials_fetcher.conf
+ * If credentials_fetcher_mode is not set in /etc/credentials_fetcher.conf, daemon will
+ * be in "domain_joined_and_grpc_mode", i.e ECS mode
+ */
+void read_global_config(creds_fetcher::Daemon& cf_daemon)
+{
+    std::ifstream global_config_file( global_config_file_name );
+    std::string line;
+    std::vector<std::string> results;
+
+    while ( std::getline( global_config_file, line ) )
+    {
+        // TBD:: Use json parser later
+        boost::split( results, line, []( char c ) { return c == '='; } );
+        std::string key = results[0];
+        std::string value = results[1];
+        if ( credentials_fetcher_mode_key.compare( key ) == 0 )
+        {
+            value.erase( std::remove( value.begin(), value.end(), '"' ), value.end() );
+            if ( key == credentials_fetcher_mode_key )
+            {
+		std:: string msg = "Option credentials_fetcher_mode is set to " + value;
+                if ( value == domain_joined_and_eks_mode )
+                {
+                    cf_daemon.use_kube = true;
+                }
+                std::cout << msg << std::endl;
+                cf_daemon.cf_logger.logger( LOG_ERR, msg.c_str(), 0 );
+            }
+            if ( key == kubeconfig_path_key )
+            {
+                cf_daemon.kube_config_file_path = value;
+		std::string msg = "Option credentials_fetcher_kubeconfig_path is set to " + value;
+                std::cout << msg << std::endl;
+                cf_daemon.cf_logger.logger( LOG_ERR, msg.c_str(), 0 );
+            }
+        }
+    }
+    cf_daemon.krb_files_dir = krbdir;
+}
+
 /**
  * This function has options used to invoke the daemon such as
  * credentials-fetcherd --configfile path-to-file
@@ -14,17 +62,18 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
     const char* ecs_config_file_name = "/etc/ecs/ecs.config"; // TBD:: Add commandline if needed
     std::string domainless_gmsa_field( "CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA" );
 
+    read_global_config(cf_daemon);
+
     try
     {
         namespace po = boost::program_options;
+        namespace bp = boost::property_tree;
 
         /* Declare the supported options */
         po::options_description desc( "Allowed options" );
         desc.add_options()( "help", "produce help message" ) /* TBD: Add help message description */
-            ( "self_test", "Run tests such as utf16 decode")
-                ("use_kube", po::value<std::string>(), "update the config file located /etc/credentials_fetcher_kubeconfig.json"
-                               ".json" )
-	        ( "verbosity", po::value<int>(), "set verbosity level" )(
+            ( "self_test", "Run tests such as utf16 decode" )( "verbosity", po::value<int>(),
+                                                               "set verbosity level" )(
                 "aws_sm_secret_name", po::value<std::string>(), // TBD:: Extend to other stores
                 "Name of secret containing username/password in AWS Secrets Manager (in same "
                 "region)" );
@@ -46,15 +95,6 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         if ( vm.count( "verbosity" ) )
         {
             std::cout << "verbosity level was set to " << vm["verbosity"].as<int>() << std::endl;
-        }
-
-        if ( vm.count( "use_kube" ) )
-        {
-            cf_daemon.kube_config_file_path = vm["use_kube"].as<std::string>();;
-            cf_daemon.krb_files_dir = "/var/credentials-fetcher/krbdir";
-            std::cout
-                << "Option selected for kube apply, path to kube config"
-                <<  cf_daemon.kube_config_file_path << std::endl;
         }
 
         if ( vm.count( "self_test" ) )

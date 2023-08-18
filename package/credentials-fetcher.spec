@@ -56,6 +56,7 @@ ctest3
 %files
 %{_sbindir}/credentials-fetcherd
 %{_sysconfdir}/credentials_fetcher_kubeconfig.json
+%{_sysconfdir}/credentials_fetcher.conf
 %{_sbindir}/credentials_fetcher_krbsecret_to_kubesecret.py
 %{_unitdir}/credentials-fetcher.service
 %license LICENSE
@@ -64,6 +65,7 @@ ctest3
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
 %attr(0400, -, -) %{_sysconfdir}/credentials_fetcher_kubeconfig.json
+%attr(0400, -, -) %{_sysconfdir}/credentials_fetcher.conf
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_krbsecret_to_kubesecret.py
 
 %changelog

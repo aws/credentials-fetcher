@@ -143,10 +143,10 @@ std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthrea
  */
 int parse_kube_config_json_test()
 {
-    std::string kubeconfig_file_path = "kubeconfig.json";
+    std::string kubeconfig_file_path = "credentials_fetcher_kubeconfig.json";
 
-    std::list<creds_fetcher::kube_config_info*> result = parse_kube_config( kubeconfig_file_path,
-                                                                            "/var/credentials-fetcher/krbdir" );
+    std::list<creds_fetcher::kube_config_info*> result =
+        parse_kube_config( kubeconfig_file_path, "/var/credentials-fetcher/krbdir" );
 
     if ( result.empty() || result.size() != 1 )
     {
@@ -158,8 +158,9 @@ int parse_kube_config_json_test()
     {
         std::cout << kube_config_info->krb_ticket_info->service_account_name << std::endl;
         std::map<std::string, std::list<std::string>>::iterator it;
-        for(it = kube_config_info->secret_yaml_map.begin(); it != kube_config_info->secret_yaml_map
-                                                                        .end(); ++it){
+        for ( it = kube_config_info->secret_yaml_map.begin();
+              it != kube_config_info->secret_yaml_map.end(); ++it )
+        {
             std::cout << it->first << '\n';
         }
     }
@@ -189,7 +190,7 @@ void handle_tickets_kube()
     std::string err_msg;
 
     std::list<creds_fetcher::kube_config_info*> kube_config_info_list =
-        parse_kube_config(cf_daemon.kube_config_file_path, cf_daemon.krb_files_dir);
+        parse_kube_config( cf_daemon.kube_config_file_path, cf_daemon.krb_files_dir );
 
     // create the kerberos tickets for the service accounts
     for ( auto kube_config_info : kube_config_info_list )
@@ -197,11 +198,11 @@ void handle_tickets_kube()
         std::string aws_sm_secret_name = kube_config_info->krb_ticket_info->domainless_user;
         // invoke to get machine ticket
         int status = 0;
-        if ( aws_sm_secret_name.length() != 0 && aws_sm_secret_name != "kubehostprincipal")
+        if ( aws_sm_secret_name.length() != 0 && aws_sm_secret_name != "kubehostprincipal" )
         {
             status = get_user_krb_ticket( kube_config_info->krb_ticket_info->domain_name,
                                           aws_sm_secret_name, cf_daemon.cf_logger );
-            kube_config_info->krb_ticket_info->domainless_user = aws_sm_secret_name ;
+            kube_config_info->krb_ticket_info->domainless_user = aws_sm_secret_name;
         }
         else
         {
@@ -214,9 +215,9 @@ void handle_tickets_kube()
                                         status );
             err_msg = "ERROR: cannot get machine krb ticket";
             std::cout << "kube apply failed " + err_msg << std::endl;
-            lease_dir_path = cf_daemon.krb_files_dir+"/"+kube_config_info->lease_id;
+            lease_dir_path = cf_daemon.krb_files_dir + "/" + kube_config_info->lease_id;
             // delete associated directories, since the ticket creation failed
-            std::filesystem::remove_all(lease_dir_path);
+            std::filesystem::remove_all( lease_dir_path );
             break;
         }
 
@@ -244,9 +245,9 @@ void handle_tickets_kube()
             cf_daemon.cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket", status );
 
             std::cout << "kube apply failed " + err_msg << std::endl;
-            lease_dir_path = cf_daemon.krb_files_dir+"/"+kube_config_info->lease_id;
+            lease_dir_path = cf_daemon.krb_files_dir + "/" + kube_config_info->lease_id;
             // delete associated directories, since the ticket creation failed
-            std::filesystem::remove_all(lease_dir_path);
+            std::filesystem::remove_all( lease_dir_path );
             break;
         }
         else
@@ -259,7 +260,7 @@ void handle_tickets_kube()
         for ( auto const& kube_yaml_path : kube_config_info->kube_yaml_paths )
         {
             convert_secret_krb2kube( kube_yaml_path->secret_yaml_path,
-                                     kube_yaml_path->pod_yaml_path ,krb_ccname_str );
+                                     kube_yaml_path->pod_yaml_path, krb_ccname_str );
         }
         std::cout << "kube apply completed" << std::endl;
     }
@@ -298,10 +299,9 @@ int main( int argc, const char* argv[] )
 
     if ( cf_daemon.run_diagnostic )
     {
-        exit( read_meta_data_json_test() ||
-              read_meta_data_invalid_json_test() || renewal_failure_krb_dir_not_found_test() ||
-              write_meta_data_json_test() || parse_kube_config_json_test()
-||handle_tickets_kube_test());
+        exit( read_meta_data_json_test() || read_meta_data_invalid_json_test() ||
+              renewal_failure_krb_dir_not_found_test() || write_meta_data_json_test() ||
+              parse_kube_config_json_test() || handle_tickets_kube_test() );
     }
 
     struct sigaction sa;

@@ -1,14 +1,17 @@
 #include "config.h"
 #include <boost/algorithm/string.hpp>
-#include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <csignal>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <glib.h>
 #include <iostream>
+#include <json/json.h>
+#include <json/writer.h>
 #include <krb5/krb5.h>
 #include <list>
 #include <netinet/in.h>
@@ -18,9 +21,6 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
-#include <json/json.h>
-#include <json/writer.h>
-#include <filesystem>
 
 #ifndef _daemon_h_
 #define _daemon_h_
@@ -65,7 +65,7 @@ namespace creds_fetcher
       public:
         std::list<creds_fetcher::kube_yaml_path*> kube_yaml_paths;
         creds_fetcher::krb_ticket_info* krb_ticket_info;
-        std::map<std::string,std::list<std::string>> secret_yaml_map;
+        std::map<std::string, std::list<std::string>> secret_yaml_map;
         std::string lease_id;
     };
 
@@ -119,6 +119,7 @@ namespace creds_fetcher
         CF_logger cf_logger;
         bool run_diagnostic = false;
         std::string aws_sm_secret_name; /* TBD:: Extend to other secret stores */
+        bool use_kube;
         std::string kube_config_file_path;
         // run ticket renewal every 10 minutes
         uint64_t krb_ticket_handle_interval = 10;
@@ -152,18 +153,18 @@ int generate_host_machine_krb_ticket( const char* krb_ccname = "" );
 int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger );
 int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name,
                          creds_fetcher::CF_logger& cf_logger );
-int get_domainless_user_krb_ticket( std::string domain_name, std::string username, std::string
-                                                                                   password,
-                                creds_fetcher::CF_logger& cf_logger );
+int get_domainless_user_krb_ticket( std::string domain_name, std::string username,
+                                    std::string password, creds_fetcher::CF_logger& cf_logger );
 
 std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
                                                  const std::string& gmsa_account_name,
                                                  const std::string& krb_cc_name,
                                                  creds_fetcher::CF_logger& cf_logger );
 
-std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_dir, std::string
-                                                                                         domain_name,
-                                                          std::string username, std::string password,
+std::list<std::string> renew_kerberos_tickets_domainless( std::string krb_files_dir,
+                                                          std::string domain_name,
+                                                          std::string username,
+                                                          std::string password,
                                                           creds_fetcher::CF_logger& cf_logger );
 
 void krb_ticket_creation( const char* ldap_uri_arg, const char* gmsa_account_name_arg,
@@ -178,11 +179,11 @@ void ltrim( std::string& s );
 void rtrim( std::string& s );
 std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeFilePath,
                                                                std::string krbdir );
-std::pair<int, std::string> convert_secret_krb2kube(const std::string kube_secrets_yaml_file,
+std::pair<int, std::string> convert_secret_krb2kube( const std::string kube_secrets_yaml_file,
                                                      const std::string kube_pod_yaml_file,
                                                      const std::string krb_ticket_file );
-void writeKubeJsonCache(std::string metadataFilePath, std::list<creds_fetcher::kube_meta_mapping*>
-                                                  kubeMappings);
+void writeKubeJsonCache( std::string metadataFilePath,
+                         std::list<creds_fetcher::kube_meta_mapping*> kubeMappings );
 
 void handle_tickets_kube();
 // unit tests

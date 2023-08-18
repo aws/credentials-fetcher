@@ -154,6 +154,9 @@ install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_kubeconfig.json
 install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_krbsecret_to_kubesecret.py
         DESTINATION "/usr/sbin/"
 	PERMISSIONS OWNER_EXECUTE OWNER_READ)
+install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher.conf
+        DESTINATION "/etc/"
+        PERMISSIONS OWNER_WRITE OWNER_READ)
 
 
 enable_testing()
