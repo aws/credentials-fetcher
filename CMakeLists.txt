@@ -5,7 +5,7 @@ include(GNUInstallDirs)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall -Werror -pthread")
+set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall -Werror -pthread -fstack-protector-all")
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf REQUIRED)
