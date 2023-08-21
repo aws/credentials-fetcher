@@ -1,6 +1,19 @@
 # Using Credentials-fetcher with Kubernetes (EKS)
 
-This is a simplified description of how to integrate Active Directory with EKS using the credentials-fetcher daemon.
+## Steps in brief
+If you are already familiar with EKS, AD and credentials-fetcher, these are steps you can use for EKS:
+* After extracting RPM, uncomment mode in /etc/credentials_fetcher.conf to use EKS
+* Uncomment and modify path to the credentials-fetcher kube config json
+* Modify /etc/credentials_fetcher_kubeconfig.json
+* Start daemon
+
+
+## Notes
+
+* The Credentials-fetcher daemon does not create or modify any VPC, subnet settings.
+* The configuration below is not a production configuration, customers need to make appropriate changes for production deployment.
+
+This is a simplified description of how to integrate Active Directory with EKS using the credentials-fetcher daemon. 
 
 Using this feature, applications running in EKS pods can use Windows Authentication to access SQL server or other services using Windows Authentication.
 Applications running in EKS use AD credentials shared by the credentials-fetcher daemon running in a domain-joined instance, sharing of AD credentials is done using kubernetes.
