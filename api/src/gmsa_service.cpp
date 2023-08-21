@@ -1278,21 +1278,21 @@ void writeKubeJsonCache(std::string metadataFilePath, std::list<creds_fetcher::k
         std::unique_ptr<Json::StreamWriter> writer( wbuilder.newStreamWriter() );
 
         Json::Value root;
+        Json::Value child_entry;
         for ( const auto& mapping : kubeMappings )
         {
-            Json::Value child;
-            Json::Value secrets( Json::arrayValue );
-            Json::Value pods( Json::arrayValue );
+            Json::Value kube_secrets_yaml ( Json::arrayValue );
             for ( const auto& path : mapping->kube_yaml_paths )
             {
-                secrets.append( Json::Value( path->secret_yaml_path) );
-                pods.append( Json::Value( path->pod_yaml_path) );
+                Json::Value child;
+                child["path_to_kube_secret_yaml"] = path->secret_yaml_path;
+                child["path_to_kube_pod_yaml"] = path->pod_yaml_path;
+                kube_secrets_yaml.append(child);
             }
-            child["path_to_kube_secret_yaml"] = secrets;
-            child["path_to_kube_pod_yaml"] = pods;
 
-            child["krb_ticket_path"] = mapping->krb_file_path;
-            root.append( child );
+            child_entry["kube_secret_yaml"] = kube_secrets_yaml;
+            child_entry["krb_ticket_path"] = mapping->krb_file_path;
+            root.append( child_entry );
         }
 
         std::ofstream outputFileStream( metadataFilePath );
