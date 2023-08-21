@@ -1248,7 +1248,7 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
                     = secret_yaml_paths;
             }
             kube_config_info->lease_id = lease_id;
-            kube_meta_mapping->secret_yaml_paths = secret_yaml_paths;
+            kube_meta_mapping->kube_yaml_paths = kube_yaml_paths_list;
             kube_meta_mapping->krb_file_path =  krb_ticket_info->krb_file_path;
             kube_config_info->kube_yaml_paths = kube_yaml_paths_list;
             kube_config_info_list.push_back( kube_config_info );
@@ -1281,12 +1281,15 @@ void writeKubeJsonCache(std::string metadataFilePath, std::list<creds_fetcher::k
         for ( const auto& mapping : kubeMappings )
         {
             Json::Value child;
-            Json::Value vec( Json::arrayValue );
-            for ( const auto& path : mapping->secret_yaml_paths )
+            Json::Value secrets( Json::arrayValue );
+            Json::Value pods( Json::arrayValue );
+            for ( const auto& path : mapping->kube_yaml_paths )
             {
-                vec.append( Json::Value( path ) );
+                secrets.append( Json::Value( path->secret_yaml_path) );
+                pods.append( Json::Value( path->pod_yaml_path) );
             }
-            child["path_to_kube_secret_yaml"] = vec;
+            child["path_to_kube_secret_yaml"] = secrets;
+            child["path_to_kube_pod_yaml"] = pods;
 
             child["krb_ticket_path"] = mapping->krb_file_path;
             root.append( child );

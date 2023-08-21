@@ -76,7 +76,7 @@ namespace creds_fetcher
     {
       public:
         std::string krb_file_path;
-        std::list<std::string> secret_yaml_paths;
+        std::list<creds_fetcher::kube_yaml_path*> kube_yaml_paths;
     };
 
     /*
