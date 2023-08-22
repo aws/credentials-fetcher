@@ -1,5 +1,7 @@
 # Using Credentials-fetcher with Kubernetes (EKS)
 
+Note: The Credentials-fetcher daemon does not communicate with the AWS EKS control-plane, modifications to /etc/credentials-fetcher.conf and /etc/credentials_fetcher_kubeconfig.json are sufficient.
+
 ## Steps in brief
 If you are already familiar with EKS, AD and credentials-fetcher, these are steps you can use for EKS:
 * After extracting RPM, uncomment mode in /etc/credentials_fetcher.conf to use EKS
