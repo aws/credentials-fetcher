@@ -10,7 +10,7 @@ fwkver=$(LC_ALL=C dotnet --list-runtimes | \
     LC_ALL=C sed --posix -n '/^Microsoft.NETCore.App \([^ ]*\) .*$/{s//\1/p;q;}')
 
 # dotnet-sdk-5.0 installed via .deb package
-dotnethome=/usr/lib64/dotnet
+dotnethome=/usr/lib/dotnet
 dotnetlib=$dotnethome/shared/Microsoft.NETCore.App/$fwkver
 dotnet_cscdll=$dotnethome/sdk/$sdkver/Roslyn/bincore/csc.dll
 dotnet_csclib='-r:netstandard.dll -r:Microsoft.CSharp.dll -r:System.dll'
