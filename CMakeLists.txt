@@ -5,7 +5,7 @@ include(GNUInstallDirs)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall -Werror -pthread")
+set(CMAKE_CXX_FLAGS " -std=c++17 -g -Wall -Werror -pthread")
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf REQUIRED)
@@ -104,7 +104,7 @@ if (CMAKE_C_LINK_PIE_SUPPORTED)
 endif ()
 
 find_path(GLIB_INCLUDE_DIR glib.h "/usr/include" "/usr/include/glib-2.0")
-find_path(GLIB_CONFIG_DIR glibconfig.h "/usr/include" "/usr/lib64/glib-2.0/include")
+find_path(GLIB_CONFIG_DIR glibconfig.h "/usr/include" "/usr/lib64/glib-2.0/include" "/usr/lib/x86_64-linux-gnu/glib-2.0/include/")
 
 target_include_directories(credentials-fetcherd
         PUBLIC
@@ -128,13 +128,7 @@ target_include_directories(credentials-fetcherd PUBLIC common)
 
 target_link_libraries(credentials-fetcherd
         PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private
-        boost_filesystem boost_system crypto
-        kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
-        com_err krb5support resolv)
-
-target_link_libraries(credentials-fetcherd
-            PUBLIC
-            ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
+        boost_filesystem boost_system crypto protobuf -L/usr/local/lib absl_log_internal_check_op absl_leak_check absl_die_if_null absl_log_internal_conditions absl_log_internal_message absl_examine_stack absl_log_internal_format absl_log_internal_proto absl_log_internal_nullguard absl_log_internal_log_sink_set absl_log_sink absl_log_entry absl_flags absl_flags_internal absl_flags_marshalling absl_flags_reflection absl_flags_private_handle_accessor absl_flags_commandlineflag absl_flags_commandlineflag_internal absl_flags_config absl_flags_program_name absl_log_initialize absl_log_globals absl_log_internal_globals absl_raw_hash_set absl_hash absl_city absl_low_level_hash absl_hashtablez_sampler absl_statusor absl_status absl_cord absl_cordz_info absl_cord_internal absl_cordz_functions absl_exponential_biased absl_cordz_handle absl_crc_cord_state absl_crc32c absl_crc_internal absl_crc_cpu_detect absl_bad_optional_access absl_str_format_internal absl_strerror absl_synchronization absl_graphcycles_internal absl_kernel_timeout_internal absl_stacktrace absl_symbolize absl_debugging_internal absl_demangle_internal absl_malloc_internal absl_time absl_civil_time absl_time_zone absl_bad_variant_access utf8_validity utf8_range absl_strings absl_string_view absl_strings_internal absl_base rt absl_spinlock_wait absl_int128 absl_throw_delegate absl_raw_logging_internal absl_log_severity kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto com_err krb5support resolv utf8_validity ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
 
 install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
         DESTINATION "/usr/sbin/"
