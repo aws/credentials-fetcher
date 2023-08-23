@@ -66,7 +66,8 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                             if ( gmsa_ticket_result.first != 0 )
                             {
                                 int status = -1;
-                                cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket" );
+                                cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket using account %s",
+                                                    krb_ticket->service_account_name.c_str() );
                                 if (domainless_user.find("awsdomainlessusersecret") !=
                                                            std::string::npos) {
                                     int pos = domainless_user.find(":");
@@ -94,7 +95,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                     }
                     else
                     {
-                        cf_logger.logger( LOG_INFO, "gMSA ticket is at %s", krb_cc_name );
+                        cf_logger.logger( LOG_INFO, "gMSA ticket is at %s", krb_cc_name.c_str() );
                         std::cout << "gMSA ticket is at " + krb_cc_name +
                                          " is not yet ready for "
                                          "renewal"
