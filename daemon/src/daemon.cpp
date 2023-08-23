@@ -82,7 +82,6 @@ std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthrea
     pthread_attr_t attr;
     int status;
     const int num_threads = 1;
-    std::pair<int, void*> result;
 
     if ( func == nullptr || pthread_arg == nullptr )
     {
