@@ -635,7 +635,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
         if ( domain_ips.first != 0 )
         {
             cf_logger.logger( LOG_ERR, "ERROR: Cannot resolve domain IPs of %s", __func__, __LINE__,
-                              domain_name );
+                              domain_name.c_str() );
             return std::make_pair( -1, std::string( "" ) );
         }
 
@@ -846,11 +846,13 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
                             cf_logger.logger( LOG_WARNING,
                                               "WARNING: Cannot get gMSA krb ticket "
                                               "because of expired user/machine ticket, "
-                                              "will be retried automatically" );
+                                              "will be retried automatically, service_account_name = %s",
+                                              krb_ticket->service_account_name.c_str() );
                         }
                         else
                         {
-                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket" );
+                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket using account %s",
+                                                krb_ticket->service_account_name.c_str() );
                         }
                         // if tickets are created in domainless mode
                         std::string domainless_user = krb_ticket->domainless_user;
