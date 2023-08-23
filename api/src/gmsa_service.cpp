@@ -201,7 +201,7 @@ class CredentialsFetcherImpl final
                             cf_logger.logger( LOG_INFO,
                                               "Directory already exists: "
                                               "%s",
-                                              krb_file_path );
++                                              krb_file_path.c_str() );
                             break;
                         }
                         boost::filesystem::create_directories( krb_file_path );
@@ -230,7 +230,7 @@ class CredentialsFetcherImpl final
                         else
                         {
                             cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
-                                              gmsa_ticket_result.second );
+                                              gmsa_ticket_result.second.c_str() );
                             std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
                                       << std::endl;
                         }
@@ -466,7 +466,7 @@ class CredentialsFetcherImpl final
                         if ( username.empty()  ||  password.empty() )
                         {
                             cf_logger.logger( LOG_ERR, "Invalid credentials for "
-                                                       "domainless user ");
+                                                       "domainless user ", username.c_str());
                             err_msg = "ERROR: Invalid credentials for mainless user";
                             break;
                         }
@@ -487,7 +487,7 @@ class CredentialsFetcherImpl final
                             cf_logger.logger( LOG_INFO,
                                               "Directory already exists: "
                                               "%s",
-                                              krb_file_path );
+                                              krb_file_path.c_str() );
                             break;
                         }
                         boost::filesystem::create_directories( krb_file_path );
@@ -516,7 +516,7 @@ class CredentialsFetcherImpl final
                         else
                         {
                             cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
-                                              gmsa_ticket_result.second );
+                                              gmsa_ticket_result.second.c_str() );
                             std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
                                       << std::endl;
                         }
