@@ -1,5 +1,6 @@
 #include "daemon.h"
 
+#include <filesystem>
 #include <boost/filesystem.hpp>
 #include <credentialsfetcher.grpc.pb.h>
 #include <fstream>
@@ -1171,6 +1172,14 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
     std::list<creds_fetcher::kube_meta_mapping*> kube_meta_mapping_list;
     std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
     std::string metadata_file_path;
+    std::string lease_id = "eks_configuration";
+    std::string dirName = krbdir + "/" + lease_id;
+    if (std::filesystem::exists(dirName))
+    {
+        // The folder already exists
+        return kube_config_info_list;
+    }
+
     try
     {
         if ( kubeFilePath.empty() )
@@ -1193,7 +1202,6 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
             return kube_config_info_list;
         }
 
-        std::string lease_id = generate_lease_id();
         std::string meta_file_name = lease_id + "_kube_metadata.json";
         metadata_file_path = krbdir + "/" + lease_id + "/" + meta_file_name;
 
