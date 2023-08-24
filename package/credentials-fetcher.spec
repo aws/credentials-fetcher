@@ -1,5 +1,5 @@
 %global major_version 1
-%global minor_version 2
+%global minor_version 3
 %global patch_version 0
 
 # For handling bump release by rpmdev-bumpspec and mass rebuild
@@ -16,7 +16,7 @@ Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/%{v
 
 BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-devel boost-devel
 BuildRequires:  openssl-devel zlib-devel protobuf-devel re2-devel krb5-devel systemd-devel
-BuildRequires:  systemd-rpm-macros dotnet-sdk-6.0 grpc-plugins
+BuildRequires:  systemd-rpm-macros dotnet-sdk-6.0 grpc-plugins jsoncpp-devel
 
 Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0
 
@@ -55,15 +55,27 @@ ctest3
 
 %files
 %{_sbindir}/credentials-fetcherd
+%{_sysconfdir}/credentials_fetcher_kubeconfig.json
+%{_sysconfdir}/credentials_fetcher.conf
+%{_sbindir}/credentials_fetcher_krbsecret_to_kubesecret.py
 %{_unitdir}/credentials-fetcher.service
 %license LICENSE
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
 %doc CONTRIBUTING.md NOTICE README.md
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
+%attr(0400, -, -) %{_sysconfdir}/credentials_fetcher_kubeconfig.json
+%attr(0400, -, -) %{_sysconfdir}/credentials_fetcher.conf
+%attr(0700, -, -) %{_sbindir}/credentials_fetcher_krbsecret_to_kubesecret.py
 
 %changelog
-* Thu May 15 2023 Sai Kiran Akula <saakla@amazon.com> - 1.2.0
+* Mon Aug 14 2023 Sai Kiran Akula <saakla@amazon.com> - 1.3.0
+- Add EKS support
+
+* Fri Aug 11 2023 Samiullah Mohammed <samiull@amazon.com> - 1.2.0
+- Add credentials_fetcher_kubeconfig.json
+
+* Mon May 15 2023 Sai Kiran Akula <saakla@amazon.com> - 1.2.0
 - Create 1.2.0 release
 
 * Thu Mar 23 2023 Tom Callaway <spot@fedoraproject.org> - 1.1.0-7

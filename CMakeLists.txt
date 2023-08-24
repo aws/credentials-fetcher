@@ -5,7 +5,7 @@ include(GNUInstallDirs)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall -Werror -pthread")
+set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall -Werror -pthread -fstack-protector-all")
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf REQUIRED)
@@ -128,7 +128,7 @@ target_include_directories(credentials-fetcherd PUBLIC common)
 
 target_link_libraries(credentials-fetcherd
         PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private
-        boost_filesystem boost_system crypto
+        boost_filesystem boost_system crypto jsoncpp
         kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
         com_err krb5support resolv)
 
@@ -147,7 +147,17 @@ install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.exe
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
 install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.runtimeconfig.json
         DESTINATION "/usr/sbin/"
-        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
+        PERMISSIONS OWNER_WRITE OWNER_READ)
+install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_kubeconfig.json
+        DESTINATION "/etc/"
+        PERMISSIONS OWNER_WRITE OWNER_READ)
+install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_krbsecret_to_kubesecret.py
+        DESTINATION "/usr/sbin/"
+	PERMISSIONS OWNER_EXECUTE OWNER_READ)
+install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher.conf
+        DESTINATION "/etc/"
+        PERMISSIONS OWNER_WRITE OWNER_READ)
+
 
 enable_testing()
 

@@ -134,6 +134,138 @@ std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthrea
     return std::make_pair( EXIT_SUCCESS, tinfo );
 }
 
+/**
+ * Self test function to parse input kube config file and modify it in-place.
+ * @param func - pthread function
+ * @param pthread_arg - pthread function parameter
+ * @param stack_size - pthread stack defaults to -1
+ * @return pair of return code and pointer to pthread
+ */
+int parse_kube_config_json_test()
+{
+    std::string kubeconfig_file_path = "credentials_fetcher_kubeconfig.json";
+
+    std::list<creds_fetcher::kube_config_info*> result =
+        parse_kube_config( kubeconfig_file_path, "/var/credentials-fetcher/krbdir" );
+
+    if ( result.empty() || result.size() != 1 )
+    {
+        std::cout << "parsing kube config test failed" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    for ( auto kube_config_info : result )
+    {
+        std::cout << kube_config_info->krb_ticket_info->service_account_name << std::endl;
+        std::map<std::string, std::list<std::string>>::iterator it;
+        for ( it = kube_config_info->secret_yaml_map.begin();
+              it != kube_config_info->secret_yaml_map.end(); ++it )
+        {
+            std::cout << it->first << '\n';
+        }
+    }
+
+    std::cout << "parsing kube config test successful" << std::endl;
+    return EXIT_SUCCESS;
+}
+
+/**
+ * Self test function to handle tickets kube test and modify it in-place.
+ * @param func - pthread function
+ * @param pthread_arg - pthread function parameter
+ * @param stack_size - pthread stack defaults to -1
+ * @return pair of return code and pointer to pthread
+ */
+int handle_tickets_kube_test()
+{
+    cf_daemon.kube_config_file_path = "kubeconfig.json";
+    cf_daemon.krb_files_dir = "/var/credentials-fetcher/krbdir";
+    handle_tickets_kube();
+    return EXIT_SUCCESS;
+}
+
+void handle_tickets_kube()
+{
+    std::string lease_dir_path;
+    std::string err_msg;
+
+    std::list<creds_fetcher::kube_config_info*> kube_config_info_list =
+        parse_kube_config( cf_daemon.kube_config_file_path, cf_daemon.krb_files_dir );
+
+    // create the kerberos tickets for the service accounts
+    for ( auto kube_config_info : kube_config_info_list )
+    {
+        std::string aws_sm_secret_name = kube_config_info->krb_ticket_info->domainless_user;
+        // invoke to get machine ticket
+        int status = 0;
+        if ( aws_sm_secret_name.length() != 0 && aws_sm_secret_name != "kubehostprincipal" )
+        {
+            status = get_user_krb_ticket( kube_config_info->krb_ticket_info->domain_name,
+                                          aws_sm_secret_name, cf_daemon.cf_logger );
+            kube_config_info->krb_ticket_info->domainless_user = aws_sm_secret_name;
+        }
+        else
+        {
+            status = get_machine_krb_ticket( kube_config_info->krb_ticket_info->domain_name,
+                                             cf_daemon.cf_logger );
+        }
+        if ( status < 0 )
+        {
+            cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
+                                        status );
+            err_msg = "ERROR: cannot get machine krb ticket";
+            std::cout << "kube apply failed " + err_msg << std::endl;
+            lease_dir_path = cf_daemon.krb_files_dir + "/" + kube_config_info->lease_id;
+            // delete associated directories, since the ticket creation failed
+            std::filesystem::remove_all( lease_dir_path );
+            break;
+        }
+
+        std::string krb_file_path = kube_config_info->krb_ticket_info->krb_file_path;
+        boost::filesystem::create_directories( krb_file_path );
+
+        std::string krb_ccname_str = kube_config_info->krb_ticket_info->krb_file_path + "/krb5cc";
+        std::cout << krb_ccname_str << std::endl;
+
+        if ( !boost::filesystem::exists( krb_ccname_str ) )
+        {
+            std::ofstream file( krb_ccname_str );
+            file.close();
+
+            kube_config_info->krb_ticket_info->krb_file_path = krb_ccname_str;
+        }
+
+        std::pair<int, std::string> gmsa_ticket_result =
+            get_gmsa_krb_ticket( kube_config_info->krb_ticket_info->domain_name,
+                                 kube_config_info->krb_ticket_info->service_account_name,
+                                 krb_ccname_str, cf_daemon.cf_logger );
+        if ( gmsa_ticket_result.first != 0 )
+        {
+            err_msg = "ERROR: Cannot get gMSA krb ticket";
+            cf_daemon.cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket", status );
+
+            std::cout << "kube apply failed " + err_msg << std::endl;
+            lease_dir_path = cf_daemon.krb_files_dir + "/" + kube_config_info->lease_id;
+            // delete associated directories, since the ticket creation failed
+            std::filesystem::remove_all( lease_dir_path );
+            break;
+        }
+        else
+        {
+            cf_daemon.cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
+                                        gmsa_ticket_result.second );
+            std::cout << "gMSA ticket is at " << gmsa_ticket_result.second << std::endl;
+        }
+        // convert_secret_krb2kube()
+        for ( auto const& kube_yaml_path : kube_config_info->kube_yaml_paths )
+        {
+            convert_secret_krb2kube( kube_yaml_path->secret_yaml_path,
+                                     kube_yaml_path->pod_yaml_path, krb_ccname_str );
+        }
+        std::cout << "kube apply completed" << std::endl;
+    }
+}
+
 int main( int argc, const char* argv[] )
 {
     void* grpc_pthread;
@@ -160,11 +292,16 @@ int main( int argc, const char* argv[] )
     std::cout << "logging_dir = " << cf_daemon.logging_dir << std::endl;
     std::cout << "unix_socket_dir = " << cf_daemon.unix_socket_dir << std::endl;
 
+    if ( !cf_daemon.kube_config_file_path.empty() )
+    {
+        handle_tickets_kube();
+    }
+
     if ( cf_daemon.run_diagnostic )
     {
-        exit(  read_meta_data_json_test() ||
-              read_meta_data_invalid_json_test() || renewal_failure_krb_dir_not_found_test() ||
-              write_meta_data_json_test() );
+        exit( read_meta_data_json_test() || read_meta_data_invalid_json_test() ||
+              renewal_failure_krb_dir_not_found_test() || write_meta_data_json_test() ||
+              parse_kube_config_json_test() || handle_tickets_kube_test() );
     }
 
     struct sigaction sa;

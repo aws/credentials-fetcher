@@ -170,7 +170,7 @@ class CredentialsFetcherClient
         if ( status.ok() )
         {
             std::cout << "kerberos ticket renewal successful" <<
-                std::endl;
+                 std::endl;
             for ( int i = 0; i < response.renewed_kerberos_file_paths_size(); i++ )
             {
                 std::string msg =
@@ -178,6 +178,9 @@ class CredentialsFetcherClient
                 krb_ticket_paths.push_back( msg );
                 std::cout << msg << std::endl;
             }
+        }
+        else{
+            std::cout << "Failed to renew tickets" << std::endl;
         }
         return krb_ticket_paths;
     }
@@ -399,27 +402,16 @@ int main( int argc, char** argv )
         "{\"CmsPlugins\":[\"ActiveDirectory\"],"
         "\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4217655605-3681839426-3493040985\","
         "\"MachineAccountName\":\"WebApp01\",\"Guid\":\"af602f85-d754-4eea-9fa8-fd76810485f1\","
-        "\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},"
+        "\"DnsTreeName\":\"contosoeks.com\",\"DnsName\":\"contosoeks.com\","
+        "\"NetBiosName\":\"contosoeks\"},"
         "\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"WebApp01\","
-        "\"Scope\":\"contoso.com\"},{\"Name\":\"WebApp01\",\"Scope\":\"contoso\"}]}}",
-        "{\"CmsPlugins\":[\"ActiveDirectory\"],"
-        "\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4217655605-3681839426-3493040985\","
-        "\"MachineAccountName\":\"WebApp03\",\"Guid\":\"af602f85-d754-4eea-9fa8-fd76810485f1\","
-        "\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},"
-        "\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"WebApp03\","
-        "\"Scope\":\"contoso.com\"},{\"Name\":\"WebApp03\",\"Scope\":\"contoso\"}]}}",
-        "{\"CmsPlugins\":[\"ActiveDirectory\"],"
-        "\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4217655605-3681839426-3493040985\","
-        "\"MachineAccountName\":\"WebApp01\",\"Guid\":\"af602f85-d754-4eea-9fa8-fd76810485f1\","
-        "\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},"
-        "\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"WebApp01\","
-        "\"Scope\":\"contoso.com\"},{\"Name\":\"WebApp01\",\"Scope\":\"contoso\"}]}}" };
+        "\"Scope\":\"contosoeks.com\"},{\"Name\":\"WebApp01\",\"Scope\":\"contosoeks\"}]}}"};
 
     std::list<std::string> invalid_credspec_contents = {
         "{\"CmsPlugins\":[\"ActiveDirectory\"],"
         "\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4217655605-3681839426-3493040985\","
         "\"MachineAccountName\":\"WebApp01\",\"Guid\":\"af602f85-d754-4eea-9fa8-fd76810485f1\","
-        "\"DnsTreeName\":\"contoso.com\",\"NetBiosName\":\"contoso\"}," };
+        "\"DnsTreeName\":\"contosoeks.com\",\"NetBiosName\":\"contosoeks\"}," };
 
     std::list<std::string> lease_ids = {"12345", "34567", "45678"};
     // create and delete krb tickets

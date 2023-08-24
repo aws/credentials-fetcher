@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+
 // renew the ticket 1 hrs before the expiration
 #define RENEW_TICKET_HOURS 1
 #define SECONDS_IN_HOUR 3600
@@ -15,6 +16,8 @@
 static const std::string install_path_for_decode_exe =
     "/usr/sbin/credentials_fetcher_utf16_private.exe";
 static const std::string install_path_for_aws_cli = "/usr/bin/aws";
+static const std::string install_path_for_kube_apply_script =
+    "/usr/sbin/credentials_fetcher_krbsecret_to_kubesecret.py";
 
 extern "C" int my_kinit_main(int, char **);
 
@@ -202,13 +205,6 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
     int ret;
 
     std::pair<int, std::string> cmd = exec_shell_cmd( "which hostname" );
-    rtrim( cmd.second );
-    if ( !check_file_permissions( cmd.second ) )
-    {
-        return -1;
-    }
-
-    cmd = exec_shell_cmd( "which realm" );
     rtrim( cmd.second );
     if ( !check_file_permissions( cmd.second ) )
     {
@@ -993,4 +989,22 @@ void rtrim( std::string& s )
         std::find_if( s.rbegin(), s.rend(), []( unsigned char ch ) { return !std::isspace( ch ); } )
             .base(),
         s.end() );
+}
+
+
+/*
+ * #f=open("/var/credentials-fetcher/krbdir/434d760fade0559999d6/WebApp01/krb5cc","rb")
+ */
+/*
+ * convert_secret_krb2kube : Update secret in kube file for secret by importing from krb ticket
+ */
+std::pair<int, std::string> convert_secret_krb2kube(const std::string kube_secrets_yaml_file,
+                                                     const std::string kube_pod_yaml_file,
+                                                     const std::string krb_ticket_file )
+{
+
+    std::string cmd = "python3 " + install_path_for_kube_apply_script + " -s " +
+                      kube_secrets_yaml_file + " -p " + kube_pod_yaml_file  + " -k " +
+                      krb_ticket_file;
+    return exec_shell_cmd( cmd );
 }

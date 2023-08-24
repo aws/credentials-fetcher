@@ -23,6 +23,8 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
             std::this_thread::sleep_until( x );
             std::cout << "###### renewal started ######" << std::endl;
 
+            std::list<creds_fetcher::kube_config_info*> kube_config_info_list = parse_kube_config
+                (cf_daemon.kube_config_file_path, cf_daemon.krb_files_dir);
             // identify the metadata files in the krb directory
             std::vector<std::string> metadatafiles;
             for ( boost::filesystem::recursive_directory_iterator end, dir( krb_files_dir );
@@ -55,7 +57,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                     std::string krb_cc_name = krb_ticket->krb_file_path;
                     std::string domainless_user = krb_ticket->domainless_user;
                     // check if the ticket is ready for renewal and not created in domainless mode
-                    if ( is_ticket_ready_for_renewal( krb_cc_name ) && domainless_user == "")
+                    if ( is_ticket_ready_for_renewal( krb_cc_name ) )
                     {
                         int num_retries = 1;
                         for ( int i = 0; i <= num_retries; i++ )
@@ -74,10 +76,60 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                                     status = get_user_krb_ticket(krb_ticket->domain_name,
                                                                   domainlessUser, cf_logger );
                                 }
+                                else if (domainless_user.find("kubedomainlessusersecret") !=
+                                          std::string::npos) {
+                                    int pos = domainless_user.find(":");
+                                    std::string domainlessUser = domainless_user.substr(pos + 1);
+                                    status = get_user_krb_ticket(krb_ticket->domain_name,
+                                                                  domainlessUser, cf_logger );
+                                    for ( auto kube_config_info :  kube_config_info_list )
+                                    {
+                                        std::map<std::string, std::list<std::string>>::iterator it;
+                                        if(kube_config_info->secret_yaml_map.count(krb_ticket->krb_file_path)){
+                                            std::map<std::string, std::list<std::string>>::iterator
+                                                kube_it;
+                                            for(kube_it=kube_config_info->secret_yaml_map.begin(); kube_it!=kube_config_info->secret_yaml_map
+                                                                                                            .end(); ++kube_it){
+                                                for (auto const& secret_path : kube_it->second) {
+                                                    convert_secret_krb2kube(secret_path, "",
+                                                                             krb_ticket->krb_file_path + "/krb5cc");
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 else
                                 {
                                     status = get_machine_krb_ticket( krb_ticket->domain_name,
                                                                          cf_logger );
+                                    if (domainless_user.find("kubehostprincipal") !=
+                                         std::string::npos)
+                                    {
+                                        for ( auto kube_config_info : kube_config_info_list )
+                                        {
+                                            std::map<std::string, std::list<std::string>>::iterator
+                                                it;
+                                            if ( kube_config_info->secret_yaml_map.count(krb_ticket->krb_file_path ) )
+                                            {
+                                                std::map<std::string,
+                                                         std::list<std::string>>::iterator kube_it;
+                                                for ( kube_it = kube_config_info->secret_yaml_map
+                                                                    .begin();
+                                                      kube_it !=
+                                                      kube_config_info->secret_yaml_map.end();
+                                                      ++kube_it )
+                                                {
+                                                    for ( auto const& secret_path :
+                                                          kube_it->second )
+                                                    {
+                                                        convert_secret_krb2kube(
+                                                            secret_path, "",
+                                                            krb_ticket->krb_file_path + "/krb5cc" );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                                 if ( status < 0 )
                                 {
