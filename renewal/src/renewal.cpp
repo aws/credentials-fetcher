@@ -23,7 +23,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
             std::cout << "###### renewal started ######" << std::endl;
 
             std::list<creds_fetcher::kube_config_info*> kube_config_info_list =
-                parse_kube_config( cf_daemon.kube_config_file_path, cf_daemon.krb_files_dir );
+                parse_kube_config( cf_daemon );
             // identify the metadata files in the krb directory
             std::vector<std::string> metadatafiles;
             for ( boost::filesystem::recursive_directory_iterator end, dir( krb_files_dir );

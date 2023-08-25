@@ -1157,15 +1157,15 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
  * @param krb_ticket_info - return service account info
  * @return
  */
-std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeFilePath,
-                                                               std::string krbdir )
+std::list<creds_fetcher::kube_config_info*> parse_kube_config( creds_fetcher::Daemon& cf_daemon )
 {
     std::list<creds_fetcher::kube_config_info*> kube_config_info_list;
     std::list<creds_fetcher::kube_meta_mapping*> kube_meta_mapping_list;
     std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
     std::string metadata_file_path;
-    std::string lease_id = "eks_configuration";
-    std::string dirName = krbdir + "/" + lease_id;
+    std::string lease_id = cf_daemon.fixed_lease_name_dir;
+    std::string dirName = cf_daemon.krb_files_dir + "/" + lease_id;
+    std::string kubeFilePath = cf_daemon.kube_config_file_path;
 
     try
     {
@@ -1191,7 +1191,7 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
         }
 
         std::string meta_file_name = lease_id + "_kube_metadata.json";
-        metadata_file_path = krbdir + "/" + lease_id + "/" + meta_file_name;
+        metadata_file_path = cf_daemon.krb_files_dir + "/" + lease_id + "/" + meta_file_name;
 
         Json::Value& array1 = root["ServiceAccountMappings"];
         for ( int i = 0; i < (int)array1.size(); i++ )
@@ -1204,8 +1204,8 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
             {
                 if ( krb_ticket_info->krb_file_path.empty() )
                 {
-                    std::string ticket_path =
-                        krbdir + "/" + lease_id + "/" + krb_ticket_info->service_account_name;
+                    std::string ticket_path = cf_daemon.krb_files_dir + "/" + lease_id + "/" +
+                                              krb_ticket_info->service_account_name;
 
                     // create ticket paths
                     krb_ticket_info->krb_file_path = ticket_path;
@@ -1256,7 +1256,7 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
             krb_ticket_info_list.push_back( krb_ticket_info );
         }
 
-        write_meta_data_json( krb_ticket_info_list, lease_id, krbdir );
+        write_meta_data_json( krb_ticket_info_list, lease_id, cf_daemon.krb_files_dir );
         writeKubeJsonCache( metadata_file_path, kube_meta_mapping_list );
     }
     catch ( ... )

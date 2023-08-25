@@ -145,8 +145,7 @@ int parse_kube_config_json_test()
 {
     std::string kubeconfig_file_path = "credentials_fetcher_kubeconfig.json";
 
-    std::list<creds_fetcher::kube_config_info*> result =
-        parse_kube_config( kubeconfig_file_path, "/var/credentials-fetcher/krbdir" );
+    std::list<creds_fetcher::kube_config_info*> result = parse_kube_config( cf_daemon );
 
     if ( result.empty() || result.size() != 1 )
     {
@@ -190,7 +189,7 @@ void handle_tickets_kube()
     std::string err_msg;
 
     std::list<creds_fetcher::kube_config_info*> kube_config_info_list =
-        parse_kube_config( cf_daemon.kube_config_file_path, cf_daemon.krb_files_dir );
+        parse_kube_config( cf_daemon );
 
     // create the kerberos tickets for the service accounts
     for ( auto kube_config_info : kube_config_info_list )

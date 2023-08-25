@@ -44,6 +44,9 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
                                    "credentials_fetcher_krbdir_path" );
         fileOptions.add_options()( "credentials_fetcher_krbfile_suffix", po::value<std::string>(),
                                    "credentials_fetcher_krbfile_suffix" );
+        fileOptions.add_options()( "credentials_fetcher_fixed_lease_name_dir",
+                                   po::value<std::string>(),
+                                   "credentials_fetcher_fixed_lease_name_dir" );
 
         /**
          * Calls to store, parse_command_line and notify functions
@@ -113,6 +116,13 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         {
             std::cout << "run diagnostic set" << std::endl;
             cf_daemon.run_diagnostic = true;
+        }
+
+        if ( vm.count( "credentials_fetcher_fixed_lease_name_dir" ) )
+        {
+            cf_daemon.fixed_lease_name_dir =
+                vm["credentials_fetcher_fixed_lease_name_dir"].as<std::string>();
+            std::cout << "Using fixed name dir = " + cf_daemon.fixed_lease_name_dir << std::endl;
         }
 
         if ( vm.count( "aws_sm_secret_name" ) ) // TBD:: Extend to other stores

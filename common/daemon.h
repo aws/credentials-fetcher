@@ -125,6 +125,7 @@ namespace creds_fetcher
         uint64_t krb_ticket_handle_interval = 10;
         volatile sig_atomic_t got_systemd_shutdown_signal = false;
         std::string krb_file_suffix = "";
+        std::string fixed_lease_name_dir = "";
     };
 
     // https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/a9019740-3d73-46ef-a9ae-3ea8eb86ac2e
@@ -177,8 +178,7 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
 void ltrim( std::string& s );
 
 void rtrim( std::string& s );
-std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeFilePath,
-                                                               std::string krbdir );
+std::list<creds_fetcher::kube_config_info*> parse_kube_config( creds_fetcher::Daemon& cf_daemon );
 std::pair<int, std::string> convert_secret_krb2kube( const std::string kube_secrets_yaml_file,
                                                      const std::string kube_pod_yaml_file,
                                                      const std::string krb_ticket_file );
@@ -208,7 +208,7 @@ int parse_config_file( creds_fetcher::Daemon& cf_daemon );
  */
 bool contains_invalid_characters_in_credentials( const std::string& value );
 int run_grpc_server( creds_fetcher::Daemon& cf_daemon, volatile sig_atomic_t* shutdown_signal,
-                   std::string aws_sm_secret_name );
+                     std::string aws_sm_secret_name );
 
 int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info,
                      bool is_file );
