@@ -7,7 +7,6 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
 {
     std::string krb_files_dir = cf_daemon.krb_files_dir;
     int interval = cf_daemon.krb_ticket_handle_interval;
-    creds_fetcher::CF_logger cf_logger = cf_daemon.cf_logger;
 
     if ( krb_files_dir.empty() )
     {
@@ -23,8 +22,8 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
             std::this_thread::sleep_until( x );
             std::cout << "###### renewal started ######" << std::endl;
 
-            std::list<creds_fetcher::kube_config_info*> kube_config_info_list = parse_kube_config
-                (cf_daemon.kube_config_file_path, cf_daemon.krb_files_dir);
+            std::list<creds_fetcher::kube_config_info*> kube_config_info_list =
+                parse_kube_config( cf_daemon.kube_config_file_path, cf_daemon.krb_files_dir );
             // identify the metadata files in the krb directory
             std::vector<std::string> metadatafiles;
             for ( boost::filesystem::recursive_directory_iterator end, dir( krb_files_dir );
@@ -64,35 +63,46 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                         {
                             gmsa_ticket_result = get_gmsa_krb_ticket(
                                 krb_ticket->domain_name, krb_ticket->service_account_name,
-                                krb_cc_name, cf_logger );
+                                krb_cc_name, cf_daemon );
                             if ( gmsa_ticket_result.first != 0 )
                             {
                                 int status = -1;
-                                cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket" );
-                                if (domainless_user.find("awsdomainlessusersecret") !=
-                                                           std::string::npos) {
-                                    int pos = domainless_user.find(":");
-                                    std::string domainlessUser = domainless_user.substr(pos + 1);
-                                    status = get_user_krb_ticket(krb_ticket->domain_name,
-                                                                  domainlessUser, cf_logger );
+                                cf_daemon.cf_logger.logger( LOG_ERR,
+                                                            "ERROR: Cannot get gMSA krb ticket" );
+                                if ( domainless_user.find( "awsdomainlessusersecret" ) !=
+                                     std::string::npos )
+                                {
+                                    int pos = domainless_user.find( ":" );
+                                    std::string domainlessUser = domainless_user.substr( pos + 1 );
+                                    status = get_user_krb_ticket( krb_ticket->domain_name,
+                                                                  domainlessUser, cf_daemon );
                                 }
-                                else if (domainless_user.find("kubedomainlessusersecret") !=
-                                          std::string::npos) {
-                                    int pos = domainless_user.find(":");
-                                    std::string domainlessUser = domainless_user.substr(pos + 1);
-                                    status = get_user_krb_ticket(krb_ticket->domain_name,
-                                                                  domainlessUser, cf_logger );
-                                    for ( auto kube_config_info :  kube_config_info_list )
+                                else if ( domainless_user.find( "kubedomainlessusersecret" ) !=
+                                          std::string::npos )
+                                {
+                                    int pos = domainless_user.find( ":" );
+                                    std::string domainlessUser = domainless_user.substr( pos + 1 );
+                                    status = get_user_krb_ticket( krb_ticket->domain_name,
+                                                                  domainlessUser, cf_daemon );
+                                    for ( auto kube_config_info : kube_config_info_list )
                                     {
                                         std::map<std::string, std::list<std::string>>::iterator it;
-                                        if(kube_config_info->secret_yaml_map.count(krb_ticket->krb_file_path)){
+                                        if ( kube_config_info->secret_yaml_map.count(
+                                                 krb_ticket->krb_file_path ) )
+                                        {
                                             std::map<std::string, std::list<std::string>>::iterator
                                                 kube_it;
-                                            for(kube_it=kube_config_info->secret_yaml_map.begin(); kube_it!=kube_config_info->secret_yaml_map
-                                                                                                            .end(); ++kube_it){
-                                                for (auto const& secret_path : kube_it->second) {
-                                                    convert_secret_krb2kube(secret_path, "",
-                                                                             krb_ticket->krb_file_path + "/krb5cc");
+                                            for ( kube_it =
+                                                      kube_config_info->secret_yaml_map.begin();
+                                                  kube_it !=
+                                                  kube_config_info->secret_yaml_map.end();
+                                                  ++kube_it )
+                                            {
+                                                for ( auto const& secret_path : kube_it->second )
+                                                {
+                                                    convert_secret_krb2kube(
+                                                        secret_path, "",
+                                                        krb_ticket->krb_file_path + "/krb5cc" );
                                                 }
                                             }
                                         }
@@ -101,20 +111,21 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                                 else
                                 {
                                     status = get_machine_krb_ticket( krb_ticket->domain_name,
-                                                                         cf_logger );
-                                    if (domainless_user.find("kubehostprincipal") !=
-                                         std::string::npos)
+                                                                     cf_daemon );
+                                    if ( domainless_user.find( "kubehostprincipal" ) !=
+                                         std::string::npos )
                                     {
                                         for ( auto kube_config_info : kube_config_info_list )
                                         {
                                             std::map<std::string, std::list<std::string>>::iterator
                                                 it;
-                                            if ( kube_config_info->secret_yaml_map.count(krb_ticket->krb_file_path ) )
+                                            if ( kube_config_info->secret_yaml_map.count(
+                                                     krb_ticket->krb_file_path ) )
                                             {
                                                 std::map<std::string,
                                                          std::list<std::string>>::iterator kube_it;
-                                                for ( kube_it = kube_config_info->secret_yaml_map
-                                                                    .begin();
+                                                for ( kube_it =
+                                                          kube_config_info->secret_yaml_map.begin();
                                                       kube_it !=
                                                       kube_config_info->secret_yaml_map.end();
                                                       ++kube_it )
@@ -133,9 +144,9 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                                 }
                                 if ( status < 0 )
                                 {
-                                    cf_logger.logger( LOG_ERR,
-                                                      "Error %d: Cannot get machine krb ticket",
-                                                      status );
+                                    cf_daemon.cf_logger.logger(
+                                        LOG_ERR, "Error %d: Cannot get machine krb ticket",
+                                        status );
                                 }
                                 else
                                 {
@@ -146,7 +157,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                     }
                     else
                     {
-                        cf_logger.logger( LOG_INFO, "gMSA ticket is at %s", krb_cc_name );
+                        cf_daemon.cf_logger.logger( LOG_INFO, "gMSA ticket is at %s", krb_cc_name );
                         std::cout << "gMSA ticket is at " + krb_cc_name +
                                          " is not yet ready for "
                                          "renewal"
@@ -155,7 +166,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                 }
             }
         }
-        catch ( const std::exception& ex  )
+        catch ( const std::exception& ex )
         {
             std::cout << "Exception: '" << ex.what() << "'!" << std::endl;
             fprintf( stderr, SD_CRIT "failed to run the ticket renewal" );

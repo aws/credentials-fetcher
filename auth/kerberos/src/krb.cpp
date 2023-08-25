@@ -5,7 +5,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-
 // renew the ticket 1 hrs before the expiration
 #define RENEW_TICKET_HOURS 1
 #define SECONDS_IN_HOUR 3600
@@ -19,7 +18,7 @@ static const std::string install_path_for_aws_cli = "/usr/bin/aws";
 static const std::string install_path_for_kube_apply_script =
     "/usr/sbin/credentials_fetcher_krbsecret_to_kubesecret.py";
 
-extern "C" int my_kinit_main(int, char **);
+extern "C" int my_kinit_main( int, char** );
 
 /**
  * Check if binary is writable other than root
@@ -78,7 +77,8 @@ static std::pair<int, std::string> exec_shell_cmd( std::string cmd )
  * @return result pair<int, std::string> (error-code - 0 if successful
  *                          string of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM')
  */
-static std::pair<int, std::string> get_machine_principal( std::string domain_name, creds_fetcher::CF_logger& cf_logger )
+static std::pair<int, std::string> get_machine_principal( std::string domain_name,
+                                                          creds_fetcher::Daemon& cf_daemon )
 {
     std::pair<int, std::string> result;
 
@@ -116,11 +116,14 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
     std::string host_name = hostname_result.second;
 
     // truncate the hostname to the host name size limit defined by microsoft
-    if(host_name.length() > HOST_NAME_LENGTH_LIMIT){
-        cf_logger.logger( LOG_ERR, "WARNING: %s:%d hostname exceeds 15 characters,"
-             "this can cause problems in getting kerberos tickets, please reduce hostname length",
-             __func__, __LINE__ );
-        host_name = host_name.substr(0,HOST_NAME_LENGTH_LIMIT);
+    if ( host_name.length() > HOST_NAME_LENGTH_LIMIT )
+    {
+        cf_daemon.cf_logger.logger(
+            LOG_ERR,
+            "WARNING: %s:%d hostname exceeds 15 characters,"
+            "this can cause problems in getting kerberos tickets, please reduce hostname length",
+            __func__, __LINE__ );
+        host_name = host_name.substr( 0, HOST_NAME_LENGTH_LIMIT );
     }
 
     /**
@@ -138,7 +141,7 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
  * @param cf_daemon - parent daemon object
  * @return error-code - 0 if successful
  */
-int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger )
+int get_machine_krb_ticket( std::string domain_name, creds_fetcher::Daemon& cf_daemon )
 {
     std::pair<int, std::string> result;
 
@@ -175,10 +178,11 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
         return -1;
     }
 
-    result = get_machine_principal( std::move( domain_name ), cf_logger );
+    result = get_machine_principal( std::move( domain_name ), cf_daemon );
     if ( result.first != 0 )
     {
-        cf_logger.logger( LOG_ERR, "ERROR: %s:%d invalid machine principal", __func__, __LINE__ );
+        cf_daemon.cf_logger.logger( LOG_ERR, "ERROR: %s:%d invalid machine principal", __func__,
+                                    __LINE__ );
         return result.first;
     }
 
@@ -199,7 +203,7 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
  * @return error-code - 0 if successful
  */
 int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name,
-                         creds_fetcher::CF_logger& cf_logger )
+                         creds_fetcher::Daemon& cf_daemon )
 {
     std::pair<int, std::string> result;
     int ret;
@@ -235,9 +239,11 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
         return -1;
     }
 
-    std::string command =
-        install_path_for_aws_cli + std::string( " secretsmanager get-secret-value --secret-id " ) + aws_sm_secret_name + " --query 'SecretString' --output text";
-    // /usr/bin/aws secretsmanager get-secret-value --secret-id aws/directoryservices/d-xxxxxxxxxx/gmsa --query 'SecretString' --output text
+    std::string command = install_path_for_aws_cli +
+                          std::string( " secretsmanager get-secret-value --secret-id " ) +
+                          aws_sm_secret_name + " --query 'SecretString' --output text";
+    // /usr/bin/aws secretsmanager get-secret-value --secret-id
+    // aws/directoryservices/d-xxxxxxxxxx/gmsa --query 'SecretString' --output text
     result = exec_shell_cmd( command );
 
     // deserialize json to krb_ticket_info object
@@ -254,13 +260,13 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
                     []( unsigned char c ) { return std::toupper( c ); } );
 
     // kinit using api interface
-    char *kinit_argv[3];
+    char* kinit_argv[3];
 
-    kinit_argv[0] = (char *)"my_kinit";
+    kinit_argv[0] = (char*)"my_kinit";
     username = username + "@" + domain_name;
-    kinit_argv[1] = (char *)username.c_str();
-    kinit_argv[2] = (char *)password.c_str();
-    ret = my_kinit_main(2, kinit_argv);
+    kinit_argv[1] = (char*)username.c_str();
+    kinit_argv[2] = (char*)password.c_str();
+    ret = my_kinit_main( 2, kinit_argv );
 #if 0
     /* The old way */
     std::string kinit_cmd = "echo '"  + password +  "' | kinit -V " + username + "@" +
@@ -275,7 +281,6 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
     return ret;
 }
 
-
 /**
  * This function generates kerberos ticket with user with access to gMSA password credentials
  * User credentials must have adequate privileges to read gMSA passwords
@@ -283,9 +288,8 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
  * @param cf_daemon - parent daemon object
  * @return error-code - 0 if successful
  */
-int get_domainless_user_krb_ticket( std::string domain_name, std::string username, std::string
-                                                                                       password,
-                         creds_fetcher::CF_logger& cf_logger )
+int get_domainless_user_krb_ticket( std::string domain_name, std::string username,
+                                    std::string password, creds_fetcher::Daemon& cf_daemon )
 {
     std::pair<int, std::string> result;
     int ret;
@@ -315,20 +319,19 @@ int get_domainless_user_krb_ticket( std::string domain_name, std::string usernam
                     []( unsigned char c ) { return std::toupper( c ); } );
 
     // kinit using api interface
-    char *kinit_argv[3];
+    char* kinit_argv[3];
 
-    kinit_argv[0] = (char *)"my_kinit";
+    kinit_argv[0] = (char*)"my_kinit";
     username = username + "@" + domain_name;
-    kinit_argv[1] = (char *)username.c_str();
-    kinit_argv[2] = (char *)password.c_str();
-    ret = my_kinit_main(2, kinit_argv);
+    kinit_argv[1] = (char*)username.c_str();
+    kinit_argv[2] = (char*)password.c_str();
+    ret = my_kinit_main( 2, kinit_argv );
     username = "xxxx";
     password = "xxxx";
 
-    //TODO: nit - return pair later
+    // TODO: nit - return pair later
     return ret;
 }
-
 
 /**
  * base64_decode - Decodes base64 encoded string
@@ -602,13 +605,13 @@ std::pair<int, std::string> get_fqdn_from_domain_ip( std::string domain_ip,
 std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
                                                  const std::string& gmsa_account_name,
                                                  const std::string& krb_cc_name,
-                                                 creds_fetcher::CF_logger& cf_logger )
+                                                 creds_fetcher::Daemon& cf_daemon )
 {
     std::vector<std::string> results;
 
     if ( domain_name.empty() || gmsa_account_name.empty() )
     {
-        cf_logger.logger( LOG_ERR, "ERROR: %s:%d null args", __func__, __LINE__ );
+        cf_daemon.cf_logger.logger( LOG_ERR, "ERROR: %s:%d null args", __func__, __LINE__ );
         return std::make_pair( -1, std::string( "" ) );
     }
 
@@ -623,8 +626,8 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     std::pair<int, std::vector<std::string>> domain_ips = get_domain_ips( domain_name );
     if ( domain_ips.first != 0 )
     {
-        cf_logger.logger( LOG_ERR, "ERROR: Cannot resolve domain IPs of %s", __func__, __LINE__,
-                          domain_name );
+        cf_daemon.cf_logger.logger( LOG_ERR, "ERROR: Cannot resolve domain IPs of %s", __func__,
+                                    __LINE__, domain_name );
         return std::make_pair( -1, std::string( "" ) );
     }
 
@@ -655,12 +658,12 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
            std::string( " -s sub  \"(objectClass=msDs-GroupManagedServiceAccount)\" "
                         " msDS-ManagedPassword" );
 
-    cf_logger.logger( LOG_INFO, "%s", cmd );
+    cf_daemon.cf_logger.logger( LOG_INFO, "%s", cmd );
     std::cout << cmd << std::endl;
     std::pair<int, std::string> ldap_search_result = exec_shell_cmd( cmd );
     if ( ldap_search_result.first != 0 )
     {
-        cf_logger.logger( LOG_ERR, "ERROR: %s:%d ldapsearch failed", __func__, __LINE__ );
+        cf_daemon.cf_logger.logger( LOG_ERR, "ERROR: %s:%d ldapsearch failed", __func__, __LINE__ );
         return std::make_pair( -1, std::string( "" ) );
     }
 
@@ -680,7 +683,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     std::string default_principal = "'" + gmsa_account_name + "$'" + "@" + domain_name;
 
     /* Pipe password to the utf16 decoder and kinit */
-    std::string kinit_cmd = std::string("dotnet ") + std::string( install_path_for_decode_exe ) +
+    std::string kinit_cmd = std::string( "dotnet " ) + std::string( install_path_for_decode_exe ) +
                             std::string( " | kinit " ) + std::string( " -c " ) + krb_cc_name +
                             " -V " + default_principal;
     std::cout << kinit_cmd << std::endl;
@@ -690,7 +693,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
         perror( "kinit failed" );
         OPENSSL_cleanse( password_found_result.second, password_found_result.first );
         OPENSSL_free( password_found_result.second );
-        cf_logger.logger( LOG_ERR, "ERROR: %s:%d kinit failed", __func__, __LINE__ );
+        cf_daemon.cf_logger.logger( LOG_ERR, "ERROR: %s:%d kinit failed", __func__, __LINE__ );
         return std::make_pair( -1, std::string( "" ) );
     }
     fwrite( blob_password, 1, GMSA_PASSWORD_SIZE, fp );
@@ -781,15 +784,15 @@ bool is_ticket_ready_for_renewal( std::string krb_cc_name )
  * @param username
  * @param password
  */
-std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_dir, std::string
-                                                                                         domain_name,
-                                               std::string username, std::string password,
-                                               creds_fetcher::CF_logger& cf_logger )
+std::list<std::string> renew_kerberos_tickets_domainless( std::string domain_name,
+                                                          std::string username,
+                                                          std::string password,
+                                                          creds_fetcher::Daemon& cf_daemon )
 {
     std::list<std::string> renewed_krb_ticket_paths;
     // identify the metadata files in the krb directory
     std::vector<std::string> metadatafiles;
-    for ( boost::filesystem::recursive_directory_iterator end, dir( krb_files_dir );
+    for ( boost::filesystem::recursive_directory_iterator end, dir( cf_daemon.krb_files_dir );
           dir != end; ++dir )
     {
         auto path = dir->path();
@@ -816,42 +819,45 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
         for ( auto krb_ticket : krb_ticket_info_list )
         {
             std::string domainlessuser = krb_ticket->domainless_user;
-            if(!username.empty()  && username == domainlessuser)
+            if ( !username.empty() && username == domainlessuser )
             {
                 std::pair<int, std::string> gmsa_ticket_result;
-                std::string krb_cc_name = krb_ticket->krb_file_path;
+                std::string krb_cc_name = krb_ticket->krb_file_path + cf_daemon.krb_file_suffix;
                 // gMSA kerberos ticket generation needs to have ldap over kerberos
-                // if the ticket exists for the machine/user already reuse it for getting gMSA password else retry the ticket creation again after generating user/machine kerberos ticket
+                // if the ticket exists for the machine/user already reuse it for getting gMSA
+                // password else retry the ticket creation again after generating user/machine
+                // kerberos ticket
                 int num_retries = 2;
                 for ( int i = 0; i < num_retries; i++ )
                 {
                     gmsa_ticket_result = get_gmsa_krb_ticket( krb_ticket->domain_name,
                                                               krb_ticket->service_account_name,
-                                                              krb_cc_name, cf_logger );
+                                                              krb_cc_name, cf_daemon );
                     if ( gmsa_ticket_result.first != 0 )
                     {
                         if ( num_retries == 0 )
                         {
-                            cf_logger.logger( LOG_WARNING,
-                                              "WARNING: Cannot get gMSA krb ticket "
-                                              "because of expired user/machine ticket, "
-                                              "will be retried automatically" );
+                            cf_daemon.cf_logger.logger( LOG_WARNING,
+                                                        "WARNING: Cannot get gMSA krb ticket "
+                                                        "because of expired user/machine ticket, "
+                                                        "will be retried automatically" );
                         }
                         else
                         {
-                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket" );
+                            cf_daemon.cf_logger.logger( LOG_ERR,
+                                                        "ERROR: Cannot get gMSA krb ticket" );
                         }
                         // if tickets are created in domainless mode
                         std::string domainless_user = krb_ticket->domainless_user;
                         if ( !domainless_user.empty() && domainless_user == username )
                         {
                             int status = get_domainless_user_krb_ticket( domain_name, username,
-                                                                         password, cf_logger );
+                                                                         password, cf_daemon );
 
                             if ( status < 0 )
                             {
-                                cf_logger.logger( LOG_ERR, "Error %d: Cannot get user krb ticket",
-                                                  status );
+                                cf_daemon.cf_logger.logger(
+                                    LOG_ERR, "Error %d: Cannot get user krb ticket", status );
                             }
                         }
                         else
@@ -961,20 +967,19 @@ void rtrim( std::string& s )
         s.end() );
 }
 
-
 /*
  * #f=open("/var/credentials-fetcher/krbdir/434d760fade0559999d6/WebApp01/krb5cc","rb")
  */
 /*
  * convert_secret_krb2kube : Update secret in kube file for secret by importing from krb ticket
  */
-std::pair<int, std::string> convert_secret_krb2kube(const std::string kube_secrets_yaml_file,
+std::pair<int, std::string> convert_secret_krb2kube( const std::string kube_secrets_yaml_file,
                                                      const std::string kube_pod_yaml_file,
                                                      const std::string krb_ticket_file )
 {
 
     std::string cmd = "python3 " + install_path_for_kube_apply_script + " -s " +
-                      kube_secrets_yaml_file + " -p " + kube_pod_yaml_file  + " -k " +
+                      kube_secrets_yaml_file + " -p " + kube_pod_yaml_file + " -k " +
                       krb_ticket_file;
     return exec_shell_cmd( cmd );
 }

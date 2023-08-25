@@ -3,14 +3,11 @@
 #include <boost/program_options.hpp>
 
 static std::string global_config_file_name( "/etc/credentials_fetcher.conf" );
-static std::string credentials_fetcher_mode_key( "credentials_fetcher_mode" );
 static std::string domain_joined_and_grpc_mode( "domain_joined_and_grpc_mode" );
 static std::string domain_joined_and_eks_mode( "domain_joined_and_eks_mode" );
-static std::string kubeconfig_path_key( "credentials_fetcher_kubeconfig_path" );
-static std::string config_file_mode_key( "config_file_mode" );
-static std::string krb_dir_path_mode( "krb_dir_path_mode" );
-static std::string config_krb_path_key( "credentials_fetcher_krbdir_path" );
-static std::string krbdir( "/var/credentials-fetcher/krbdir" );
+static std::string kube_config_file_path( "/etc/credentials_fetcher_kubeconfig.json" );
+static std::string default_krbdir_path( "/var/credentials_fetcher/krbdir" );
+/* TBD: use constants for other strings in this file */
 
 /**
  * This function has options used to invoke the daemon such as
@@ -43,10 +40,10 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         po::options_description fileOptions{ "File" };
         fileOptions.add_options()( "credentials_fetcher_mode", po::value<std::string>(),
                                    "credentials_fetcher_mode" );
-        fileOptions.add_options()( "credentials_fetcher_kubeconfig_path", po::value<std::string>(),
-                                   "credentials_fetcher_kubeconfig_path" );
-        fileOptions.add_options()( "config_file_mode", po::value<std::string>(),
-                                   "config_file_mode" );
+        fileOptions.add_options()( "credentials_fetcher_krbdir_path", po::value<std::string>(),
+                                   "credentials_fetcher_krbdir_path" );
+        fileOptions.add_options()( "credentials_fetcher_krbfile_suffix", po::value<std::string>(),
+                                   "credentials_fetcher_krbfile_suffix" );
 
         /**
          * Calls to store, parse_command_line and notify functions
@@ -70,56 +67,35 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
             std::string msg =
                 "credentials_fetcher_mode = " + vm["credentials_fetcher_mode"].as<std::string>();
             std::cout << msg << std::endl;
-            std::string mode = "\"" + domain_joined_and_eks_mode + "\"";
-            if ( vm["credentials_fetcher_mode"].as<std::string>() == mode )
+            std::string eks_mode = "\"" + domain_joined_and_eks_mode + "\"";
+            if ( vm["credentials_fetcher_mode"].as<std::string>() == eks_mode )
             {
                 msg = "From global config file, credentials_fetcher_mode = " +
                       vm["credentials_fetcher_mode"].as<std::string>();
                 std::cout << msg << std::endl;
                 cf_daemon.use_kube = true;
-                if ( vm.count( "credentials_fetcher_kubeconfig_path" ) )
-                {
-                    cf_daemon.kube_config_file_path =
-                        vm["credentials_fetcher_kubeconfig_path"].as<std::string>();
-                    cf_daemon.kube_config_file_path.erase( cf_daemon.kube_config_file_path.begin(),
-                                                           cf_daemon.kube_config_file_path.begin() +
-                                                               1 );
-                    cf_daemon.kube_config_file_path.erase( cf_daemon.kube_config_file_path.end() -
-                                                               1,
-                                                           cf_daemon.kube_config_file_path.end() );
-                    std::string msg =
-                        "From global config file, credentials_fetcher_kubeconfig_path = " +
-                        cf_daemon.kube_config_file_path;
-                    std::cout << msg << std::endl;
-                }
-            }
-
-            if ( vm.count( "config_file_mode" ) )
-            {
-                std::string msg = "config_file_mode = " + vm["config_file_mode"].as<std::string>();
+                cf_daemon.kube_config_file_path = kube_config_file_path;
+                std::string msg =
+                    "From global config file, credentials_fetcher_kubeconfig_path = " +
+                    cf_daemon.kube_config_file_path;
                 std::cout << msg << std::endl;
-                std::string mode = "\"" + krb_dir_path_mode + "\"";
-                if ( vm["config_file_mode"].as<std::string>() == mode )
-                {
-                    msg = "From global config file, config_file_mode = " +
-                          vm["config_file_mode"].as<std::string>();
-                    std::cout << msg << std::endl;
-                    cf_daemon.use_kube = true;
-                    if ( vm.count( "credentials_fetcher_krbdir_path" ) )
-                    {
-                        cf_daemon.krb_files_dir =
-                            vm["credentials_fetcher_krbdir_path"].as<std::string>();
-                        cf_daemon.kube_config_file_path.erase(
-                            cf_daemon.krb_files_dir.begin(), cf_daemon.krb_files_dir.begin() + 1 );
-                        cf_daemon.kube_config_file_path.erase( cf_daemon.krb_files_dir.end() - 1,
-                                                               cf_daemon.krb_files_dir.end() );
-                        std::string msg =
-                            "From global config file, credentials_fetcher_krbdir_path = " +
-                            cf_daemon.krb_files_dir;
-                        std::cout << msg << std::endl;
-                    }
-                }
             }
+        }
+
+        cf_daemon.krb_files_dir = default_krbdir_path;
+        if ( vm.count( "credentials_fetcher_krbdir_path" ) )
+        {
+            cf_daemon.krb_files_dir = vm["credentials_fetcher_krbdir_path"].as<std::string>();
+        }
+        std::string msg = "Setting credentials_fetcher_krbdir_path as " + cf_daemon.krb_files_dir;
+        std::cout << msg << std::endl;
+
+        if ( vm.count( "credentials_fetcher_krbfile_suffix" ) )
+        {
+            cf_daemon.krb_file_suffix = vm["credentials_fetcher_krbfile_suffix"].as<std::string>();
+            std::string msg =
+                "Setting credentials_fetcher_krbfile_suffix as " + cf_daemon.krb_file_suffix;
+            std::cout << msg << std::endl;
         }
 
         if ( vm.count( "help" ) )

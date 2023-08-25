@@ -45,8 +45,8 @@ void* grpc_thread_start( void* arg )
     printf( "Thread %d: top of stack near %p; argv_string=%s\n", tinfo->thread_num, (void*)&tinfo,
             tinfo->argv_string );
 
-    RunGrpcServer( cf_daemon.unix_socket_dir, cf_daemon.krb_files_dir, cf_daemon.cf_logger,
-                   &cf_daemon.got_systemd_shutdown_signal, cf_daemon.aws_sm_secret_name );
+    run_grpc_server( cf_daemon, &cf_daemon.got_systemd_shutdown_signal,
+                     cf_daemon.aws_sm_secret_name );
 
     return tinfo->argv_string;
 }
@@ -178,7 +178,7 @@ int parse_kube_config_json_test()
  */
 int handle_tickets_kube_test()
 {
-    cf_daemon.kube_config_file_path = "kubeconfig.json";
+    cf_daemon.kube_config_file_path = "/etc/credentials_fetcher_kubeconfig.json";
     cf_daemon.krb_files_dir = "/var/credentials-fetcher/krbdir";
     handle_tickets_kube();
     return EXIT_SUCCESS;
@@ -201,13 +201,13 @@ void handle_tickets_kube()
         if ( aws_sm_secret_name.length() != 0 && aws_sm_secret_name != "kubehostprincipal" )
         {
             status = get_user_krb_ticket( kube_config_info->krb_ticket_info->domain_name,
-                                          aws_sm_secret_name, cf_daemon.cf_logger );
+                                          aws_sm_secret_name, cf_daemon );
             kube_config_info->krb_ticket_info->domainless_user = aws_sm_secret_name;
         }
         else
         {
-            status = get_machine_krb_ticket( kube_config_info->krb_ticket_info->domain_name,
-                                             cf_daemon.cf_logger );
+            status =
+                get_machine_krb_ticket( kube_config_info->krb_ticket_info->domain_name, cf_daemon );
         }
         if ( status < 0 )
         {
@@ -224,7 +224,8 @@ void handle_tickets_kube()
         std::string krb_file_path = kube_config_info->krb_ticket_info->krb_file_path;
         boost::filesystem::create_directories( krb_file_path );
 
-        std::string krb_ccname_str = kube_config_info->krb_ticket_info->krb_file_path + "/krb5cc";
+        std::string krb_ccname_str = kube_config_info->krb_ticket_info->krb_file_path + "/krb5cc" +
+                                     cf_daemon.krb_file_suffix;
         std::cout << krb_ccname_str << std::endl;
 
         if ( !boost::filesystem::exists( krb_ccname_str ) )
@@ -235,10 +236,9 @@ void handle_tickets_kube()
             kube_config_info->krb_ticket_info->krb_file_path = krb_ccname_str;
         }
 
-        std::pair<int, std::string> gmsa_ticket_result =
-            get_gmsa_krb_ticket( kube_config_info->krb_ticket_info->domain_name,
-                                 kube_config_info->krb_ticket_info->service_account_name,
-                                 krb_ccname_str, cf_daemon.cf_logger );
+        std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
+            kube_config_info->krb_ticket_info->domain_name,
+            kube_config_info->krb_ticket_info->service_account_name, krb_ccname_str, cf_daemon );
         if ( gmsa_ticket_result.first != 0 )
         {
             err_msg = "ERROR: Cannot get gMSA krb ticket";
@@ -277,7 +277,6 @@ int main( int argc, const char* argv[] )
         exit( EXIT_FAILURE );
     }
 
-    cf_daemon.krb_files_dir = CF_KRB_DIR;
     cf_daemon.logging_dir = CF_LOGGING_DIR;
     cf_daemon.unix_socket_dir = CF_UNIX_DOMAIN_SOCKET_DIR;
 
@@ -288,9 +287,9 @@ int main( int argc, const char* argv[] )
     cf_daemon.domain_name = CF_TEST_DOMAIN_NAME;
     cf_daemon.gmsa_account_name = CF_TEST_GMSA_ACCOUNT;
 
-    std::cout << "krb_files_dir = " << cf_daemon.krb_files_dir << std::endl;
     std::cout << "logging_dir = " << cf_daemon.logging_dir << std::endl;
     std::cout << "unix_socket_dir = " << cf_daemon.unix_socket_dir << std::endl;
+    std::cout << "kube config file path = " << cf_daemon.kube_config_file_path << std::endl;
 
     if ( !cf_daemon.kube_config_file_path.empty() )
     {

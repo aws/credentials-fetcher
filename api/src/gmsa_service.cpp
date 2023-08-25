@@ -1,8 +1,8 @@
 #include "daemon.h"
 
-#include <filesystem>
 #include <boost/filesystem.hpp>
 #include <credentialsfetcher.grpc.pb.h>
+#include <filesystem>
 #include <fstream>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
@@ -13,9 +13,8 @@
 #define UNIX_SOCKET_NAME "credentials_fetcher.sock"
 #define INPUT_CREDENTIALS_LENGTH 256
 
-static const std::vector<char> invalid_characters = {
-    '&', '|', ';', '$', '*', '?', '<', '>', '!',' '};
-
+static const std::vector<char> invalid_characters = { '&', '|', ';', '$', '*',
+                                                      '?', '<', '>', '!', ' ' };
 
 /**
  *
@@ -55,15 +54,14 @@ class CredentialsFetcherImpl final
     }
 
     /**
-     * RunServer - Run one grpc server for all rpcs
-     * @param unix_socket_dir: path to unix domain socket
-     * @param cf_logger : log to systemd
+     * run_server - Run one grpc server for all rpcs
+     * @param cf_daemon: global vars
+     * @param aws_sm_secret_name : only for non-domain-joined use-case
      */
-    void RunServer( std::string unix_socket_dir, std::string krb_files_dir,
-                    creds_fetcher::CF_logger& cf_logger, std::string aws_sm_secret_name )
+    void run_server( creds_fetcher::Daemon& cf_daemon, std::string aws_sm_secret_name )
     {
-        std::string unix_socket_address =
-            std::string( "unix:" ) + unix_socket_dir + "/" + std::string( UNIX_SOCKET_NAME );
+        std::string unix_socket_address = std::string( "unix:" ) + cf_daemon.unix_socket_dir + "/" +
+                                          std::string( UNIX_SOCKET_NAME );
         std::string server_address( unix_socket_address );
 
         grpc::ServerBuilder builder;
@@ -80,7 +78,7 @@ class CredentialsFetcherImpl final
         std::cout << "Server listening on " << server_address << std::endl;
 
         // Proceed to the server's main loop.
-        HandleRpcs( krb_files_dir, cf_logger, aws_sm_secret_name );
+        HandleRpcs( cf_daemon, aws_sm_secret_name );
     }
 
   private:
@@ -106,8 +104,7 @@ class CredentialsFetcherImpl final
             Proceed();
         }
 
-        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
-                      std::string aws_sm_secret_name )
+        void Proceed( creds_fetcher::Daemon& cf_daemon, std::string aws_sm_secret_name )
         {
             if ( cookie.compare( CLASS_NAME_CallDataCreateKerberosLease ) != 0 )
             {
@@ -152,8 +149,8 @@ class CredentialsFetcherImpl final
                     // only add the ticket info if the parsing is successful
                     if ( parse_result == 0 )
                     {
-                        std::string krb_files_path = krb_files_dir + "/" + lease_id + "/" +
-                                                     krb_ticket_info->service_account_name;
+                        std::string krb_files_path = cf_daemon.krb_files_dir + "/" + lease_id +
+                                                     "/" + krb_ticket_info->service_account_name;
                         krb_ticket_info->krb_file_path = krb_files_path;
                         krb_ticket_info->domainless_user = "";
 
@@ -180,18 +177,18 @@ class CredentialsFetcherImpl final
                         if ( aws_sm_secret_name.length() != 0 )
                         {
                             status = get_user_krb_ticket( krb_ticket->domain_name,
-                                                          aws_sm_secret_name, cf_logger );
+                                                          aws_sm_secret_name, cf_daemon );
                             krb_ticket->domainless_user =
-                                "awsdomainlessusersecret:"+aws_sm_secret_name;
+                                "awsdomainlessusersecret:" + aws_sm_secret_name;
                         }
                         else
                         {
-                            status = get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
+                            status = get_machine_krb_ticket( krb_ticket->domain_name, cf_daemon );
                         }
                         if ( status < 0 )
                         {
-                            cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
-                                              status );
+                            cf_daemon.cf_logger.logger(
+                                LOG_ERR, "Error %d: Cannot get machine krb ticket", status );
                             err_msg = "ERROR: cannot get machine krb ticket";
                             break;
                         }
@@ -199,10 +196,10 @@ class CredentialsFetcherImpl final
                         std::string krb_file_path = krb_ticket->krb_file_path;
                         if ( boost::filesystem::exists( krb_file_path ) )
                         {
-                            cf_logger.logger( LOG_INFO,
-                                              "Directory already exists: "
-                                              "%s",
-                                              krb_file_path );
+                            cf_daemon.cf_logger.logger( LOG_INFO,
+                                                        "Directory already exists: "
+                                                        "%s",
+                                                        krb_file_path );
                             break;
                         }
                         boost::filesystem::create_directories( krb_file_path );
@@ -219,19 +216,19 @@ class CredentialsFetcherImpl final
 
                         std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
                             krb_ticket->domain_name, krb_ticket->service_account_name,
-                            krb_ccname_str, cf_logger );
+                            krb_ccname_str, cf_daemon );
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: Cannot get gMSA krb ticket";
                             std::cout << err_msg << std::endl;
-                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket",
-                                              status );
+                            cf_daemon.cf_logger.logger(
+                                LOG_ERR, "ERROR: Cannot get gMSA krb ticket", status );
                             break;
                         }
                         else
                         {
-                            cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
-                                              gmsa_ticket_result.second );
+                            cf_daemon.cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
+                                                        gmsa_ticket_result.second );
                             std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
                                       << std::endl;
                         }
@@ -256,7 +253,7 @@ class CredentialsFetcherImpl final
                 else
                 {
                     // write the ticket information to meta data file
-                    write_meta_data_json( krb_ticket_info_list, lease_id, krb_files_dir );
+                    write_meta_data_json( krb_ticket_info_list, lease_id, cf_daemon.krb_files_dir );
                     status_ = FINISH;
                     create_krb_responder_.Finish( create_krb_reply_, grpc::Status::OK, this );
                 }
@@ -352,8 +349,7 @@ class CredentialsFetcherImpl final
     {
       public:
         std::string cookie;
-#define CLASS_NAME_CallDataAddNonDomainJoinedKerberosLease \
-    "CallDataAddNonDomainJoinedKerberosLease"
+#define CLASS_NAME_CallDataAddNonDomainJoinedKerberosLease "CallDataAddNonDomainJoinedKerberosLease"
         // Take in the "service" instance (in this case representing an asynchronous
         // server) and the completion queue "cq" used for asynchronous communication
         // with the gRPC runtime.
@@ -370,8 +366,7 @@ class CredentialsFetcherImpl final
             Proceed();
         }
 
-        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
-                      std::string aws_sm_secret_name )
+        void Proceed( creds_fetcher::Daemon& cf_daemon, std::string aws_sm_secret_name )
         {
             if ( cookie.compare( CLASS_NAME_CallDataAddNonDomainJoinedKerberosLease ) != 0 )
             {
@@ -385,21 +380,21 @@ class CredentialsFetcherImpl final
                 status_ = PROCESS;
 
                 // As part of the initial CREATE state, we *request* that the system
-                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this request, "this" acts
-                // are the tag uniquely identifying the request (so that different CallData
-                // instances can serve different requests concurrently), in this case
-                // the memory address of this CallData instance.
+                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this
+                // request, "this" acts are the tag uniquely identifying the request (so that
+                // different CallData instances can serve different requests concurrently), in this
+                // case the memory address of this CallData instance.
 
-                service_->RequestAddNonDomainJoinedKerberosLease( &add_krb_ctx_,
-                                                                 &create_domainless_krb_request_,
-                                                   &handle_krb_responder_, cq_, cq_, this );
+                service_->RequestAddNonDomainJoinedKerberosLease(
+                    &add_krb_ctx_, &create_domainless_krb_request_, &handle_krb_responder_, cq_,
+                    cq_, this );
             }
             else if ( status_ == PROCESS )
             {
                 // Spawn a new CallData instance to serve new clients while we process
                 // the one for this CallData. The instance will deallocate itself as
                 // part of its FINISH state.
-                new CallDataAddNonDomainJoinedKerberosLease(service_, cq_ );
+                new CallDataAddNonDomainJoinedKerberosLease( service_, cq_ );
                 // The actual processing.
                 std::string lease_id = generate_lease_id();
                 std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
@@ -409,11 +404,12 @@ class CredentialsFetcherImpl final
                 std::string domain = create_domainless_krb_request_.domain();
 
                 std::string err_msg;
-                if(!contains_invalid_characters_in_credentials(domain))
+                if ( !contains_invalid_characters_in_credentials( domain ) )
                 {
-                    if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
-                                                                                                                                          INPUT_CREDENTIALS_LENGTH )
-                       {
+                    if ( !username.empty() && !password.empty() && !domain.empty() &&
+                         username.length() < INPUT_CREDENTIALS_LENGTH &&
+                         password.length() < INPUT_CREDENTIALS_LENGTH )
+                    {
                         create_domainless_krb_reply_.set_lease_id( lease_id );
                         for ( int i = 0;
                               i < create_domainless_krb_request_.credspec_contents_size(); i++ )
@@ -427,7 +423,8 @@ class CredentialsFetcherImpl final
                             // only add the ticket info if the parsing is successful
                             if ( parse_result == 0 )
                             {
-                                std::string krb_files_path = krb_files_dir + "/" + lease_id + "/" +
+                                std::string krb_files_path = cf_daemon.krb_files_dir + "/" +
+                                                             lease_id + "/" +
                                                              krb_ticket_info->service_account_name;
                                 krb_ticket_info->krb_file_path = krb_files_path;
                                 krb_ticket_info->domainless_user = username;
@@ -455,7 +452,7 @@ class CredentialsFetcherImpl final
                 }
                 else
                 {
-                   err_msg = "Error: invalid domainName";
+                    err_msg = "Error: invalid domainName";
                 }
                 if ( err_msg.empty() )
                 {
@@ -464,20 +461,20 @@ class CredentialsFetcherImpl final
                     {
                         // invoke to get machine ticket
                         int status = 0;
-                        if ( username.empty()  ||  password.empty() )
+                        if ( username.empty() || password.empty() )
                         {
-                            cf_logger.logger( LOG_ERR, "Invalid credentials for "
-                                                       "domainless user ");
+                            cf_daemon.cf_logger.logger( LOG_ERR, "Invalid credentials for "
+                                                                 "domainless user " );
                             err_msg = "ERROR: Invalid credentials for mainless user";
                             break;
                         }
-                        status = get_domainless_user_krb_ticket( domain,
-                                                                 username, password,
-                                                                     cf_logger );
+                        status =
+                            get_domainless_user_krb_ticket( domain, username, password, cf_daemon );
                         if ( status < 0 )
                         {
-                            cf_logger.logger( LOG_ERR, "Error %d: cannot domainless user kerberos tickets",
-                                              status );
+                            cf_daemon.cf_logger.logger(
+                                LOG_ERR, "Error %d: cannot domainless user kerberos tickets",
+                                status );
                             err_msg = "ERROR: cannot domainless user kerberos tickets";
                             break;
                         }
@@ -485,10 +482,10 @@ class CredentialsFetcherImpl final
                         std::string krb_file_path = krb_ticket->krb_file_path;
                         if ( boost::filesystem::exists( krb_file_path ) )
                         {
-                            cf_logger.logger( LOG_INFO,
-                                              "Directory already exists: "
-                                              "%s",
-                                              krb_file_path );
+                            cf_daemon.cf_logger.logger( LOG_INFO,
+                                                        "Directory already exists: "
+                                                        "%s",
+                                                        krb_file_path );
                             break;
                         }
                         boost::filesystem::create_directories( krb_file_path );
@@ -504,24 +501,24 @@ class CredentialsFetcherImpl final
                         }
 
                         std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
-                            domain, krb_ticket->service_account_name,
-                            krb_ccname_str, cf_logger );
+                            domain, krb_ticket->service_account_name, krb_ccname_str, cf_daemon );
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: Cannot get gMSA krb ticket";
                             std::cout << err_msg << std::endl;
-                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket",
-                                              status );
+                            cf_daemon.cf_logger.logger(
+                                LOG_ERR, "ERROR: Cannot get gMSA krb ticket", status );
                             break;
                         }
                         else
                         {
-                            cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
-                                              gmsa_ticket_result.second );
+                            cf_daemon.cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
+                                                        gmsa_ticket_result.second );
                             std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
                                       << std::endl;
                         }
-                        create_domainless_krb_reply_.add_created_kerberos_file_paths( krb_file_path );
+                        create_domainless_krb_reply_.add_created_kerberos_file_paths(
+                            krb_file_path );
                     }
                 }
                 // And we are done! Let the gRPC runtime know we've finished, using the
@@ -538,18 +535,18 @@ class CredentialsFetcherImpl final
                     }
                     status_ = FINISH;
                     handle_krb_responder_.Finish(
-                        create_domainless_krb_reply_, grpc::Status( grpc::StatusCode::INTERNAL, err_msg ),
-                        this );
+                        create_domainless_krb_reply_,
+                        grpc::Status( grpc::StatusCode::INTERNAL, err_msg ), this );
                 }
                 else
                 {
                     username = "xxxx";
                     password = "xxxx";
                     // write the ticket information to meta data file
-                    write_meta_data_json( krb_ticket_info_list, lease_id, krb_files_dir );
+                    write_meta_data_json( krb_ticket_info_list, lease_id, cf_daemon.krb_files_dir );
                     status_ = FINISH;
                     handle_krb_responder_.Finish( create_domainless_krb_reply_, grpc::Status::OK,
-                                                             this );
+                                                  this );
                 }
             }
             else
@@ -575,21 +572,21 @@ class CredentialsFetcherImpl final
                 status_ = PROCESS;
 
                 // As part of the initial CREATE state, we *request* that the system
-                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this request, "this" acts
-                // are the tag uniquely identifying the request (so that different CallData
-                // instances can serve different requests concurrently), in this case
-                // the memory address of this CallData instance.
+                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this
+                // request, "this" acts are the tag uniquely identifying the request (so that
+                // different CallData instances can serve different requests concurrently), in this
+                // case the memory address of this CallData instance.
 
-                service_->RequestAddNonDomainJoinedKerberosLease( &add_krb_ctx_,
-                                                                 &create_domainless_krb_request_,
-                                                   &handle_krb_responder_, cq_, cq_, this );
+                service_->RequestAddNonDomainJoinedKerberosLease(
+                    &add_krb_ctx_, &create_domainless_krb_request_, &handle_krb_responder_, cq_,
+                    cq_, this );
             }
             else if ( status_ == PROCESS )
             {
                 // Spawn a new CallData instance to serve new clients while we process
                 // the one for this CallData. The instance will deallocate itself as
                 // part of its FINISH state.
-                new CallDataAddNonDomainJoinedKerberosLease(service_, cq_ );
+                new CallDataAddNonDomainJoinedKerberosLease( service_, cq_ );
                 // The actual processing.
                 create_domainless_krb_reply_.set_lease_id( "12345" );
 
@@ -628,8 +625,8 @@ class CredentialsFetcherImpl final
         credentialsfetcher::CreateNonDomainJoinedKerberosLeaseResponse create_domainless_krb_reply_;
 
         // The means to get back to the client.
-        grpc::ServerAsyncResponseWriter<credentialsfetcher
-                                        ::CreateNonDomainJoinedKerberosLeaseResponse>
+        grpc::ServerAsyncResponseWriter<
+            credentialsfetcher ::CreateNonDomainJoinedKerberosLeaseResponse>
             handle_krb_responder_;
 
         // Let's implement a tiny state machine with the following states.
@@ -647,7 +644,7 @@ class CredentialsFetcherImpl final
     {
       public:
         std::string cookie;
-#define CLASS_NAME_CallDataRenewNonDomainJoinedKerberosLease \
+#define CLASS_NAME_CallDataRenewNonDomainJoinedKerberosLease                                       \
     "CallDataRenewNonDomainJoinedKerberosLease"
         // Take in the "service" instance (in this case representing an asynchronous
         // server) and the completion queue "cq" used for asynchronous communication
@@ -665,8 +662,7 @@ class CredentialsFetcherImpl final
             Proceed();
         }
 
-        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
-                      std::string aws_sm_secret_name )
+        void Proceed( creds_fetcher::Daemon& cf_daemon, std::string aws_sm_secret_name )
         {
             if ( cookie.compare( CLASS_NAME_CallDataRenewNonDomainJoinedKerberosLease ) != 0 )
             {
@@ -680,14 +676,14 @@ class CredentialsFetcherImpl final
                 status_ = PROCESS;
 
                 // As part of the initial CREATE state, we *request* that the system
-                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this request, "this" acts
-                // are the tag uniquely identifying the request (so that different CallData
-                // instances can serve different requests concurrently), in this case
-                // the memory address of this CallData instance.
+                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this
+                // request, "this" acts are the tag uniquely identifying the request (so that
+                // different CallData instances can serve different requests concurrently), in this
+                // case the memory address of this CallData instance.
 
-                service_->RequestRenewNonDomainJoinedKerberosLease( &add_krb_ctx_,
-                                                                  &renew_domainless_krb_request_,
-                                                                  &handle_krb_responder_, cq_, cq_, this );
+                service_->RequestRenewNonDomainJoinedKerberosLease(
+                    &add_krb_ctx_, &renew_domainless_krb_request_, &handle_krb_responder_, cq_, cq_,
+                    this );
             }
             else if ( status_ == PROCESS )
             {
@@ -702,14 +698,15 @@ class CredentialsFetcherImpl final
                 std::string domain = renew_domainless_krb_request_.domain();
 
                 std::string err_msg;
-                if(!contains_invalid_characters_in_credentials(domain))
+                if ( !contains_invalid_characters_in_credentials( domain ) )
                 {
-                    if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
-                                                                                                                                          INPUT_CREDENTIALS_LENGTH )
+                    if ( !username.empty() && !password.empty() && !domain.empty() &&
+                         username.length() < INPUT_CREDENTIALS_LENGTH &&
+                         password.length() < INPUT_CREDENTIALS_LENGTH )
                     {
                         std::list<std::string> renewed_krb_file_paths =
-                            renew_kerberos_tickets_domainless( krb_files_dir, domain, username,
-                                                               password, cf_logger );
+                            renew_kerberos_tickets_domainless( domain, username, password,
+                                                               cf_daemon );
 
                         for ( auto renewed_krb_path : renewed_krb_file_paths )
                         {
@@ -738,13 +735,14 @@ class CredentialsFetcherImpl final
                 {
                     status_ = FINISH;
                     handle_krb_responder_.Finish(
-                        renew_domainless_krb_reply_, grpc::Status( grpc::StatusCode::INTERNAL, err_msg ),
-                        this );
+                        renew_domainless_krb_reply_,
+                        grpc::Status( grpc::StatusCode::INTERNAL, err_msg ), this );
                 }
                 else
                 {
                     status_ = FINISH;
-                    handle_krb_responder_.Finish( renew_domainless_krb_reply_, grpc::Status::OK, this );
+                    handle_krb_responder_.Finish( renew_domainless_krb_reply_, grpc::Status::OK,
+                                                  this );
                 }
             }
             else
@@ -770,21 +768,21 @@ class CredentialsFetcherImpl final
                 status_ = PROCESS;
 
                 // As part of the initial CREATE state, we *request* that the system
-                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this request, "this" acts
-                // are the tag uniquely identifying the request (so that different CallData
-                // instances can serve different requests concurrently), in this case
-                // the memory address of this CallData instance.
+                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this
+                // request, "this" acts are the tag uniquely identifying the request (so that
+                // different CallData instances can serve different requests concurrently), in this
+                // case the memory address of this CallData instance.
 
-                service_->RequestRenewNonDomainJoinedKerberosLease( &add_krb_ctx_,
-                                                                    &renew_domainless_krb_request_,
-                                                                    &handle_krb_responder_, cq_, cq_, this );
+                service_->RequestRenewNonDomainJoinedKerberosLease(
+                    &add_krb_ctx_, &renew_domainless_krb_request_, &handle_krb_responder_, cq_, cq_,
+                    this );
             }
             else if ( status_ == PROCESS )
             {
                 // Spawn a new CallData instance to serve new clients while we process
                 // the one for this CallData. The instance will deallocate itself as
                 // part of its FINISH state.
-                new CallDataRenewNonDomainJoinedKerberosLease(service_, cq_ );
+                new CallDataRenewNonDomainJoinedKerberosLease( service_, cq_ );
                 // The actual processing.
                 renew_domainless_krb_reply_.add_renewed_kerberos_file_paths(
                     "/var/credentials-fetcher/krb5cc" );
@@ -793,8 +791,7 @@ class CredentialsFetcherImpl final
                 // memory address of this instance as the uniquely identifying tag for
                 // the event.
                 status_ = FINISH;
-                handle_krb_responder_.Finish( renew_domainless_krb_reply_, grpc::Status::OK,
-                                              this );
+                handle_krb_responder_.Finish( renew_domainless_krb_reply_, grpc::Status::OK, this );
             }
             else
             {
@@ -818,14 +815,13 @@ class CredentialsFetcherImpl final
         grpc::ServerContext add_krb_ctx_;
 
         // What we get from the client.
-        credentialsfetcher::RenewNonDomainJoinedKerberosLeaseRequest
-            renew_domainless_krb_request_;
+        credentialsfetcher::RenewNonDomainJoinedKerberosLeaseRequest renew_domainless_krb_request_;
         // What we send back to the client.
         credentialsfetcher::RenewNonDomainJoinedKerberosLeaseResponse renew_domainless_krb_reply_;
 
         // The means to get back to the client.
-        grpc::ServerAsyncResponseWriter<credentialsfetcher
-                                        ::RenewNonDomainJoinedKerberosLeaseResponse>
+        grpc::ServerAsyncResponseWriter<
+            credentialsfetcher ::RenewNonDomainJoinedKerberosLeaseResponse>
             handle_krb_responder_;
 
         // Let's implement a tiny state machine with the following states.
@@ -862,8 +858,7 @@ class CredentialsFetcherImpl final
             Proceed();
         }
 
-        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
-                      std::string aws_sm_secret_name )
+        void Proceed( creds_fetcher::Daemon& cf_daemon, std::string aws_sm_secret_name )
         {
             if ( cookie.compare( CLASS_NAME_CallDataDeleteKerberosLease ) != 0 )
             {
@@ -898,7 +893,7 @@ class CredentialsFetcherImpl final
                 if ( !lease_id.empty() )
                 {
                     std::vector<std::string> deleted_krb_file_paths =
-                        delete_krb_tickets( krb_files_dir, lease_id );
+                        delete_krb_tickets( cf_daemon.krb_files_dir, lease_id );
 
                     for ( auto deleted_krb_path : deleted_krb_file_paths )
                     {
@@ -1014,15 +1009,14 @@ class CredentialsFetcherImpl final
     };
 
     // This can be run in multiple threads if needed.
-    void HandleRpcs( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
-                     std::string aws_sm_secret_name )
+    void HandleRpcs( creds_fetcher::Daemon& cf_daemon, std::string aws_sm_secret_name )
     {
         void* got_tag; // uniquely identifies a request.
         bool ok;
 
         new CallDataCreateKerberosLease( &service_, cq_.get() );
-        new CallDataAddNonDomainJoinedKerberosLease ( &service_, cq_.get() );
-        new CallDataRenewNonDomainJoinedKerberosLease ( &service_, cq_.get() );
+        new CallDataAddNonDomainJoinedKerberosLease( &service_, cq_.get() );
+        new CallDataRenewNonDomainJoinedKerberosLease( &service_, cq_.get() );
         new CallDataDeleteKerberosLease( &service_, cq_.get() );
 
         while ( pthread_shutdown_signal != nullptr && !( *pthread_shutdown_signal ) )
@@ -1036,15 +1030,13 @@ class CredentialsFetcherImpl final
             GPR_ASSERT( cq_->Next( &got_tag, &ok ) );
             GPR_ASSERT( ok );
 
-            static_cast<CallDataCreateKerberosLease*>( got_tag )->Proceed( krb_files_dir, cf_logger,
+            static_cast<CallDataCreateKerberosLease*>( got_tag )->Proceed( cf_daemon,
                                                                            aws_sm_secret_name );
             static_cast<CallDataAddNonDomainJoinedKerberosLease*>( got_tag )->Proceed(
-                krb_files_dir, cf_logger,
-                                                                           aws_sm_secret_name );
+                cf_daemon, aws_sm_secret_name );
             static_cast<CallDataRenewNonDomainJoinedKerberosLease*>( got_tag )->Proceed(
-                krb_files_dir, cf_logger,
-                aws_sm_secret_name );
-            static_cast<CallDataDeleteKerberosLease*>( got_tag )->Proceed( krb_files_dir, cf_logger,
+                cf_daemon, aws_sm_secret_name );
+            static_cast<CallDataDeleteKerberosLease*>( got_tag )->Proceed( cf_daemon,
                                                                            aws_sm_secret_name );
         }
     }
@@ -1061,15 +1053,14 @@ class CredentialsFetcherImpl final
  * @param shutdown_signal - sigterm from systemd
  * @return - return 0 when server exits
  */
-int RunGrpcServer( std::string unix_socket_dir, std::string krb_files_dir,
-                   creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t* shutdown_signal,
-                   std::string aws_sm_secret_name )
+int run_grpc_server( creds_fetcher::Daemon& cf_daemon, volatile sig_atomic_t* shutdown_signal,
+                     std::string aws_sm_secret_name )
 {
     CredentialsFetcherImpl creds_fetcher_grpc;
 
     pthread_shutdown_signal = shutdown_signal;
 
-    creds_fetcher_grpc.RunServer( unix_socket_dir, krb_files_dir, cf_logger, aws_sm_secret_name );
+    creds_fetcher_grpc.run_server( cf_daemon, aws_sm_secret_name );
 
     // TBD:: Add return status for errors
     return 0;
@@ -1119,12 +1110,13 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
 
         namespace pt = boost::property_tree;
         pt::ptree root;
-        if(!is_file)
+        if ( !is_file )
         {
             std::istringstream credspec_stream( credspec_data );
             pt::read_json( credspec_stream, root );
         }
-        else{
+        else
+        {
             pt::read_json( credspec_data, root );
         }
 
@@ -1164,9 +1156,9 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
  * @param kubeconfigpath - path to kubeconfig file
  * @param krb_ticket_info - return service account info
  * @return
-*/
+ */
 std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeFilePath,
-                                                                          std::string krbdir )
+                                                               std::string krbdir )
 {
     std::list<creds_fetcher::kube_config_info*> kube_config_info_list;
     std::list<creds_fetcher::kube_meta_mapping*> kube_meta_mapping_list;
@@ -1174,11 +1166,6 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
     std::string metadata_file_path;
     std::string lease_id = "eks_configuration";
     std::string dirName = krbdir + "/" + lease_id;
-    if (std::filesystem::exists(dirName))
-    {
-        // The folder already exists
-        return kube_config_info_list;
-    }
 
     try
     {
@@ -1194,9 +1181,10 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
 
         std::string errors;
 
-        bool parsingSuccessful = Json::parseFromStream(rbuilder, credspec_stream, &root, &errors);
+        bool parsingSuccessful = Json::parseFromStream( rbuilder, credspec_stream, &root, &errors );
 
-        if (!parsingSuccessful) {
+        if ( !parsingSuccessful )
+        {
             std::cout << "Failed to parse the JSON, errors:" << std::endl;
             std::cout << errors << std::endl;
             return kube_config_info_list;
@@ -1205,8 +1193,8 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
         std::string meta_file_name = lease_id + "_kube_metadata.json";
         metadata_file_path = krbdir + "/" + lease_id + "/" + meta_file_name;
 
-        Json::Value &array1 = root["ServiceAccountMappings"];
-        for (int i = 0; i < (int)array1.size(); i++)
+        Json::Value& array1 = root["ServiceAccountMappings"];
+        for ( int i = 0; i < (int)array1.size(); i++ )
         {
             creds_fetcher::kube_config_info* kube_config_info = new creds_fetcher::kube_config_info;
             creds_fetcher::krb_ticket_info* krb_ticket_info = new creds_fetcher::krb_ticket_info;
@@ -1214,28 +1202,29 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
             int status = parse_cred_spec( credentialspecpath, krb_ticket_info, true );
             if ( status != -1 )
             {
-                if ( krb_ticket_info->krb_file_path.empty())
+                if ( krb_ticket_info->krb_file_path.empty() )
                 {
-                    std::string ticket_path = krbdir + "/" + lease_id + "/" +
-                                              krb_ticket_info->service_account_name;
+                    std::string ticket_path =
+                        krbdir + "/" + lease_id + "/" + krb_ticket_info->service_account_name;
 
-                    //create ticket paths
+                    // create ticket paths
                     krb_ticket_info->krb_file_path = ticket_path;
                     boost::filesystem::create_directories( ticket_path );
                 }
                 std::string domainlessUser = array1[i]["domainless_user"].asString();
-                if(domainlessUser.length() != 0 )
+                if ( domainlessUser.length() != 0 )
                 {
-                    krb_ticket_info->domainless_user =
-                       "kubedomainlessusersecret:"+domainlessUser;
+                    krb_ticket_info->domainless_user = "kubedomainlessusersecret:" + domainlessUser;
                 }
-                else{
-                    krb_ticket_info->domainless_user = "kubehostprincipal" ;
+                else
+                {
+                    krb_ticket_info->domainless_user = "kubehostprincipal";
                 }
             }
             kube_config_info->krb_ticket_info = krb_ticket_info;
 
-            creds_fetcher::kube_meta_mapping* kube_meta_mapping  = new creds_fetcher::kube_meta_mapping;
+            creds_fetcher::kube_meta_mapping* kube_meta_mapping =
+                new creds_fetcher::kube_meta_mapping;
             std::list<creds_fetcher::kube_yaml_path*> kube_yaml_paths_list;
             std::list<std::string> secret_yaml_paths;
             std::list<std::string> pod_yaml_paths;
@@ -1243,29 +1232,32 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
             for ( int j = 0; j < (int)array2.size(); j++ )
             {
                 creds_fetcher::kube_yaml_path* kube_yaml_path = new creds_fetcher::kube_yaml_path;
-                std::string secret_yaml_path = array2[i]["path_to_kube_secret_yaml_file"].asString();
+                std::string secret_yaml_path =
+                    array2[i]["path_to_kube_secret_yaml_file"].asString();
                 kube_yaml_path->secret_yaml_path = secret_yaml_path;
                 std::string pod_yaml_path = array2[i]["path_to_kube_pod_yaml_file"].asString();
                 kube_yaml_path->pod_yaml_path = pod_yaml_path;
-                kube_yaml_paths_list.push_back(kube_yaml_path);
+                kube_yaml_paths_list.push_back( kube_yaml_path );
             }
 
-            if(!kube_config_info->secret_yaml_map.count(kube_config_info->krb_ticket_info->krb_file_path))
+            if ( !kube_config_info->secret_yaml_map.count(
+                     kube_config_info->krb_ticket_info->krb_file_path ) )
             {
-                kube_config_info->secret_yaml_map[kube_config_info->krb_ticket_info->krb_file_path]
-                    = secret_yaml_paths;
+                kube_config_info
+                    ->secret_yaml_map[kube_config_info->krb_ticket_info->krb_file_path] =
+                    secret_yaml_paths;
             }
             kube_config_info->lease_id = lease_id;
             kube_meta_mapping->kube_yaml_paths = kube_yaml_paths_list;
-            kube_meta_mapping->krb_file_path =  krb_ticket_info->krb_file_path;
+            kube_meta_mapping->krb_file_path = krb_ticket_info->krb_file_path;
             kube_config_info->kube_yaml_paths = kube_yaml_paths_list;
             kube_config_info_list.push_back( kube_config_info );
-            kube_meta_mapping_list.push_back(kube_meta_mapping);
+            kube_meta_mapping_list.push_back( kube_meta_mapping );
             krb_ticket_info_list.push_back( krb_ticket_info );
         }
 
-        write_meta_data_json(krb_ticket_info_list, lease_id,krbdir);
-        writeKubeJsonCache(metadata_file_path,kube_meta_mapping_list);
+        write_meta_data_json( krb_ticket_info_list, lease_id, krbdir );
+        writeKubeJsonCache( metadata_file_path, kube_meta_mapping_list );
     }
     catch ( ... )
     {
@@ -1275,8 +1267,9 @@ std::list<creds_fetcher::kube_config_info*> parse_kube_config( std::string kubeF
     return kube_config_info_list;
 }
 
-void writeKubeJsonCache(std::string metadataFilePath, std::list<creds_fetcher::kube_meta_mapping*>
-    kubeMappings){
+void writeKubeJsonCache( std::string metadataFilePath,
+                         std::list<creds_fetcher::kube_meta_mapping*> kubeMappings )
+{
     try
     {
         // create the meta file in the lease directory
@@ -1289,13 +1282,13 @@ void writeKubeJsonCache(std::string metadataFilePath, std::list<creds_fetcher::k
         Json::Value child_entry;
         for ( const auto& mapping : kubeMappings )
         {
-            Json::Value kube_secrets_yaml ( Json::arrayValue );
+            Json::Value kube_secrets_yaml( Json::arrayValue );
             for ( const auto& path : mapping->kube_yaml_paths )
             {
                 Json::Value child;
                 child["path_to_kube_secret_yaml"] = path->secret_yaml_path;
                 child["path_to_kube_pod_yaml"] = path->pod_yaml_path;
-                kube_secrets_yaml.append(child);
+                kube_secrets_yaml.append( child );
             }
 
             child_entry["kube_secret_yaml"] = kube_secrets_yaml;
