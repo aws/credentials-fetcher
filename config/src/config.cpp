@@ -3,8 +3,8 @@
 #include <boost/program_options.hpp>
 
 static std::string global_config_file_name( "/etc/credentials_fetcher.conf" );
-static std::string domain_joined_and_grpc_mode( "domain_joined_and_grpc_mode" );
-static std::string domain_joined_and_eks_mode( "domain_joined_and_eks_mode" );
+static std::string grpc_mode( "grpc_mode" );
+static std::string config_file_mode( "config_file_mode" );
 static std::string kube_config_file_path( "/etc/credentials_fetcher_kubeconfig.json" );
 static std::string default_krbdir_path( "/var/credentials_fetcher/krbdir" );
 /* TBD: use constants for other strings in this file */
@@ -65,12 +65,19 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
             std::cout << msg << std::endl;
         }
 
+        if ( vm.count( "credentials_fetcher_fixed_lease_name_dir" ) )
+        {
+            cf_daemon.fixed_lease_name_dir =
+                vm["credentials_fetcher_fixed_lease_name_dir"].as<std::string>();
+            std::cout << "Using fixed name dir = " + cf_daemon.fixed_lease_name_dir << std::endl;
+        }
+
         if ( vm.count( "credentials_fetcher_mode" ) )
         {
             std::string msg =
                 "credentials_fetcher_mode = " + vm["credentials_fetcher_mode"].as<std::string>();
             std::cout << msg << std::endl;
-            std::string eks_mode = "\"" + domain_joined_and_eks_mode + "\"";
+            std::string eks_mode = "\"" + config_file_mode + "\"";
             if ( vm["credentials_fetcher_mode"].as<std::string>() == eks_mode )
             {
                 msg = "From global config file, credentials_fetcher_mode = " +
@@ -82,72 +89,71 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
                     "From global config file, credentials_fetcher_kubeconfig_path = " +
                     cf_daemon.kube_config_file_path;
                 std::cout << msg << std::endl;
+                if ( cf_daemon.fixed_lease_name_dir.empty() )
+                {
+                    cf_daemon.fixed_lease_name_dir = "eks_configuration";
+                }
             }
-        }
 
-        cf_daemon.krb_files_dir = default_krbdir_path;
-        if ( vm.count( "credentials_fetcher_krbdir_path" ) )
-        {
-            cf_daemon.krb_files_dir = vm["credentials_fetcher_krbdir_path"].as<std::string>();
-        }
-        std::string msg = "Setting credentials_fetcher_krbdir_path as " + cf_daemon.krb_files_dir;
-        std::cout << msg << std::endl;
-
-        if ( vm.count( "credentials_fetcher_krbfile_suffix" ) )
-        {
-            cf_daemon.krb_file_suffix = vm["credentials_fetcher_krbfile_suffix"].as<std::string>();
-            std::string msg =
-                "Setting credentials_fetcher_krbfile_suffix as " + cf_daemon.krb_file_suffix;
-            std::cout << msg << std::endl;
-        }
-
-        if ( vm.count( "help" ) )
-        {
-            std::cout << desc << "\n";
-            return EXIT_FAILURE;
-        }
-
-        if ( vm.count( "verbosity" ) )
-        {
-            std::cout << "verbosity level was set to " << vm["verbosity"].as<int>() << std::endl;
-        }
-
-        if ( vm.count( "self_test" ) )
-        {
-            std::cout << "run diagnostic set" << std::endl;
-            cf_daemon.run_diagnostic = true;
-        }
-
-        if ( vm.count( "credentials_fetcher_fixed_lease_name_dir" ) )
-        {
-            cf_daemon.fixed_lease_name_dir =
-                vm["credentials_fetcher_fixed_lease_name_dir"].as<std::string>();
-            std::cout << "Using fixed name dir = " + cf_daemon.fixed_lease_name_dir << std::endl;
-        }
-
-        if ( vm.count( "aws_sm_secret_name" ) ) // TBD:: Extend to other stores
-        {
-            cf_daemon.aws_sm_secret_name = vm["aws_sm_secret_name"].as<std::string>();
-            std::cout
-                << "Option selected for domainless operation, AWS secrets manager secret-name = "
-                << cf_daemon.aws_sm_secret_name << std::endl;
-        }
-
-        std::ifstream config_file( ecs_config_file_name );
-        std::string line;
-        std::vector<std::string> results;
-
-        while ( std::getline( config_file, line ) )
-        {
-            // TBD: Error handling for incorrectly formatted /etc/ecs/ecs.config
-            boost::split( results, line, []( char c ) { return c == '='; } );
-            std::string key = results[0];
-            std::string value = results[1];
-            if ( domainless_gmsa_field.compare( key ) == 0 )
+            cf_daemon.krb_files_dir = default_krbdir_path;
+            if ( vm.count( "credentials_fetcher_krbdir_path" ) )
             {
-                value.erase( std::remove( value.begin(), value.end(), '"' ), value.end() );
-                std::cout << "Using " << value << " for domainless gMSA" << std::endl;
-                cf_daemon.aws_sm_secret_name = value;
+                cf_daemon.krb_files_dir = vm["credentials_fetcher_krbdir_path"].as<std::string>();
+            }
+            msg = "Setting credentials_fetcher_krbdir_path as " + cf_daemon.krb_files_dir;
+            std::cout << msg << std::endl;
+
+            if ( vm.count( "credentials_fetcher_krbfile_suffix" ) )
+            {
+                cf_daemon.krb_file_suffix =
+                    vm["credentials_fetcher_krbfile_suffix"].as<std::string>();
+                std::string msg =
+                    "Setting credentials_fetcher_krbfile_suffix as " + cf_daemon.krb_file_suffix;
+                std::cout << msg << std::endl;
+            }
+
+            if ( vm.count( "help" ) )
+            {
+                std::cout << desc << "\n";
+                return EXIT_FAILURE;
+            }
+
+            if ( vm.count( "verbosity" ) )
+            {
+                std::cout << "verbosity level was set to " << vm["verbosity"].as<int>()
+                          << std::endl;
+            }
+
+            if ( vm.count( "self_test" ) )
+            {
+                std::cout << "run diagnostic set" << std::endl;
+                cf_daemon.run_diagnostic = true;
+            }
+
+            if ( vm.count( "aws_sm_secret_name" ) ) // TBD:: Extend to other stores
+            {
+                cf_daemon.aws_sm_secret_name = vm["aws_sm_secret_name"].as<std::string>();
+                std::cout << "Option selected for domainless operation, AWS secrets manager "
+                             "secret-name = "
+                          << cf_daemon.aws_sm_secret_name << std::endl;
+            }
+
+            std::ifstream config_file( ecs_config_file_name );
+            std::string line;
+            std::vector<std::string> results;
+
+            while ( std::getline( config_file, line ) )
+            {
+                // TBD: Error handling for incorrectly formatted /etc/ecs/ecs.config
+                boost::split( results, line, []( char c ) { return c == '='; } );
+                std::string key = results[0];
+                std::string value = results[1];
+                if ( domainless_gmsa_field.compare( key ) == 0 )
+                {
+                    value.erase( std::remove( value.begin(), value.end(), '"' ), value.end() );
+                    std::cout << "Using " << value << " for domainless gMSA" << std::endl;
+                    cf_daemon.aws_sm_secret_name = value;
+                }
             }
         }
     }
