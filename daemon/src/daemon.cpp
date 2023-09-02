@@ -145,6 +145,7 @@ int main( int argc, const char* argv[] )
     }
 
     cf_daemon.krb_files_dir = CF_KRB_DIR;
+    cf_daemon.cred_file = CF_CRED_FILE;
     cf_daemon.logging_dir = CF_LOGGING_DIR;
     cf_daemon.unix_socket_dir = CF_UNIX_DOMAIN_SOCKET_DIR;
 
@@ -156,6 +157,7 @@ int main( int argc, const char* argv[] )
     cf_daemon.gmsa_account_name = CF_TEST_GMSA_ACCOUNT;
 
     std::cout << "krb_files_dir = " << cf_daemon.krb_files_dir << std::endl;
+    std::cout << "cred_file = " << cf_daemon.cred_file << std::endl;
     std::cout << "logging_dir = " << cf_daemon.logging_dir << std::endl;
     std::cout << "unix_socket_dir = " << cf_daemon.unix_socket_dir << std::endl;
 

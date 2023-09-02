@@ -18,7 +18,7 @@ RUN apt-get update \
 
 RUN apt-get install libboost-program-options-dev libboost-filesystem-dev -y
 
-RUN cd /root && git clone https://github.com/fordth/credentials-fetcher \
+RUN cd /root && git clone -b credentials-fetcher-credfile https://github.com/fordth/credentials-fetcher \
     && mkdir -p credentials-fetcher/build \
     && mkdir -p /usr/lib64/glib-2.0/ \
     && ln -s '/usr/lib/x86_64-linux-gnu/glib-2.0/include/' '/usr/lib64/glib-2.0/include' \

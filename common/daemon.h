@@ -76,6 +76,7 @@ namespace creds_fetcher
         uint64_t watchdog_interval_usecs = 0;
         char* config_file = NULL;
         std::string krb_files_dir;
+        std::string cred_file;
         std::string unix_socket_dir;
         std::string logging_dir;
         std::string domain_name;
