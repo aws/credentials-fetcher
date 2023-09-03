@@ -183,6 +183,11 @@ int main( int argc, const char* argv[] )
     // 2. grpc server
     // 3. timer to run every 45 min
 
+    if ( !cf_daemon.cred_file.empty() ) {
+        cf_daemon.cf_logger.logger( LOG_INFO, "Bypassing grpc pthread initialization, credential file exists %s", cf_daemon.cred_file.c_str() );
+        return EXIT_FAILURE;
+    }
+
     /* Create one pthread for gRPC processing */
     std::pair<int, void*> pthread_status =
         create_pthread( grpc_thread_start, grpc_thread_name, -1 );
@@ -194,7 +199,7 @@ int main( int argc, const char* argv[] )
     }
     grpc_pthread = pthread_status.second;
     cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
-
+    
     /* Create pthread for refreshing krb tickets */
     pthread_status =
         create_pthread( refresh_krb_tickets_thread_start, "krb_ticket_refresh_thread", -1 );

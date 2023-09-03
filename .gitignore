@@ -1,0 +1,4 @@
+/build/
+/**/obj/Debug/
+/auth/**/*.exe
+/.vscode/

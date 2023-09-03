@@ -63,7 +63,7 @@ namespace creds_fetcher
         {
             if ( level >= log_level )
             {
-                sd_journal_print( level, fmt, logs... );
+                //sd_journal_print( level, fmt, logs... );
             }
         }
     };
