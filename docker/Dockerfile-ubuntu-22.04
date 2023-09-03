@@ -24,7 +24,6 @@ RUN cd /root && git clone https://github.com/fordth/credentials-fetcher \
     && cd credentials-fetcher \ 
     && sed -i 's/sd_journal_print/\/\/sd_journal_print/g' common/daemon.h \
     && cd build \
-    #&& cd credentials-fetcher/build \ 
     && cmake -DCMAKE_CXX_STANDARD=17 ../ && make -j && make install
 
 WORKDIR /root/credentials-fetcher/build
