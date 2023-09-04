@@ -167,6 +167,8 @@ int RunGrpcServer( std::string unix_socket_dir, std::string krb_file_path,
 
 int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info );
 
+int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger);
+
 std::string generate_lease_id();
 
 /**

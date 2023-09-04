@@ -135,6 +135,7 @@ std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthrea
 
 int main( int argc, const char* argv[] )
 {
+    std::pair<int, void*> pthread_status;
     void* grpc_pthread;
     void* krb_refresh_pthread;
 
@@ -184,22 +185,30 @@ int main( int argc, const char* argv[] )
     // 3. timer to run every 45 min
 
     if ( !cf_daemon.cred_file.empty() ) {
+        std::cout << "cred_file here " << std::endl;
         cf_daemon.cf_logger.logger( LOG_INFO, "Bypassing grpc pthread initialization, credential file exists %s", cf_daemon.cred_file.c_str() );
-        return EXIT_FAILURE;
+        
+        int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, "/home/tford/credspec_sample.json", cf_daemon.cf_logger);
+        if (specFileReturn != 0) {
+            std::cout << "specFileReturn non 0 " << std::endl;
+            exit( EXIT_FAILURE );
+        }
     }
-
-    /* Create one pthread for gRPC processing */
-    std::pair<int, void*> pthread_status =
-        create_pthread( grpc_thread_start, grpc_thread_name, -1 );
-    if ( pthread_status.first < 0 )
+    else 
     {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
-                                    pthread_status.first );
-        exit( EXIT_FAILURE );
+        /* Create one pthread for gRPC processing */
+        pthread_status =
+            create_pthread( grpc_thread_start, grpc_thread_name, -1 );
+        if ( pthread_status.first < 0 )
+        {
+            cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
+                                        pthread_status.first );
+            exit( EXIT_FAILURE );
+        }
+        grpc_pthread = pthread_status.second;
+        cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
     }
-    grpc_pthread = pthread_status.second;
-    cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
-    
+        
     /* Create pthread for refreshing krb tickets */
     pthread_status =
         create_pthread( refresh_krb_tickets_thread_start, "krb_ticket_refresh_thread", -1 );
