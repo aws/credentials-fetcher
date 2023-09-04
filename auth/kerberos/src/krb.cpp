@@ -666,7 +666,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
            std::string( " -s sub  \"(objectClass=msDs-GroupManagedServiceAccount)\" "
                         " msDS-ManagedPassword" );
 
-    cf_logger.logger( LOG_INFO, "%s", cmd );
+    cf_logger.logger( LOG_INFO, "%s", cmd.c_str() );
     std::cout << cmd << std::endl;
     std::pair<int, std::string> ldap_search_result = exec_shell_cmd( cmd );
     if ( ldap_search_result.first != 0 )
