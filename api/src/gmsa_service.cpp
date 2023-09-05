@@ -7,6 +7,7 @@
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
 #include <random>
+#include <sys/stat.h>
 
 
 #define LEASE_ID_LENGTH 10
@@ -1160,7 +1161,7 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
  * @return - return 0 on success
  */
 int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger) {
-    std::string lease_id = generate_lease_id();
+    std::string lease_id = "credspec";
     std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
     std::unordered_set<std::string> krb_ticket_dirs;
     std::string err_msg;
@@ -1170,9 +1171,10 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     cf_logger.logger( LOG_INFO, "Generated lease id %s", lease_id.c_str() );
 
     if ( !boost::filesystem::exists( credspec_filepath ) ){
+        std::cerr << "The credential spec file was not found!" << std::endl;
         cf_logger.logger( LOG_ERR, "The credential spec file %s was not found!",
                                     credspec_filepath.c_str() );
-        return 1;
+        return -1;
     }
 
     std::ifstream inputFile(credspec_filepath);
@@ -1186,7 +1188,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     else 
     {
         std::cerr << "Unable to open credential spec file: " << credspec_filepath << std::endl;
-        return 1;
+        return -1;
     }
 
     creds_fetcher::krb_ticket_info* krb_ticket_info = new creds_fetcher::krb_ticket_info;
@@ -1225,10 +1227,10 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
             if ( boost::filesystem::exists( krb_file_path ) )
             {
                 cf_logger.logger( LOG_INFO,
-                                    "Directory already exists: "
-                                    "%s",
+                                    "Deleting existing credential file directory %s",
 +                                              krb_file_path.c_str() );
-                break;
+
+                boost::filesystem::remove_all(krb_file_path);
             }
             boost::filesystem::create_directories( krb_file_path );
 
@@ -1255,6 +1257,8 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
             }
             else
             {
+                chmod(krb_ccname_str.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
                 cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
                                     gmsa_ticket_result.second.c_str() );
                 std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
@@ -1274,9 +1278,10 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
             boost::filesystem::remove_all( krb_ticket->krb_file_path );
         }
 
+        std::cerr << err_msg << std::endl;
         cf_logger.logger( LOG_ERR, "%s", err_msg.c_str() );
 
-        return 1;
+        return -1;
     }
     else
     {

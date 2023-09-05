@@ -188,7 +188,7 @@ int main( int argc, const char* argv[] )
         std::cout << "cred_file here " << std::endl;
         cf_daemon.cf_logger.logger( LOG_INFO, "Bypassing grpc pthread initialization, credential file exists %s", cf_daemon.cred_file.c_str() );
         
-        int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, "/home/tford/credspec_sample.json", cf_daemon.cf_logger);
+        int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, "/home/tford@ford.local/CryptoDev_credspec.json", cf_daemon.cf_logger);
         if (specFileReturn != 0) {
             std::cout << "specFileReturn non 0 " << std::endl;
             exit( EXIT_FAILURE );

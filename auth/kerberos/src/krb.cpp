@@ -175,10 +175,11 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
     result = get_machine_principal( std::move( domain_name ), cf_logger );
     if ( result.first != 0 )
     {
+        std::cout << "ERROR: " << __func__ << ":" << __LINE__ << " invalid machine principal" << std::endl;
         cf_logger.logger( LOG_ERR, "ERROR: %s:%d invalid machine principal", __func__, __LINE__ );
         return result.first;
     }
-
+    
     // kinit -kt /etc/krb5.keytab  'EC2AMAZ-GG97ZL$'@CONTOSO.COM
     std::transform( result.second.begin(), result.second.end(), result.second.begin(),
                     []( unsigned char c ) { return std::toupper( c ); } );
