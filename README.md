@@ -99,9 +99,15 @@ journalctl -u credentials-fetcher
 | `CF_KRB_DIR`                | '/var/credentials-fetcher/krbdir'  | *(Default)* Dir path for storing the kerberos tickets                                        |
 | `CF_UNIX_DOMAIN_SOCKET_DIR` | '/var/credentials-fetcher/socket'  | *(Default)* Dir path for the domain socker for gRPC communication 'credentials_fetcher.sock' |
 | `CF_LOGGING_DIR`            | '/var/credentials-fetcher/logging' | *(Default)* Dir Path for log                                                                 |
-| `CF_CRED_FILE`              | 'credspec.json'                    | Optional path to a credential spec file used as input                                             |
 | `CF_TEST_DOMAIN_NAME`       | 'contoso.com'                      | Test domain name                                                                             |
 | `CF_TEST_GMSA_ACCOUNT`      | 'webapp01'                         | Test gMSA account name                                                                       |
+
+
+#### Runtime environment variables
+
+| Environment Variable        | Examples values                          | Description                                                                                  |
+| :-------------------------- | ---------------------------------------- | :------------------------------------------------------------------------------------------- |
+| `CF_CRED_FILE`              | '/var/credentials-fetcher/credspec.json' | Optional path to a credential spec file used as input, this disables gRPC                    |
 
 ## Compatibility
 

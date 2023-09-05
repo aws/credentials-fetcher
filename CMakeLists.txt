@@ -30,10 +30,6 @@ add_subdirectory(daemon)
 set(metadata)
 add_subdirectory(metadata)
 
-if (NOT CF_CRED_FILE)
-    set(CF_CRED_FILE " ")
-endif()
-
 if (NOT CF_KRB_DIR)
     set(CF_KRB_DIR "/var/credentials-fetcher/krbdir")
 endif()

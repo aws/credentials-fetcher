@@ -17,7 +17,7 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         namespace po = boost::program_options;
 
         /* Declare the supported options */
-        po::options_description desc( "Allowed options" );
+        po::options_description desc( "Runtime Environment Variables:\n\tCF_CRED_FILE\tOptionally set to a path of a json credential file instead of using gRPC.\n\nAllowed options" );
         desc.add_options()( "help", "produce help message" ) /* TBD: Add help message description */
             ( "self_test", "Run tests such as utf16 decode" )( "verbosity", po::value<int>(),
                                                                "set verbosity level" )(

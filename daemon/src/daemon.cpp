@@ -146,9 +146,13 @@ int main( int argc, const char* argv[] )
     }
 
     cf_daemon.krb_files_dir = CF_KRB_DIR;
-    cf_daemon.cred_file = CF_CRED_FILE;
     cf_daemon.logging_dir = CF_LOGGING_DIR;
     cf_daemon.unix_socket_dir = CF_UNIX_DOMAIN_SOCKET_DIR;
+
+    if (getenv("CF_CRED_FILE") != NULL)
+    {
+        cf_daemon.cred_file = getenv("CF_CRED_FILE");
+    }
 
     /**
      * Domain name and gmsa account are usually set in APIs.
@@ -185,10 +189,9 @@ int main( int argc, const char* argv[] )
     // 3. timer to run every 45 min
 
     if ( !cf_daemon.cred_file.empty() ) {
-        std::cout << "cred_file here " << std::endl;
         cf_daemon.cf_logger.logger( LOG_INFO, "Bypassing grpc pthread initialization, credential file exists %s", cf_daemon.cred_file.c_str() );
         
-        int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, "/home/tford@ford.local/CryptoDev_credspec.json", cf_daemon.cf_logger);
+        int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, cf_daemon.cred_file, cf_daemon.cf_logger);
         if (specFileReturn != 0) {
             std::cout << "specFileReturn non 0 " << std::endl;
             exit( EXIT_FAILURE );

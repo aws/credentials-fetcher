@@ -1171,7 +1171,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     cf_logger.logger( LOG_INFO, "Generated lease id %s", lease_id.c_str() );
 
     if ( !boost::filesystem::exists( credspec_filepath ) ){
-        std::cerr << "The credential spec file was not found!" << std::endl;
+        std::cerr << "The credential spec file " << credspec_filepath << " was not found!" << std::endl;
         cf_logger.logger( LOG_ERR, "The credential spec file %s was not found!",
                                     credspec_filepath.c_str() );
         return -1;
