@@ -1,4 +1,5 @@
 #include "daemon.h"
+#include <boost/filesystem.hpp>
 #include <iostream>
 #include <libgen.h>
 #include <stdlib.h>
@@ -136,6 +137,7 @@ std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthrea
 int main( int argc, const char* argv[] )
 {
     std::pair<int, void*> pthread_status;
+    std::string cred_file;
     void* grpc_pthread;
     void* krb_refresh_pthread;
 
@@ -151,7 +153,15 @@ int main( int argc, const char* argv[] )
 
     if (getenv("CF_CRED_FILE") != NULL)
     {
-        cf_daemon.cred_file = getenv("CF_CRED_FILE");
+        cred_file = getenv("CF_CRED_FILE");
+        if (!boost::filesystem::exists( cred_file))
+        {
+            std::cout << "Ignoring CF_CREF_FILE, file " << cred_file << " not found" << std::endl;
+        }
+        else
+        {
+            cf_daemon.cred_file = cred_file;
+        }
     }
 
     /**

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(credentials-fetcher VERSION 1.1.0)
+project(credentials-fetcher VERSION 1.1.1)
 
 include(GNUInstallDirs)
 
@@ -80,6 +80,7 @@ else()
             "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
             "ExecStart=/usr/sbin/credentials-fetcherd\n"
             "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
+            "Environment=\"CF_CRED_FILE=/var/credentials-fetcher/credspec.json\"\n"
             "Type=notify\n"
             "NotifyAccess=main\n"
             "WatchdogSec=5s\n"
