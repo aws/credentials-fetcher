@@ -107,7 +107,7 @@ journalctl -u credentials-fetcher
 
 | Environment Variable        | Examples values                          | Description                                                                                  |
 | :-------------------------- | ---------------------------------------- | :------------------------------------------------------------------------------------------- |
-| `CF_CRED_FILE`              | '/var/credentials-fetcher/credspec.json' | Optional path to a credential spec file used as input, this disables gRPC. If the file is not found, then gRPC is enabled.  |
+| `CF_CRED_FILE`              | '/var/credentials-fetcher/credspec.json' | Optional path to a credential spec file used as input. |
 
 ## Compatibility
 
