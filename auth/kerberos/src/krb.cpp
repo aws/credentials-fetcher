@@ -4,6 +4,7 @@
 #include <openssl/crypto.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <regex>
 
 // renew the ticket 1 hrs before the expiration
 #define RENEW_TICKET_HOURS 1
@@ -718,18 +719,38 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
 }
 
 /**
+ * Parses the string that is a result of the klist command for the ticket experation date and time
+ * @param klist_ticket_info  - String output of the klist command to parse
+ * @return - returns the date and time of the ticket experation otherwise an empty string
+ */
+std::string get_ticket_expiration( std::string klist_ticket_info )
+{
+    std::regex pattern(".+\n.{21}(.{19}).+");
+    std::smatch expires_match;
+
+    if (!std::regex_search(klist_ticket_info, expires_match, pattern))
+    {
+        std::cout << "Unable to parse klist for ticket experation: " << klist_ticket_info << std::endl;
+        return "";
+    }
+
+    return expires_match[1];
+}
+
+/**
  * Checks if the given ticket needs renewal or recreation
  * @param krb_cc_name  - Like '/var/credentials_fetcher/krb_dir/krb5_cc'
  * @return - is renewal needed - true or false
  */
 
-bool is_ticket_ready_for_renewal( std::string krb_cc_name )
+bool is_ticket_ready_for_renewal( std::string krb_cc_name, bool is_cred_file_mode )
 {
     std::string cmd = "export KRB5CCNAME=" + krb_cc_name + " &&  klist";
     std::pair<int, std::string> krb_ticket_info_result = exec_shell_cmd( cmd );
     if ( krb_ticket_info_result.first != 0 )
     {
         // we need to check if meta file exists to recreate the ticket
+        std::cout << "ERROR: klist failed for command " << cmd << std::endl;
         return false;
     }
 
@@ -738,14 +759,23 @@ bool is_ticket_ready_for_renewal( std::string krb_cc_name )
     boost::split( results, krb_ticket_info_result.second, []( char c ) { return c == '#'; } );
     std::string renew_until = "renew until";
     bool is_ready_for_renewal = false;
-
+    
     for ( auto& result : results )
     {
         auto found = result.find( renew_until );
         if ( found != std::string::npos )
         {
             found += renew_until.length();
-            std::string renewal_date_time = result.substr( found + 1, result.length() );
+            std::string renewal_date_time;
+            
+            if (is_cred_file_mode)
+            {
+                renewal_date_time = get_ticket_expiration(result);
+            }
+            else 
+            {
+                renewal_date_time = result.substr( found + 1, result.length() );
+            }
 
             char renewal_date[80];
             char renewal_time[80];

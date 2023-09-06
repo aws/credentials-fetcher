@@ -133,7 +133,9 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
 void krb_ticket_creation( const char* ldap_uri_arg, const char* gmsa_account_name_arg,
                           const char* krb_ccname = "" );
 
-bool is_ticket_ready_for_renewal( std::string krb_cc_name );
+bool is_ticket_ready_for_renewal( std::string krb_cc_name, bool is_cred_file_mode );
+
+std::string get_ticket_expiration( std::string klist_ticket_info );
 
 std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::string lease_id );
 
