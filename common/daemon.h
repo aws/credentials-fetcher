@@ -41,6 +41,7 @@ namespace creds_fetcher
         std::string service_account_name;
         std::string domain_name;
         std::string domainless_user;
+        std::string origin;
     };
 
     /*
@@ -133,7 +134,7 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
 void krb_ticket_creation( const char* ldap_uri_arg, const char* gmsa_account_name_arg,
                           const char* krb_ccname = "" );
 
-bool is_ticket_ready_for_renewal( std::string krb_cc_name, bool is_cred_file_mode );
+bool is_ticket_ready_for_renewal( creds_fetcher::krb_ticket_info* krb_ticket_info );
 
 std::string get_ticket_expiration( std::string klist_ticket_info );
 

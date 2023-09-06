@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(credentials-fetcher VERSION 1.1.1)
+project(credentials-fetcher VERSION 1.2.0)
 
 include(GNUInstallDirs)
 

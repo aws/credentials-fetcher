@@ -743,9 +743,9 @@ std::string get_ticket_expiration( std::string klist_ticket_info )
  * @return - is renewal needed - true or false
  */
 
-bool is_ticket_ready_for_renewal( std::string krb_cc_name, bool is_cred_file_mode )
+bool is_ticket_ready_for_renewal( creds_fetcher::krb_ticket_info* krb_ticket_info )
 {
-    std::string cmd = "export KRB5CCNAME=" + krb_cc_name + " &&  klist";
+    std::string cmd = "export KRB5CCNAME=" + krb_ticket_info->krb_file_path + " &&  klist";
     std::pair<int, std::string> krb_ticket_info_result = exec_shell_cmd( cmd );
     if ( krb_ticket_info_result.first != 0 )
     {
@@ -768,7 +768,7 @@ bool is_ticket_ready_for_renewal( std::string krb_cc_name, bool is_cred_file_mod
             found += renew_until.length();
             std::string renewal_date_time;
             
-            if (is_cred_file_mode)
+            if (krb_ticket_info->origin == "file")
             {
                 renewal_date_time = get_ticket_expiration(result);
             }

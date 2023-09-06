@@ -199,28 +199,26 @@ int main( int argc, const char* argv[] )
     // 3. timer to run every 45 min
 
     if ( !cf_daemon.cred_file.empty() ) {
-        cf_daemon.cf_logger.logger( LOG_INFO, "Bypassing grpc pthread initialization, credential file exists %s", cf_daemon.cred_file.c_str() );
+        cf_daemon.cf_logger.logger( LOG_INFO, "Credential file exists %s", cf_daemon.cred_file.c_str() );
         
         int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, cf_daemon.cred_file, cf_daemon.cf_logger);
         if (specFileReturn != 0) {
-            std::cout << "specFileReturn non 0 " << std::endl;
+            std::cout << "ProcessCredSpecFile() non 0 " << std::endl;
             exit( EXIT_FAILURE );
         }
     }
-    else 
+    
+    /* Create one pthread for gRPC processing */
+    pthread_status =
+        create_pthread( grpc_thread_start, grpc_thread_name, -1 );
+    if ( pthread_status.first < 0 )
     {
-        /* Create one pthread for gRPC processing */
-        pthread_status =
-            create_pthread( grpc_thread_start, grpc_thread_name, -1 );
-        if ( pthread_status.first < 0 )
-        {
-            cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
-                                        pthread_status.first );
-            exit( EXIT_FAILURE );
-        }
-        grpc_pthread = pthread_status.second;
-        cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
+        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
+                                    pthread_status.first );
+        exit( EXIT_FAILURE );
     }
+    grpc_pthread = pthread_status.second;
+    cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
         
     /* Create pthread for refreshing krb tickets */
     pthread_status =
