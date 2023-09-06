@@ -13,7 +13,9 @@ struct thread_info
     char* argv_string;   /* From command-line argument */
 };
 
+#ifndef CREDENTIALS_FETCHERD_NO_GRPC
 static const char* grpc_thread_name = "grpc_thread";
+#endif
 
 static void systemd_shutdown_signal_catcher( int signo )
 {
@@ -33,6 +35,7 @@ static void systemd_shutdown_signal_catcher( int signo )
         perror( msg );                                                                             \
     } while ( 0 )
 
+#ifndef CREDENTIALS_FETCHERD_NO_GRPC
 /**
  * grpc_thread_start - used in pthread_create
  * @param arg - thread info
@@ -50,6 +53,7 @@ void* grpc_thread_start( void* arg )
 
     return tinfo->argv_string;
 }
+#endif
 
 /**
  * refresh_krb_tickets - used in pthread_create
@@ -216,7 +220,7 @@ void handle_tickets_kube()
             std::cout << "kube apply failed " + err_msg << std::endl;
             lease_dir_path = cf_daemon.krb_files_dir + "/" + kube_config_info->lease_id;
             // delete associated directories, since the ticket creation failed
-            std::filesystem::remove_all( lease_dir_path );
+            boost::filesystem::remove_all( lease_dir_path );
             break;
         }
 
@@ -246,7 +250,7 @@ void handle_tickets_kube()
             std::cout << "kube apply failed " + err_msg << std::endl;
             lease_dir_path = cf_daemon.krb_files_dir + "/" + kube_config_info->lease_id;
             // delete associated directories, since the ticket creation failed
-            std::filesystem::remove_all( lease_dir_path );
+            boost::filesystem::remove_all( lease_dir_path );
             break;
         }
         else
@@ -267,7 +271,9 @@ void handle_tickets_kube()
 
 int main( int argc, const char* argv[] )
 {
+#ifndef CREDENTIALS_FETCHERD_NO_GRPC
     void* grpc_pthread;
+#endif
     void* krb_refresh_pthread;
 
     int status = parse_options( argc, argv, cf_daemon );
@@ -318,27 +324,33 @@ int main( int argc, const char* argv[] )
     // 3. timer to run every 45 min
 
     /* Create one pthread for gRPC processing */
-    std::pair<int, void*> pthread_status =
-        create_pthread( grpc_thread_start, grpc_thread_name, -1 );
-    if ( pthread_status.first < 0 )
+#ifndef CREDENTIALS_FETCHERD_NO_GRPC
     {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
-                                    pthread_status.first );
-        exit( EXIT_FAILURE );
+        std::pair<int, void*> pthread_status =
+            create_pthread( grpc_thread_start, grpc_thread_name, -1 );
+        if ( pthread_status.first < 0 )
+        {
+            cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
+                                        pthread_status.first );
+            exit( EXIT_FAILURE );
+        }
+        grpc_pthread = pthread_status.second;
+        cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
     }
-    grpc_pthread = pthread_status.second;
-    cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
+#endif
 
-    /* Create pthread for refreshing krb tickets */
-    pthread_status =
-        create_pthread( refresh_krb_tickets_thread_start, "krb_ticket_refresh_thread", -1 );
-    if ( pthread_status.first < 0 )
     {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
-                                    pthread_status.first );
-        exit( EXIT_FAILURE );
+        /* Create pthread for refreshing krb tickets */
+        std::pair<int, void*> pthread_status =
+            create_pthread( refresh_krb_tickets_thread_start, "krb_ticket_refresh_thread", -1 );
+        if ( pthread_status.first < 0 )
+        {
+            cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
+                                        pthread_status.first );
+            exit( EXIT_FAILURE );
+        }
+        krb_refresh_pthread = pthread_status.second;
     }
-    krb_refresh_pthread = pthread_status.second;
     cf_daemon.cf_logger.logger( LOG_INFO, "krb refresh pthread is at %p", krb_refresh_pthread );
 
     cf_daemon.cf_logger.set_log_level( LOG_NOTICE );

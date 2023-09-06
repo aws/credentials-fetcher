@@ -4,6 +4,7 @@
 
 DOTNET_CLI_TELEMETRY_OPTOUT=1
 export DOTNET_CLI_TELEMETRY_OPTOUT
+PATH=~/.dotnet:$PATH
 
 sdkver=$(LC_ALL=C dotnet --version)
 fwkver=$(LC_ALL=C dotnet --list-runtimes | \
@@ -11,6 +12,7 @@ fwkver=$(LC_ALL=C dotnet --list-runtimes | \
 
 # dotnet-sdk-5.0 installed via .deb package
 dotnethome=/usr/lib64/dotnet
+dotnethome=/home/ec2-user/.dotnet
 dotnetlib=$dotnethome/shared/Microsoft.NETCore.App/$fwkver
 dotnet_cscdll=$dotnethome/sdk/$sdkver/Roslyn/bincore/csc.dll
 dotnet_csclib='-r:netstandard.dll -r:Microsoft.CSharp.dll -r:System.dll'

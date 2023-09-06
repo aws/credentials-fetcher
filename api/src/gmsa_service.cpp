@@ -1,12 +1,15 @@
 #include "daemon.h"
 
 #include <boost/filesystem.hpp>
+#ifndef CREDENTIALS_FETCHERD_NO_GRPC
 #include <credentialsfetcher.grpc.pb.h>
-#include <filesystem>
+#endif
 #include <fstream>
+#ifndef CREDENTIALS_FETCHERD_NO_GRPC
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
+#endif
 #include <random>
 
 #define LEASE_ID_LENGTH 10
@@ -39,6 +42,7 @@ bool contains_invalid_characters_in_credentials( const std::string& value )
 
 volatile sig_atomic_t* pthread_shutdown_signal = nullptr;
 
+#ifndef CREDENTIALS_FETCHERD_NO_GRPC
 /**
  * gRPC code derived from
  * https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
@@ -1065,6 +1069,7 @@ int run_grpc_server( creds_fetcher::Daemon& cf_daemon, volatile sig_atomic_t* sh
     // TBD:: Add return status for errors
     return 0;
 }
+#endif
 
 /**
  * Generate a random lease_id of defined length

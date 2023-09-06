@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <filesystem>
 #include <glib.h>
 #include <iostream>
 #include <json/json.h>

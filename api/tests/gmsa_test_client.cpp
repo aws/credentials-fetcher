@@ -1,10 +1,12 @@
 #include <chrono>
+#ifndef CREDENTIALS_FETCHERD_NO_GRPC
 #include <credentialsfetcher.grpc.pb.h>
+#include <grpc++/grpc++.h>
+#endif
 #include <ctime>
 #include <errno.h>
 #include <exception>
 #include <fstream>
-#include <grpc++/grpc++.h>
 #include <iostream>
 #include <list>
 #include <random>
@@ -15,6 +17,7 @@
 
 #define unix_socket_address "unix:/var/credentials-fetcher/socket/credentials_fetcher.sock"
 
+#ifndef CREDENTIALS_FETCHERD_NO_GRPC
 /**
  * Testing client to validate grpc communication with server
  * Testing client to validate grpc communication with server, we need the client to mimic client
@@ -527,4 +530,8 @@ int main( int argc, char** argv )
         }
     }
     return 0;
+}
+#endif
+int main( int argc, char** argv )
+{
 }
