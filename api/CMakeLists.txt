@@ -2,23 +2,58 @@ cmake_minimum_required(VERSION 3.10)
 
 project(api)
 
-FILE(GLOB SRC_FILES src/*.cpp tests/gmsa_service_test.cpp)
+FILE(GLOB SRC_FILES src/*.cpp)
 
-include_directories("${CMAKE_CURRENT_BINARY_DIR}")
+if (NOT CF_NO_GRPC)
+        get_filename_component(credentialsfetcher_proto "../protos/credentialsfetcher.proto" ABSOLUTE)
+        get_filename_component(credentialsfetcher_proto_path "${credentialsfetcher_proto}" PATH)
+        message(${credentialsfetcher_proto})
+        
+        set(credentialsfetcher_proto_sources "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.pb.cc")
+        set(credentialsfetcher_proto_headers "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.pb.h")
+        set(credentialsfetcher_grpc_sources "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.grpc.pb.cc")
+        set(credentialsfetcher_grpc_headers "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.grpc.pb.h")
+        add_custom_command(
+                OUTPUT "${credentialsfetcher_proto_sources}" "${credentialsfetcher_proto_headers}" "${credentialsfetcher_grpc_sources}" "${credentialsfetcher_grpc_headers}"
+                COMMAND ${_PROTOBUF_PROTOC}
+                ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}" --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
+                -I "${credentialsfetcher_proto_path}"
+                --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
+                "${credentialsfetcher_proto}"
+                DEPENDS "${credentialsfetcher_proto}")
+        
+        include_directories("${CMAKE_CURRENT_BINARY_DIR}")
+        
+        list(APPEND SRC_FILES ${credentialsfetcher_proto_sources})
+        list(APPEND SRC_FILES ${credentialsfetcher_proto_headers})
+        list(APPEND SRC_FILES ${credentialsfetcher_grpc_sources})
+        list(APPEND SRC_FILES ${credentialsfetcher_grpc_headers})
+endif()
 
-add_library(cf_gmsa_service_private OBJECT
-    ${SRC_FILES})
+if (NOT CF_NO_GRPC)
+        add_library(cf_gmsa_service_private OBJECT
+            ${SRC_FILES}
+            ${credentialsfetcher_proto_sources}
+            ${credentialsfetcher_proto_headers}
+            ${credentialsfetcher_grpc_sources}
+            ${credentialsfetcher_grpc_headers}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../auth/kerberos/src/krb.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../auth/kinit_client/kinit.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/../auth/kinit_client/kinit_kdb.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/../metadata/src/metadata.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../metadata/tests/metadata_test.cpp)
+else()
+        add_library(cf_gmsa_service_private OBJECT
+                ${SRC_FILES})
+endif()
 
 find_path(GLIB_INCLUDE_DIR glib.h "/usr/include" "/usr/include/glib-2.0")
 find_path(GLIB_CONFIG_DIR glibconfig.h "/usr/include" "/usr/lib64/glib-2.0/include")
 
-file(
-        COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/credentials_fetcher_krbsecret_to_kubesecret.py
-        DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/../
-        FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-)
-
-target_compile_options(cf_gmsa_service_private PUBLIC -DCREDENTIALS_FETCHERD_NO_GRPC)
+if (NOT CF_NO_GRPC)
+else()
+        target_compile_options(cf_gmsa_service_private PUBLIC -DCREDENTIALS_FETCHERD_NO_GRPC)
+endif()
 
 target_include_directories(cf_gmsa_service_private
         PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../common
@@ -26,13 +61,28 @@ target_include_directories(cf_gmsa_service_private
         ${GLIB_INCLUDE_DIR}
         ${GLIB_CONFIG_DIR}
         ${CMAKE_BINARY_DIR})
+        
+if (NOT CF_NO_GRPC)
+        target_link_libraries(cf_gmsa_service_private
+                ${_REFLECTION}
+                ${_GRPC_GRPCPP}
+                systemd
+                glib-2.0
+                boost_filesystem
+                krb5 kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
+                com_err krb5support resolv)
 
-target_link_libraries(cf_gmsa_service_private
-        systemd
-        glib-2.0
-        boost_system boost_filesystem
-        krb5 kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto crypto ssl
-        com_err krb5support resolv jsoncpp)
+else()
 
+        target_link_libraries(cf_gmsa_service_private
+                ${_PROTOBUF_LIBPROTOBUF}
+                ${_REFLECTION}
+                ${_GRPC_GRPCPP}
+                systemd
+                glib-2.0
+                boost_filesystem
+                krb5 kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
+                com_err krb5support resolv)
+endif()
 enable_testing()
 add_subdirectory(tests)

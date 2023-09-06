@@ -5,7 +5,22 @@ include(GNUInstallDirs)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
+
+#set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall -Werror -pthread -fstack-protector-all")
 set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall -Werror -pthread -fstack-protector-all -lstdc++fs")
+
+if (NOT CF_NO_GRPC)
+    
+    set(protobuf_MODULE_COMPATIBLE TRUE)
+    find_package(Protobuf REQUIRED)
+    find_package(gRPC REQUIRED)
+    set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
+    set(_REFLECTION gRPC::grpc++_reflection)
+    find_program(_PROTOBUF_PROTOC protoc)
+    find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
+    file(STRINGS /etc/os-release DISTRO REGEX "^NAME=")
+    string(REGEX REPLACE "NAME=\"(.*)\"" "\\1" DISTRO "${DISTRO}")
+endif()
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -85,6 +100,16 @@ set(sources ${daemon} ${config} ${renewal} ${metadata} ${auth})
 
 add_executable(credentials-fetcherd ${sources})
 
+cmake_policy(SET CMP0083 NEW)
+include(CheckPIESupported)
+check_pie_supported()
+if (CMAKE_C_LINK_PIE_SUPPORTED)
+   set_property(TARGET credentials-fetcherd
+                PROPERTY POSITION_INDEPENDENT_CODE TRUE)
+   set_property(TARGET cf_gmsa_service_private
+                PROPERTY POSITION_INDEPENDENT_CODE TRUE)
+endif ()
+
 find_path(GLIB_INCLUDE_DIR glib.h "/usr/include" "/usr/include/glib-2.0")
 find_path(GLIB_CONFIG_DIR glibconfig.h "/usr/include" "/usr/lib64/glib-2.0/include")
 
@@ -93,9 +118,7 @@ target_include_directories(credentials-fetcherd
         common
         ${GLIB_INCLUDE_DIR}
         ${GLIB_CONFIG_DIR}
-        ${CMAKE_CURRENT_BINARY_DIR}
-	auth
-	auth/kinit_client)
+        ${CMAKE_CURRENT_BINARY_DIR})
 
 find_program(DOTNET dotnet ~/.dotnet /usr/bin)
 if (NOT DOTNET)
@@ -109,13 +132,27 @@ add_custom_command(
     VERBATIM)
 
 target_include_directories(credentials-fetcherd PUBLIC common)
-target_compile_options(credentials-fetcherd PUBLIC -DCREDENTIALS_FETCHERD_NO_GRPC)
+
+if (NOT CF_NO_GRPC)
+ target_compile_options(credentials-fetcherd PUBLIC )
+ else()
+ target_compile_options(credentials-fetcherd PUBLIC -DCREDENTIALS_FETCHERD_NO_GRPC)
+
+endif()
+
 
 target_link_libraries(credentials-fetcherd
         PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private
         boost_filesystem boost_system crypto jsoncpp
         kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
         com_err krb5support resolv)
+
+if (NOT CF_NO_GRPC)
+
+    target_link_libraries(credentials-fetcherd
+            PUBLIC
+            ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
+endif()
 
 install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
         DESTINATION "/usr/sbin/"
