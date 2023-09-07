@@ -14,10 +14,7 @@ file(
 
 add_executable(gmsa_test_client "gmsa_test_client.cpp")
 target_link_libraries(gmsa_test_client
-            cf_gmsa_service_private
-            ${_PROTOBUF_LIBPROTOBUF}
-            ${_REFLECTION}
-            ${_GRPC_GRPCPP})
+            cf_gmsa_service_private)
 
 cmake_policy(SET CMP0083 NEW)
 include(CheckPIESupported)
