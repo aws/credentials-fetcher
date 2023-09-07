@@ -6,6 +6,8 @@
 
 creds_fetcher::Daemon cf_daemon;
 
+extern "C" void __gcov_dump();
+
 struct thread_info
 {                        /* Used as argument to thread_start() */
     pthread_t thread_id; /* ID returned by pthread_create() */
@@ -18,6 +20,12 @@ static const char* grpc_thread_name = "grpc_thread";
 static void systemd_shutdown_signal_catcher( int signo )
 {
     cf_daemon.got_systemd_shutdown_signal = 1;
+}
+
+static void systemd_code_coverage_catcher( int signo )
+{
+    printf( "Dump code coverage data\n" );
+    __gcov_dump(); /* dump coverage data on receiving SIGUSR1 */
 }
 
 #define handle_error_en( en, msg )                                                                 \
@@ -299,7 +307,7 @@ int main( int argc, const char* argv[] )
     {
         exit( read_meta_data_json_test() || read_meta_data_invalid_json_test() ||
               renewal_failure_krb_dir_not_found_test() || write_meta_data_json_test() ||
-              parse_kube_config_json_test() || handle_tickets_kube_test() );
+              parse_kube_config_json_test() || handle_tickets_kube_test() || test_utf16_decode() );
     }
 
     struct sigaction sa;
@@ -307,6 +315,14 @@ int main( int argc, const char* argv[] )
     memset( &sa, 0, sizeof( struct sigaction ) );
     sa.sa_handler = &systemd_shutdown_signal_catcher;
     if ( sigaction( SIGTERM, &sa, NULL ) == -1 )
+    {
+        perror( "sigaction" );
+        return EXIT_FAILURE;
+    }
+
+    memset( &sa, 0, sizeof( struct sigaction ) );
+    sa.sa_handler = &systemd_code_coverage_catcher;
+    if ( sigaction( SIGUSR1, &sa, NULL ) == -1 )
     {
         perror( "sigaction" );
         return EXIT_FAILURE;

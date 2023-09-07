@@ -5,7 +5,13 @@ include(GNUInstallDirs)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall -Werror -pthread -fstack-protector-all")
+if(DEFINED COVERAGE)
+   set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall -Werror -pthread --coverage -fprofile-arcs -ftest-coverage -O0 -fstack-protector-all")
+   message(STATUS "Add build flags for code-coverage")
+   unset(COVERAGE)
+else()
+   set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall -Werror -pthread -fstack-protector-all")
+endif()
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf REQUIRED)
