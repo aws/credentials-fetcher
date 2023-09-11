@@ -6,7 +6,7 @@ include(GNUInstallDirs)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 if(DEFINED COVERAGE)
-   set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall -Werror -pthread --coverage -fprofile-arcs -ftest-coverage -O0 -fstack-protector-all")
+   set(CMAKE_CXX_FLAGS "-std=c++17 -g -Wall -Werror -pthread --coverage -fprofile-arcs -ftest-coverage -O0 -fstack-protector-all -DCOVERAGE")
    message(STATUS "Add build flags for code-coverage")
    unset(COVERAGE)
 else()

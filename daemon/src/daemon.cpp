@@ -22,11 +22,13 @@ static void systemd_shutdown_signal_catcher( int signo )
     cf_daemon.got_systemd_shutdown_signal = 1;
 }
 
+#ifdef COVERAGE
 static void systemd_code_coverage_catcher( int signo )
 {
     printf( "Dump code coverage data\n" );
     __gcov_dump(); /* dump coverage data on receiving SIGUSR1 */
 }
+#endif
 
 #define handle_error_en( en, msg )                                                                 \
     do                                                                                             \
@@ -320,6 +322,7 @@ int main( int argc, const char* argv[] )
         return EXIT_FAILURE;
     }
 
+#ifdef COVERAGE
     memset( &sa, 0, sizeof( struct sigaction ) );
     sa.sa_handler = &systemd_code_coverage_catcher;
     if ( sigaction( SIGUSR1, &sa, NULL ) == -1 )
@@ -327,6 +330,7 @@ int main( int argc, const char* argv[] )
         perror( "sigaction" );
         return EXIT_FAILURE;
     }
+#endif
 
     /* We need to run three parallel processes */
     // 1. Systemd - daemon
