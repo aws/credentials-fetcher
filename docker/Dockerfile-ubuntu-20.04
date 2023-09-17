@@ -2,14 +2,18 @@ FROM ubuntu:20.04 as base
 
 RUN apt-get update \
     && DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" \
-        apt install -y git clang wget cmake curl \
+        apt install -y git clang wget curl autoconf \
         libglib2.0-dev libboost-dev libkrb5-dev libsystemd-dev libssl-dev \
-        libboost-program-options-dev libboost-filesystem-dev
+        libboost-program-options-dev libboost-filesystem-dev byacc make
 
-RUN cd /root && git clone --recurse-submodules https://github.com/grpc/grpc \
-   && cd grpc/ \
-    && mkdir build \
-    && cd build \
+RUN cd /root && git clone https://github.com/Kitware/CMake.git -b release \
+    && cd CMake && ./configure && make -j &&  pwd && make install
+
+RUN cd /root && git clone https://github.com/krb5/krb5.git -b krb5-1.21.2-final \
+   && cd krb5/src && autoconf && autoreconf && ./configure && make -j && make install
+
+RUN cd /root && git clone --recurse-submodules -b v1.58.0 https://github.com/grpc/grpc \
+    && cd grpc/ && mkdir build && cd build \
     && cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_CXX_STANDARD=17 ../ \
     && make -j4 \
     && make install
@@ -25,13 +29,11 @@ RUN cd /root && git clone https://github.com/fordth/credentials-fetcher \
     && mkdir -p credentials-fetcher/build \
     && mkdir -p /usr/lib64/glib-2.0/ \
     && ln -s '/usr/lib/x86_64-linux-gnu/glib-2.0/include/' '/usr/lib64/glib-2.0/include' \
-    && cd credentials-fetcher \ 
-    && sed -i 's/sd_journal_print/\/\/sd_journal_print/g' common/daemon.h \
-    && sed -i 's/ret = k5_cc_store_primary_cred/\/\*ret = k5_cc_store_primary_cred/g' auth/kinit_client/kinit.c  \
-    && sed -i 's/ret = krb5_cc_move/\*\/ret = krb5_cc_move/g' auth/kinit_client/kinit.c \
-    && cd build \
-    && cmake -DCMAKE_CXX_STANDARD=17 ../ && make -j && make install
+    && cd credentials-fetcher && cd build \
+    && cmake ../ && make -j && make install
 
 WORKDIR /root/credentials-fetcher/build
+
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
 CMD ["/bin/bash"]
