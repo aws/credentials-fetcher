@@ -7,10 +7,10 @@ RUN apt-get update \
         libboost-program-options-dev libboost-filesystem-dev byacc make
 
 RUN cd /root && git clone https://github.com/Kitware/CMake.git -b release \
-    && cd CMake && ./configure && make -j &&  pwd && make install
+    && cd CMake && ./configure && make -j4 &&  pwd && make install
 
 RUN cd /root && git clone https://github.com/krb5/krb5.git -b krb5-1.21.2-final \
-   && cd krb5/src && autoconf && autoreconf && ./configure && make -j && make install
+   && cd krb5/src && autoconf && autoreconf && ./configure && make -j4 && make install
 
 RUN cd /root && git clone --recurse-submodules -b v1.58.0 https://github.com/grpc/grpc \
     && cd grpc/ && mkdir build && cd build \
@@ -30,7 +30,7 @@ RUN cd /root && git clone https://github.com/fordth/credentials-fetcher \
     && mkdir -p /usr/lib64/glib-2.0/ \
     && ln -s '/usr/lib/x86_64-linux-gnu/glib-2.0/include/' '/usr/lib64/glib-2.0/include' \
     && cd credentials-fetcher && cd build \
-    && cmake ../ && make -j && make install
+    && cmake ../ && make -j4 && make install
 
 WORKDIR /root/credentials-fetcher/build
 
