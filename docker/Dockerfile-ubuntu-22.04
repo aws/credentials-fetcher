@@ -17,7 +17,7 @@ RUN cd /root && git clone --recurse-submodules https://github.com/grpc/grpc \
 RUN apt-get update \
     && apt-get install -y dotnet-sdk-6.0
 
-RUN cd /root && git clone https://github.com/fordth/credentials-fetcher \
+RUN cd /root && git clone https://github.com/aws/credentials-fetcher \
     && mkdir -p credentials-fetcher/build \
     && mkdir -p /usr/lib64/glib-2.0/ \
     && ln -s '/usr/lib/x86_64-linux-gnu/glib-2.0/include/' '/usr/lib64/glib-2.0/include' \
