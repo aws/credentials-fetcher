@@ -1,7 +1,9 @@
 FROM ubuntu:20.04 as base
+ARG TIME_ZONE
+RUN if [ -z "${TIME_ZONE}" ] ; then exit 1; fi
 
 RUN apt-get update \
-    && DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" \
+    && DEBIAN_FRONTEND="noninteractive" TZ="${TIME_ZONE}" \
         apt install -y git clang wget curl autoconf \
         libglib2.0-dev libboost-dev libkrb5-dev libsystemd-dev libssl-dev \
         libboost-program-options-dev libboost-filesystem-dev byacc make
