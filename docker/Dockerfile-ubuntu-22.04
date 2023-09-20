@@ -1,31 +1,41 @@
 FROM ubuntu:22.04 as base
 
-RUN DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" \
-    apt-get update \
-    && apt install -y git clang wget cmake curl \
+RUN apt-get update \
+    && DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" \
+        apt install -y git clang wget curl autoconf \
         libglib2.0-dev libboost-dev libkrb5-dev libsystemd-dev libssl-dev \
-        libboost-program-options-dev libboost-filesystem-dev
+        libboost-program-options-dev libboost-filesystem-dev byacc make
 
-RUN cd /root && git clone --recurse-submodules https://github.com/grpc/grpc \
-   && cd grpc/ \
-    && mkdir build \
-    && cd build \
+RUN cd /root && git clone https://github.com/Kitware/CMake.git -b release \
+    && cd CMake && ./configure && make -j4 &&  pwd && make install
+
+RUN cd /root && git clone https://github.com/krb5/krb5.git -b krb5-1.21.2-final \
+   && cd krb5/src && autoconf && autoreconf && ./configure && make -j4 && make install
+
+RUN cd /root && git clone --recurse-submodules -b v1.58.0 https://github.com/grpc/grpc \
+    && cd grpc/ && mkdir build && cd build \
     && cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_CXX_STANDARD=17 ../ \
     && make -j4 \
     && make install
 
-RUN apt-get update \
+RUN apt-get install wget -y && wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
+    && dpkg -i packages-microsoft-prod.deb \
+    && rm packages-microsoft-prod.deb \
+    && apt remove 'dotnet*' 'aspnetcore*' 'netstandard*' \
+    && rm /etc/apt/sources.list.d/microsoft-prod.list \
+    && apt update \
     && apt-get install -y dotnet-sdk-6.0
 
 RUN cd /root && git clone https://github.com/aws/credentials-fetcher \
     && mkdir -p credentials-fetcher/build \
     && mkdir -p /usr/lib64/glib-2.0/ \
     && ln -s '/usr/lib/x86_64-linux-gnu/glib-2.0/include/' '/usr/lib64/glib-2.0/include' \
-    && cd credentials-fetcher \ 
-    && sed -i 's/sd_journal_print/\/\/sd_journal_print/g' common/daemon.h \
-    && cd build \
-    && cmake -DCMAKE_CXX_STANDARD=17 ../ && make -j && make install
+    && cd credentials-fetcher && cd build \
+    && cmake ../ && make -j4 && make install
 
 WORKDIR /root/credentials-fetcher/build
 
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+
 CMD ["/bin/bash"]
+
