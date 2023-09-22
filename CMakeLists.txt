@@ -14,8 +14,15 @@ set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
 set(_REFLECTION gRPC::grpc++_reflection)
 find_program(_PROTOBUF_PROTOC protoc)
 find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
-file(STRINGS /etc/os-release DISTRO REGEX "^NAME=")
-string(REGEX REPLACE "NAME=\"(.*)\"" "\\1" DISTRO "${DISTRO}")
+
+cmake_host_system_information(RESULT PRETTY_NAME QUERY DISTRIB_PRETTY_NAME)
+message(STATUS "${PRETTY_NAME}")
+
+cmake_host_system_information(RESULT DISTRO QUERY DISTRIB_INFO)
+
+foreach(VAR IN LISTS DISTRO)
+  message(STATUS "${VAR}=`${${VAR}}`")
+endforeach()
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -53,24 +60,24 @@ endif()
 configure_file(${CMAKE_SOURCE_DIR}/config/config.h.in
     ${CMAKE_BINARY_DIR}/config.h @ONLY)
 
-if(DISTRO MATCHES "^(Amazon Linux)$")
-file(WRITE scripts/systemd/credentials-fetcher.service
-  "[Unit]\n"
-  "Description=credentials-fetcher systemd service unit file.\n\n"
-  "[Service]\n"
-  "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
-  "ExecStartPre=chgrp ec2-user /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
-  "ExecStartPre=chmod 755 /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
-  "ExecStart=/usr/sbin/credentials-fetcherd\n"
-  "ExecStartPost=chgrp ec2-user /var/credentials-fetcher/socket/credentials_fetcher.sock\n"
-  "ExecStartPost=chmod 660 /var/credentials-fetcher/socket/credentials_fetcher.sock\n"
-  "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
-  "Type=notify\n"
-  "NotifyAccess=main\n"
-  "WatchdogSec=5s\n"
-  "Restart=on-failure\n\n"
-  "[Install]\n"
-  "WantedBy=multi-user.target\n"
+if((${DISTRO_ID} MATCHES "Amazon Linux") OR (${DISTRO_ID} MATCHES "ubuntu"))
+  file(WRITE scripts/systemd/credentials-fetcher.service
+    "[Unit]\n"
+    "Description=credentials-fetcher systemd service unit file.\n\n"
+    "[Service]\n"
+    "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+    "ExecStartPre=chgrp ec2-user /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+    "ExecStartPre=chmod 755 /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+    "ExecStart=/usr/sbin/credentials-fetcherd\n"
+    "ExecStartPost=chgrp ec2-user /var/credentials-fetcher/socket/credentials_fetcher.sock\n"
+    "ExecStartPost=chmod 660 /var/credentials-fetcher/socket/credentials_fetcher.sock\n"
+    "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
+    "Type=notify\n"
+    "NotifyAccess=main\n"
+    "WatchdogSec=5s\n"
+    "Restart=on-failure\n\n"
+    "[Install]\n"
+    "WantedBy=multi-user.target\n"
 )
 else()
     file(WRITE scripts/systemd/credentials-fetcher.service
@@ -127,9 +134,18 @@ add_custom_command(
 
 target_include_directories(credentials-fetcherd PUBLIC common)
 
+if(${DISTRO_ID} MATCHES "ubuntu")
+	message(STATUS "Linux distro detected as ubuntu")
 target_link_libraries(credentials-fetcherd
         PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private
-        boost_filesystem boost_system crypto protobuf -L/usr/local/lib absl_log_internal_check_op absl_leak_check absl_die_if_null absl_log_internal_conditions absl_log_internal_message absl_examine_stack absl_log_internal_format absl_log_internal_proto absl_log_internal_nullguard absl_log_internal_log_sink_set absl_log_sink absl_log_entry absl_flags absl_flags_internal absl_flags_marshalling absl_flags_reflection absl_flags_private_handle_accessor absl_flags_commandlineflag absl_flags_commandlineflag_internal absl_flags_config absl_flags_program_name absl_log_initialize absl_log_globals absl_log_internal_globals absl_raw_hash_set absl_hash absl_city absl_low_level_hash absl_hashtablez_sampler absl_statusor absl_status absl_cord absl_cordz_info absl_cord_internal absl_cordz_functions absl_exponential_biased absl_cordz_handle absl_crc_cord_state absl_crc32c absl_crc_internal absl_crc_cpu_detect absl_bad_optional_access absl_str_format_internal absl_strerror absl_synchronization absl_graphcycles_internal absl_kernel_timeout_internal absl_stacktrace absl_symbolize absl_debugging_internal absl_demangle_internal absl_malloc_internal absl_time absl_civil_time absl_time_zone absl_bad_variant_access utf8_validity utf8_range absl_strings absl_string_view absl_strings_internal absl_base rt absl_spinlock_wait absl_int128 absl_throw_delegate absl_raw_logging_internal absl_log_severity kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto com_err krb5support resolv utf8_validity ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF} absl_bad_any_cast_impl absl_bad_optional_access absl_bad_variant_access absl_base absl_city absl_civil_time absl_cord absl_cord_internal absl_cordz_functions absl_cordz_handle absl_cordz_info absl_cordz_sample_token absl_crc32c absl_crc_cord_state absl_crc_cpu_detect absl_crc_internal absl_debugging_internal absl_demangle_internal absl_die_if_null absl_examine_stack absl_exponential_biased absl_failure_signal_handler absl_flags absl_flags_commandlineflag absl_flags_commandlineflag_internal absl_flags_config absl_flags_internal absl_flags_marshalling absl_flags_parse absl_flags_private_handle_accessor absl_flags_program_name absl_flags_reflection absl_flags_usage absl_flags_usage_internal absl_graphcycles_internal absl_hash absl_hashtablez_sampler absl_int128 absl_kernel_timeout_internal absl_leak_check absl_log_entry absl_log_flags absl_log_globals absl_log_initialize absl_log_internal_check_op absl_log_internal_conditions absl_log_internal_format absl_log_internal_globals absl_log_internal_log_sink_set absl_log_internal_message absl_log_internal_nullguard absl_log_internal_proto absl_log_severity absl_log_sink absl_low_level_hash absl_malloc_internal absl_periodic_sampler absl_random_distributions absl_random_internal_distribution_test_util absl_random_internal_platform absl_random_internal_pool_urbg absl_random_internal_randen absl_random_internal_randen_hwaes absl_random_internal_randen_hwaes_impl absl_random_internal_randen_slow absl_random_internal_seed_material absl_random_seed_gen_exception absl_random_seed_sequences absl_raw_hash_set absl_raw_logging_internal absl_scoped_set_env absl_spinlock_wait absl_stacktrace absl_status absl_statusor absl_str_format_internal absl_strerror absl_string_view absl_strings absl_strings_internal absl_symbolize absl_synchronization absl_throw_delegate absl_time absl_time_zone)
+        boost_filesystem boost_system crypto protobuf kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto com_err krb5support resolv utf8_validity)
+else()
+target_link_libraries(credentials-fetcherd
+        PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private
+        boost_filesystem boost_system crypto
+        kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
+        com_err krb5support resolv)
+endif()
 
 install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
         DESTINATION "/usr/sbin/"
