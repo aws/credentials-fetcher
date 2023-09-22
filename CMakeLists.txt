@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(credentials-fetcher)
+project(credentials-fetcher VERSION 1.2.0)
 
 include(GNUInstallDirs)
 
@@ -80,20 +80,21 @@ if((${DISTRO_ID} MATCHES "Amazon Linux") OR (${DISTRO_ID} MATCHES "ubuntu"))
     "WantedBy=multi-user.target\n"
 )
 else()
-  file(WRITE scripts/systemd/credentials-fetcher.service
-    "[Unit]\n"
-    "Description=credentials-fetcher systemd service unit file.\n\n"
-    "[Service]\n"
-    "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
-    "ExecStart=/usr/sbin/credentials-fetcherd\n"
-    "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
-    "Type=notify\n"
-    "NotifyAccess=main\n"
-    "WatchdogSec=5s\n"
-    "Restart=on-failure\n\n"
-    "[Install]\n"
-    "WantedBy=multi-user.target\n"
-    )
+    file(WRITE scripts/systemd/credentials-fetcher.service
+            "[Unit]\n"
+            "Description=credentials-fetcher systemd service unit file.\n\n"
+            "[Service]\n"
+            "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+            "ExecStart=/usr/sbin/credentials-fetcherd\n"
+            "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
+            "Environment=\"CF_CRED_FILE=/var/credentials-fetcher/credspec.json\"\n"
+            "Type=notify\n"
+            "NotifyAccess=main\n"
+            "WatchdogSec=5s\n"
+            "Restart=on-failure\n\n"
+            "[Install]\n"
+            "WantedBy=multi-user.target\n"
+            )
 endif()
 
 set(sources ${daemon} ${config} ${renewal})

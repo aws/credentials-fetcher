@@ -1,4 +1,5 @@
 #include "daemon.h"
+#include <boost/filesystem.hpp>
 #include <iostream>
 #include <libgen.h>
 #include <stdlib.h>
@@ -135,6 +136,8 @@ std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthrea
 
 int main( int argc, const char* argv[] )
 {
+    std::pair<int, void*> pthread_status;
+    std::string cred_file;
     void* grpc_pthread;
     void* krb_refresh_pthread;
 
@@ -148,6 +151,19 @@ int main( int argc, const char* argv[] )
     cf_daemon.logging_dir = CF_LOGGING_DIR;
     cf_daemon.unix_socket_dir = CF_UNIX_DOMAIN_SOCKET_DIR;
 
+    if (getenv("CF_CRED_FILE") != NULL)
+    {
+        cred_file = getenv("CF_CRED_FILE");
+        if (!boost::filesystem::exists( cred_file))
+        {
+            std::cout << "Ignoring CF_CREF_FILE, file " << cred_file << " not found" << std::endl;
+        }
+        else
+        {
+            cf_daemon.cred_file = cred_file;
+        }
+    }
+
     /**
      * Domain name and gmsa account are usually set in APIs.
      * The options below can be used as a test.
@@ -156,6 +172,7 @@ int main( int argc, const char* argv[] )
     cf_daemon.gmsa_account_name = CF_TEST_GMSA_ACCOUNT;
 
     std::cout << "krb_files_dir = " << cf_daemon.krb_files_dir << std::endl;
+    std::cout << "cred_file = " << cf_daemon.cred_file << std::endl;
     std::cout << "logging_dir = " << cf_daemon.logging_dir << std::endl;
     std::cout << "unix_socket_dir = " << cf_daemon.unix_socket_dir << std::endl;
 
@@ -181,8 +198,18 @@ int main( int argc, const char* argv[] )
     // 2. grpc server
     // 3. timer to run every 45 min
 
+    if ( !cf_daemon.cred_file.empty() ) {
+        cf_daemon.cf_logger.logger( LOG_INFO, "Credential file exists %s", cf_daemon.cred_file.c_str() );
+        
+        int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, cf_daemon.cred_file, cf_daemon.cf_logger);
+        if (specFileReturn != 0) {
+            std::cout << "ProcessCredSpecFile() non 0 " << std::endl;
+            exit( EXIT_FAILURE );
+        }
+    }
+    
     /* Create one pthread for gRPC processing */
-    std::pair<int, void*> pthread_status =
+    pthread_status =
         create_pthread( grpc_thread_start, grpc_thread_name, -1 );
     if ( pthread_status.first < 0 )
     {
@@ -192,7 +219,7 @@ int main( int argc, const char* argv[] )
     }
     grpc_pthread = pthread_status.second;
     cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
-
+        
     /* Create pthread for refreshing krb tickets */
     pthread_status =
         create_pthread( refresh_krb_tickets_thread_start, "krb_ticket_refresh_thread", -1 );

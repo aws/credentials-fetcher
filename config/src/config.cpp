@@ -17,8 +17,9 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         namespace po = boost::program_options;
 
         /* Declare the supported options */
-        po::options_description desc( "Allowed options" );
+        po::options_description desc( "Runtime Environment Variables:\n\tCF_CRED_FILE\tOptionally set to a path of a json credential file.\n\nAllowed options" );
         desc.add_options()( "help", "produce help message" ) /* TBD: Add help message description */
+            ( "version", "Version of credentials-fetcher")
             ( "self_test", "Run tests such as utf16 decode" )( "verbosity", po::value<int>(),
                                                                "set verbosity level" )(
                 "aws_sm_secret_name", po::value<std::string>(), // TBD:: Extend to other stores
@@ -32,6 +33,12 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         po::variables_map vm;
         po::store( po::parse_command_line( argc, argv, desc ), vm );
         po::notify( vm );
+
+        if ( vm.count( "version" ) )
+        {
+            std::cout << CMAKE_PROJECT_VERSION << "\n";
+            return EXIT_FAILURE;
+        }
 
         if ( vm.count( "help" ) )
         {

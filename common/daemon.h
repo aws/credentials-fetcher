@@ -41,6 +41,7 @@ namespace creds_fetcher
         std::string service_account_name;
         std::string domain_name;
         std::string domainless_user;
+        std::string origin;
     };
 
     /*
@@ -63,7 +64,7 @@ namespace creds_fetcher
         {
             if ( level >= log_level )
             {
-                sd_journal_print( level, fmt, logs... );
+                //sd_journal_print( level, fmt, logs... );
             }
         }
     };
@@ -76,6 +77,7 @@ namespace creds_fetcher
         uint64_t watchdog_interval_usecs = 0;
         char* config_file = NULL;
         std::string krb_files_dir;
+        std::string cred_file;
         std::string unix_socket_dir;
         std::string logging_dir;
         std::string domain_name;
@@ -132,7 +134,9 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
 void krb_ticket_creation( const char* ldap_uri_arg, const char* gmsa_account_name_arg,
                           const char* krb_ccname = "" );
 
-bool is_ticket_ready_for_renewal( std::string krb_cc_name );
+bool is_ticket_ready_for_renewal( creds_fetcher::krb_ticket_info* krb_ticket_info );
+
+std::string get_ticket_expiration( std::string klist_ticket_info );
 
 std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::string lease_id );
 
@@ -165,6 +169,8 @@ int RunGrpcServer( std::string unix_socket_dir, std::string krb_file_path,
                    std::string aws_sm_secret_name );
 
 int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info );
+
+int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger);
 
 std::string generate_lease_id();
 
