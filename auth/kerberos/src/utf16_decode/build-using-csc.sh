@@ -9,14 +9,29 @@ sdkver=$(LC_ALL=C dotnet --version)
 fwkver=$(LC_ALL=C dotnet --list-runtimes | \
     LC_ALL=C sed --posix -n '/^Microsoft.NETCore.App \([^ ]*\) .*$/{s//\1/p;q;}')
 
-# dotnet-sdk-5.0 installed via .deb package
-dotnethome=/usr/lib64/dotnet
+dotnethome=/usr/lib/dotnet
+if [ -d /usr/lib64/dotnet ]; then
+   dotnethome=/usr/lib64/dotnet
+fi
+echo "dotnethome=$dotnethome"
+
 dotnetlib=$dotnethome/shared/Microsoft.NETCore.App/$fwkver
+if [ -d /usr/share/dotnet/packs/Microsoft.NETCore.App.Ref/$fwkver/ref/net6.0/ ]; then
+   dotnetlib=/usr/share/dotnet/packs/Microsoft.NETCore.App.Ref/$fwkver/ref/net6.0/
+fi
+echo "dotnetlib=$dotnetlib"
+
 dotnet_cscdll=$dotnethome/sdk/$sdkver/Roslyn/bincore/csc.dll
+if [ -f /usr/share/dotnet/sdk/$sdkver/Roslyn/bincore/csc.dll ]; then
+   dotnet_cscdll=/usr/share/dotnet/sdk/$sdkver/Roslyn/bincore/csc.dll
+fi
+echo "dotnet_cscdll=$dotnet_cscdll"
+
 dotnet_csclib='-r:netstandard.dll -r:Microsoft.CSharp.dll -r:System.dll'
 for x in "$dotnetlib"/System.*.dll; do
 	dotnet_csclib="$dotnet_csclib -r:${x##*/}"
 done
+echo "dotnet_csclib=$dotnet_csclib"
 # add if needed
 #dotnet_csclib="$dotnet_csclib -r:Microsoft.Win32.Primitives.dll"
 

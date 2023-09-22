@@ -5,7 +5,7 @@ include(GNUInstallDirs)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall -Werror -pthread")
+set(CMAKE_CXX_FLAGS " -std=c++17 -g -Wall -Werror -pthread")
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf REQUIRED)
@@ -14,8 +14,15 @@ set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
 set(_REFLECTION gRPC::grpc++_reflection)
 find_program(_PROTOBUF_PROTOC protoc)
 find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
-file(STRINGS /etc/os-release DISTRO REGEX "^NAME=")
-string(REGEX REPLACE "NAME=\"(.*)\"" "\\1" DISTRO "${DISTRO}")
+
+cmake_host_system_information(RESULT PRETTY_NAME QUERY DISTRIB_PRETTY_NAME)
+message(STATUS "${PRETTY_NAME}")
+
+cmake_host_system_information(RESULT DISTRO QUERY DISTRIB_INFO)
+
+foreach(VAR IN LISTS DISTRO)
+  message(STATUS "${VAR}=`${${VAR}}`")
+endforeach()
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -53,40 +60,40 @@ endif()
 configure_file(${CMAKE_SOURCE_DIR}/config/config.h.in
     ${CMAKE_BINARY_DIR}/config.h @ONLY)
 
-if(DISTRO MATCHES "^(Amazon Linux)$")
-file(WRITE scripts/systemd/credentials-fetcher.service
-  "[Unit]\n"
-  "Description=credentials-fetcher systemd service unit file.\n\n"
-  "[Service]\n"
-  "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
-  "ExecStartPre=chgrp ec2-user /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
-  "ExecStartPre=chmod 755 /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
-  "ExecStart=/usr/sbin/credentials-fetcherd\n"
-  "ExecStartPost=chgrp ec2-user /var/credentials-fetcher/socket/credentials_fetcher.sock\n"
-  "ExecStartPost=chmod 660 /var/credentials-fetcher/socket/credentials_fetcher.sock\n"
-  "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
-  "Type=notify\n"
-  "NotifyAccess=main\n"
-  "WatchdogSec=5s\n"
-  "Restart=on-failure\n\n"
-  "[Install]\n"
-  "WantedBy=multi-user.target\n"
+if((${DISTRO_ID} MATCHES "Amazon Linux") OR (${DISTRO_ID} MATCHES "ubuntu"))
+  file(WRITE scripts/systemd/credentials-fetcher.service
+    "[Unit]\n"
+    "Description=credentials-fetcher systemd service unit file.\n\n"
+    "[Service]\n"
+    "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+    "ExecStartPre=chgrp ec2-user /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+    "ExecStartPre=chmod 755 /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+    "ExecStart=/usr/sbin/credentials-fetcherd\n"
+    "ExecStartPost=chgrp ec2-user /var/credentials-fetcher/socket/credentials_fetcher.sock\n"
+    "ExecStartPost=chmod 660 /var/credentials-fetcher/socket/credentials_fetcher.sock\n"
+    "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
+    "Type=notify\n"
+    "NotifyAccess=main\n"
+    "WatchdogSec=5s\n"
+    "Restart=on-failure\n\n"
+    "[Install]\n"
+    "WantedBy=multi-user.target\n"
 )
 else()
-    file(WRITE scripts/systemd/credentials-fetcher.service
-            "[Unit]\n"
-            "Description=credentials-fetcher systemd service unit file.\n\n"
-            "[Service]\n"
-            "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
-            "ExecStart=/usr/sbin/credentials-fetcherd\n"
-            "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
-            "Type=notify\n"
-            "NotifyAccess=main\n"
-            "WatchdogSec=5s\n"
-            "Restart=on-failure\n\n"
-            "[Install]\n"
-            "WantedBy=multi-user.target\n"
-            )
+  file(WRITE scripts/systemd/credentials-fetcher.service
+    "[Unit]\n"
+    "Description=credentials-fetcher systemd service unit file.\n\n"
+    "[Service]\n"
+    "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+    "ExecStart=/usr/sbin/credentials-fetcherd\n"
+    "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
+    "Type=notify\n"
+    "NotifyAccess=main\n"
+    "WatchdogSec=5s\n"
+    "Restart=on-failure\n\n"
+    "[Install]\n"
+    "WantedBy=multi-user.target\n"
+    )
 endif()
 
 set(sources ${daemon} ${config} ${renewal})
@@ -104,7 +111,7 @@ if (CMAKE_C_LINK_PIE_SUPPORTED)
 endif ()
 
 find_path(GLIB_INCLUDE_DIR glib.h "/usr/include" "/usr/include/glib-2.0")
-find_path(GLIB_CONFIG_DIR glibconfig.h "/usr/include" "/usr/lib64/glib-2.0/include")
+find_path(GLIB_CONFIG_DIR glibconfig.h "/usr/include" "/usr/lib64/glib-2.0/include" "/usr/lib/x86_64-linux-gnu/glib-2.0/include/")
 
 target_include_directories(credentials-fetcherd
         PUBLIC
@@ -126,15 +133,18 @@ add_custom_command(
 
 target_include_directories(credentials-fetcherd PUBLIC common)
 
+if(${DISTRO_ID} MATCHES "ubuntu")
+	message(STATUS "Linux distro detected as ubuntu")
+target_link_libraries(credentials-fetcherd
+        PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private
+        boost_filesystem boost_system crypto protobuf kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto com_err krb5support resolv utf8_validity)
+else()
 target_link_libraries(credentials-fetcherd
         PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private
         boost_filesystem boost_system crypto
         kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
         com_err krb5support resolv)
-
-target_link_libraries(credentials-fetcherd
-            PUBLIC
-            ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
+endif()
 
 install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
         DESTINATION "/usr/sbin/"
