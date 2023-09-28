@@ -1,5 +1,5 @@
 #include "daemon.h"
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <dirent.h>
 #include <openssl/crypto.h>
 #include <sys/stat.h>
@@ -800,11 +800,11 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
     std::list<std::string> renewed_krb_ticket_paths;
     // identify the metadata files in the krb directory
     std::vector<std::string> metadatafiles;
-    for ( boost::filesystem::recursive_directory_iterator end, dir( krb_files_dir );
+    for ( std::filesystem::recursive_directory_iterator end, dir( krb_files_dir );
           dir != end; ++dir )
     {
         auto path = dir->path();
-        if ( boost::filesystem::is_regular_file( path ) )
+        if ( std::filesystem::is_regular_file( path ) )
         {
             // find the file with metadata extension
             std::string filename = path.filename().string();
@@ -940,7 +940,7 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
             closedir( curr_dir );
 
             // finally delete lease file and directory
-            boost::filesystem::remove_all( krb_tickets_path );
+            std::filesystem::remove_all( krb_tickets_path );
         }
     }
     catch ( ... )

@@ -1,7 +1,7 @@
 #include "config.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
-#include <boost/property_tree/json_parser.hpp>
+#include <json/json.h>
 #include <csignal>
 #include <cstddef>
 #include <cstdint>
