@@ -1,5 +1,6 @@
 #include "daemon.h"
 #include <filesystem>
+#include <fstream>
 
 int read_meta_data_json_test()
 {
