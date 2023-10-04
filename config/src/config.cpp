@@ -17,7 +17,11 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         namespace po = boost::program_options;
 
         /* Declare the supported options */
-        po::options_description desc( "Runtime Environment Variables:\n\tCF_CRED_FILE\tOptionally set to a path of a json credential file.\n\nAllowed options" );
+        po::options_description desc( "Runtime Environment Variables:\n  CF_CRED_SPEC_FILE=<credential spec file>:<optional lease_id>\n"
+                                        "\t<credential spec file>\tSet to a path of a json credential file.\n"
+                                        "\t<optional lease_id>\tUse an optional colon followed by a lease identifier (Default: " 
+                                        DEFAULT_CRED_FILE_LEASE_ID
+                                        ")\n\nAllowed options" );
         desc.add_options()( "help", "produce help message" ) /* TBD: Add help message description */
             ( "version", "Version of credentials-fetcher")
             ( "self_test", "Run tests such as utf16 decode" )( "verbosity", po::value<int>(),

@@ -1160,23 +1160,22 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
  * @param krb_files_dir - Kerberos TGT directory
  * @param credspec_filepath - Path to credential spec file produced by DC
  * @param cf_logger - log to systemd daemon
+ * @param cred_file_lease_id - The lease id to use for this credential spec file
  * @return - return 0 on success
  */
-int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger) {
-    std::string lease_id = "credspec";
-    std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
+int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id) {
     std::unordered_set<std::string> krb_ticket_dirs;
     std::string err_msg;
     std::string credspec_contents;
     int status;
     
-    cf_logger.logger( LOG_INFO, "Generated lease id %s", lease_id.c_str() );
+    cf_logger.logger( LOG_INFO, "Generating lease id %s", cred_file_lease_id );
 
     if ( !boost::filesystem::exists( credspec_filepath ) ){
         std::cerr << "The credential spec file " << credspec_filepath << " was not found!" << std::endl;
         cf_logger.logger( LOG_ERR, "The credential spec file %s was not found!",
                                     credspec_filepath.c_str() );
-        return -1;
+        return EXIT_FAILURE;
     }
 
     std::ifstream inputFile(credspec_filepath);
@@ -1189,22 +1188,23 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     } 
     else 
     {
+        cf_logger.logger( LOG_ERR, "Unable to open credential spec file: %s", credspec_filepath);
         std::cerr << "Unable to open credential spec file: " << credspec_filepath << std::endl;
-        return -1;
+
+        return EXIT_FAILURE;
     }
 
     creds_fetcher::krb_ticket_info* krb_ticket_info = new creds_fetcher::krb_ticket_info;
     int parse_result = parse_cred_spec( credspec_contents, krb_ticket_info );
 
     // only add the ticket info if the parsing is successful
-    if ( parse_result == 0 )
+    if ( parse_result == EXIT_SUCCESS )
     {
-        std::string krb_files_path = krb_files_dir + "/" + lease_id + "/" +
+        std::string krb_files_path = krb_files_dir + "/" + cred_file_lease_id + "/" +
                                         krb_ticket_info->service_account_name;
         krb_ticket_info->krb_file_path = krb_files_path;
         krb_ticket_info->domainless_user = "";
         krb_ticket_info->origin = "file";
-        krb_ticket_info_list.push_back(krb_ticket_info);
     }
     else
     {
@@ -1213,60 +1213,55 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     
     if ( err_msg.empty() )
     {
-        // create the kerberos tickets for the service accounts
-        for ( auto krb_ticket : krb_ticket_info_list )
+        // invoke to get machine ticket
+        status = get_machine_krb_ticket( krb_ticket_info->domain_name, cf_logger );
+        if ( status < 0 )
         {
-            // invoke to get machine ticket
-            status = get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
-            if ( status < 0 )
-            {
-                cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
-                                    status );
-                err_msg = "ERROR: cannot get machine krb ticket";
-                break;
-            }
+            cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
+                                status );
+                        
+            return EXIT_FAILURE;
+        }
 
-            std::string krb_file_path = krb_ticket->krb_file_path;
-            if ( boost::filesystem::exists( krb_file_path ) )
-            {
-                cf_logger.logger( LOG_INFO,
-                                    "Deleting existing credential file directory %s",
+        std::string krb_file_path = krb_ticket_info->krb_file_path;
+        if ( boost::filesystem::exists( krb_file_path ) )
+        {
+            cf_logger.logger( LOG_INFO,
+                                "Deleting existing credential file directory %s",
 +                                              krb_file_path.c_str() );
 
-                boost::filesystem::remove_all(krb_file_path);
-            }
-            boost::filesystem::create_directories( krb_file_path );
+            boost::filesystem::remove_all(krb_file_path);
+        }
+        boost::filesystem::create_directories( krb_file_path );
 
-            std::string krb_ccname_str = krb_ticket->krb_file_path + "/krb5cc";
+        std::string krb_ccname_str = krb_ticket_info->krb_file_path + "/krb5cc";
 
-            if ( !boost::filesystem::exists( krb_ccname_str ) )
-            {
-                std::ofstream file( krb_ccname_str );
-                file.close();
+        if ( !boost::filesystem::exists( krb_ccname_str ) )
+        {
+            std::ofstream file( krb_ccname_str );
+            file.close();
 
-                krb_ticket->krb_file_path = krb_ccname_str;
-            }
+            krb_ticket_info->krb_file_path = krb_ccname_str;
+        }
 
-            std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
-                krb_ticket->domain_name, krb_ticket->service_account_name,
-                krb_ccname_str, cf_logger );
-            if ( gmsa_ticket_result.first != 0 )
-            {
-                err_msg = "ERROR: Cannot get gMSA krb ticket";
-                std::cout << err_msg << std::endl;
-                cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket",
-                                    status );
-                break;
-            }
-            else
-            {
-                chmod(krb_ccname_str.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
+            krb_ticket_info->domain_name, krb_ticket_info->service_account_name,
+            krb_ccname_str, cf_logger );
+        if ( gmsa_ticket_result.first != 0 )
+        {
+            err_msg = "ERROR: Cannot get gMSA krb ticket";
+            std::cout << err_msg << std::endl;
+            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket",
+                                status );
+        }
+        else
+        {
+            chmod(krb_ccname_str.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
-                cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
-                                    gmsa_ticket_result.second.c_str() );
-                std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
-                            << std::endl;
-            }
+            cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
+                                gmsa_ticket_result.second.c_str() );
+            std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
+                        << std::endl;
         }
     }
 
@@ -1275,22 +1270,17 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     // the event.
     if ( !err_msg.empty() )
     {
-        // remove the directories on failure
-        for ( auto krb_ticket : krb_ticket_info_list )
-        {
-            boost::filesystem::remove_all( krb_ticket->krb_file_path );
-        }
+        // remove the directory on failure
+        boost::filesystem::remove_all( krb_ticket_info->krb_file_path );
 
         std::cerr << err_msg << std::endl;
         cf_logger.logger( LOG_ERR, "%s", err_msg.c_str() );
 
-        return -1;
+        return EXIT_FAILURE;
     }
-    else
-    {
-        // write the ticket information to meta data file
-        write_meta_data_json( krb_ticket_info_list, lease_id, krb_files_dir );
-    }
+    
+    // write the ticket information to meta data file
+    write_meta_data_json( krb_ticket_info, cred_file_lease_id, krb_files_dir );
 
-    return 0;
+    return EXIT_SUCCESS;
 }

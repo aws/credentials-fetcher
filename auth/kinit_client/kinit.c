@@ -561,12 +561,12 @@ k5_kinit(struct k_opts *opts, struct k5_data *k5)
         if (opts->verbose)
             fprintf(stderr, _("Initialized cache\n"));
 
-        /*ret = k5_cc_store_primary_cred(k5->ctx, mcc, &my_creds);
+        ret = k5_cc_store_primary_cred(k5->ctx, mcc, &my_creds);
         if (ret) {
             com_err(progname, ret, _("while storing credentials"));
             goto cleanup;
         }
-        */ret = krb5_cc_move(k5->ctx, mcc, k5->out_cc);
+        ret = krb5_cc_move(k5->ctx, mcc, k5->out_cc);
         if (ret) {
             com_err(progname, ret, _("while saving to cache %s"),
                     opts->k5_out_cache_name ? opts->k5_out_cache_name : "");

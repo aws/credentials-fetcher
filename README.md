@@ -107,7 +107,8 @@ journalctl -u credentials-fetcher
 
 | Environment Variable        | Examples values                          | Description                                                                                  |
 | :-------------------------- | ---------------------------------------- | :------------------------------------------------------------------------------------------- |
-| `CF_CRED_FILE`              | '/var/credentials-fetcher/credspec.json' | Optional path to a credential spec file used as input. |
+| `CF_CRED_SPEC_FILE`         | '/var/credentials-fetcher/my-credspec.json' | Path to a credential spec file used as input. (Lease id default: credspec) |
+|                             | '/var/credentials-fetcher/my-credspec.json:myLeaseId' | An optional lease id specified after a colon
 
 ## Compatibility
 

@@ -731,10 +731,10 @@ std::string get_ticket_expiration( std::string klist_ticket_info )
     if (!std::regex_search(klist_ticket_info, expires_match, pattern))
     {
         std::cout << "Unable to parse klist for ticket experation: " << klist_ticket_info << std::endl;
-        return "";
+        return std::string("");
     }
 
-    return expires_match[1];
+    return std::string(expires_match[1]);
 }
 
 /**
