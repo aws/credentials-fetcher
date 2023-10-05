@@ -1219,7 +1219,8 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
         {
             cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
                                 status );
-                        
+            delete krb_ticket_info;      
+                  
             return EXIT_FAILURE;
         }
 
@@ -1275,12 +1276,15 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
 
         std::cerr << err_msg << std::endl;
         cf_logger.logger( LOG_ERR, "%s", err_msg.c_str() );
+        delete krb_ticket_info;
 
         return EXIT_FAILURE;
     }
     
     // write the ticket information to meta data file
     write_meta_data_json( krb_ticket_info, cred_file_lease_id, krb_files_dir );
+
+    delete krb_ticket_info;
 
     return EXIT_SUCCESS;
 }
