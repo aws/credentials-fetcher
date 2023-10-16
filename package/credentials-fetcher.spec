@@ -1,30 +1,29 @@
 %global major_version 1
 %global minor_version 2
 %global patch_version 0
-
+ 
 # For handling bump release by rpmdev-bumpspec and mass rebuild
-%global baserelease 1
-
+%global baserelease 3
+ 
 Name:           credentials-fetcher
 Version:        %{major_version}.%{minor_version}.%{patch_version}
 Release:        %{baserelease}%{?dist}
 Summary:        credentials-fetcher is a daemon that refreshes tickets or tokens periodically
-
+ 
 License:        Apache-2.0
 URL:            https://github.com/aws/credentials-fetcher
-Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/%{version}.tar.gz
-
+Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/v.%{version}.tar.gz
+ 
 BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-devel boost-program-options jsoncpp-devel
 BuildRequires:  openssl-devel zlib-devel protobuf-devel re2-devel krb5-devel systemd-devel
 BuildRequires:  systemd-rpm-macros dotnet-sdk-6.0 grpc-plugins
-
+ 
 Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0 jsoncpp-devel jsoncpp
-
 # No one likes you i686
-ExcludeArch:    i686 armv7hl
-
+ExclusiveArch: x86_64 aarch64 s390x
+ 
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/CMake/
-
+ 
 %description
 This daemon creates and refreshes kerberos tickets, these
 tickets can be used to launch new containers.
@@ -33,26 +32,26 @@ Kerberos tickets are refreshed when tickets expire
 or when a gMSA password changes.
 The same method can be used to refresh other types of security tokens.
 This spec file is specific to Fedora, use this file to rpmbuild on Fedora.
-
+ 
 %prep
-%setup -q
+%setup -q -n credentials-fetcher-v.%{version}
 # abseil-cpp LTS 20230125 requires at least C++14; string_view requires C++17:
 sed -r -i 's/(std=c\+\+)11/\117/' CMakeLists.txt
-
+ 
 %build
 %cmake3
 %cmake_build
 %install
-
+ 
 %cmake_install
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_removing_rpath
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_rpath_for_internal_libraries
 chrpath --delete %{buildroot}/%{_sbindir}/credentials-fetcherd
-
+ 
 %check
 # TBD: Run tests from top-level directory
 ctest3
-
+ 
 %files
 %{_sbindir}/credentials-fetcherd
 %{_unitdir}/credentials-fetcher.service
@@ -61,27 +60,33 @@ ctest3
 %doc CONTRIBUTING.md NOTICE README.md
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
-
+ 
 %changelog
-* Thu May 15 2023 Sai Kiran Akula <saakla@amazon.com> - 1.2.0
+* Thu Aug 31 2023 Tom Callaway <spot@fedoraproject.org> - 1.2.0-3
+- rebuild for abseil
+ 
+* Wed Jul 19 2023 Fedora Release Engineering <releng@fedoraproject.org> - 1.2.0-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_39_Mass_Rebuild
+ 
+* Mon May 15 2023 Sai Kiran Akula <saakla@amazon.com> - 1.2.0
 - Create 1.2.0 release
-
+ 
 * Thu Mar 23 2023 Tom Callaway <spot@fedoraproject.org> - 1.1.0-7
 - rebuild for new abseil-cpp
-
+ 
 * Tue Mar 07 2023 Benjamin A. Beasley <code@musicinmybrain.net> - 1.1.0-6
 - Build as C++14, required by abseil-cpp 20230125
-
+ 
 * Thu Feb 23 2023 Tom Callaway <spotaws@amazon.com> - 1.1.0-5
 - fix build against boost 1.81 (bz2172636)
-
+ 
 * Mon Feb 20 2023 Jonathan Wakely <jwakely@redhat.com> - 1.1.0-4
 - Rebuilt for Boost 1.81
-
+ 
 * Thu Feb 09 2023 Benjamin A. Beasley <code@musicinmybrain.net> - 1.1.0-3
 - Depend on dotnet-sdk-7.0; there is no longer an unversioned “dotnet” package
 - Restore ppc64le support
-
+ 
 * Thu Jan 19 2023 Fedora Release Engineering <releng@fedoraproject.org> - 1.1.0-2
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_38_Mass_Rebuild
 
