@@ -765,17 +765,9 @@ bool is_ticket_ready_for_renewal( creds_fetcher::krb_ticket_info* krb_ticket_inf
         auto found = result.find( renew_until );
         if ( found != std::string::npos )
         {
-            found += renew_until.length();
             std::string renewal_date_time;
-            
-            if (krb_ticket_info->origin == "file")
-            {
-                renewal_date_time = get_ticket_expiration(result);
-            }
-            else 
-            {
-                renewal_date_time = result.substr( found + 1, result.length() );
-            }
+
+            renewal_date_time = get_ticket_expiration(result);
 
             char renewal_date[80];
             char renewal_time[80];

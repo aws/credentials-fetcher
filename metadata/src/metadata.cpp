@@ -71,7 +71,6 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
                     kv.second.get<std::string>( "service_account_name" );
                 krb_ticket_info->domain_name = kv.second.get<std::string>( "domain_name" );
                 krb_ticket_info->domainless_user = kv.second.get<std::string>( "domainless_user" );
-                krb_ticket_info->origin = kv.second.get<std::string>( "origin" );
 
                 krb_ticket_info_list.push_back( krb_ticket_info );
             }
@@ -146,7 +145,6 @@ int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_
             ticket_info.put( "service_account_name", krb_ticket_info->service_account_name );
             ticket_info.put( "domain_name", krb_ticket_info->domain_name );
             ticket_info.put( "domainless_user", krb_ticket_info->domainless_user );
-            ticket_info.put( "origin", krb_ticket_info->origin );
 
             krb_ticket_info_parent.push_back( std::make_pair( "", ticket_info ) );
         }

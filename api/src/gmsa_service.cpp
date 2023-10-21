@@ -157,7 +157,6 @@ class CredentialsFetcherImpl final
                                                      krb_ticket_info->service_account_name;
                         krb_ticket_info->krb_file_path = krb_files_path;
                         krb_ticket_info->domainless_user = "";
-                        krb_ticket_info->origin = "grpc";
 
                         // handle duplicate service accounts
                         if ( !krb_ticket_dirs.count( krb_files_path ) )
@@ -433,7 +432,6 @@ class CredentialsFetcherImpl final
                                                              krb_ticket_info->service_account_name;
                                 krb_ticket_info->krb_file_path = krb_files_path;
                                 krb_ticket_info->domainless_user = username;
-                                krb_ticket_info->origin = "grpc";
 
                                 // handle duplicate service accounts
                                 if ( !krb_ticket_dirs.count( krb_files_path ) )
@@ -1204,7 +1202,6 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
                                         krb_ticket_info->service_account_name;
         krb_ticket_info->krb_file_path = krb_files_path;
         krb_ticket_info->domainless_user = "";
-        krb_ticket_info->origin = "file";
     }
     else
     {

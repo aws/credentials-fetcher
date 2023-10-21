@@ -43,7 +43,6 @@ namespace creds_fetcher
         std::string service_account_name;
         std::string domain_name;
         std::string domainless_user;
-        std::string origin;
     };
 
     /*
