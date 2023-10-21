@@ -154,7 +154,7 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
 
 int parse_config_file( creds_fetcher::Daemon& cf_daemon );
 std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name);
-void split_string(std::string input_string, char delimiter, std::vector<std::string> results);
+std::vector<std::string> split_string(std::string input_string, char delimiter);
 
 /**
  * Methods in api module

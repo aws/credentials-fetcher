@@ -379,7 +379,7 @@ static std::pair<size_t, void*> find_password( std::string ldap_search_result )
     std::vector<std::string> results;
 
     std::string password = std::string( "msDS-ManagedPassword::" );
-    split_string(ldap_search_result, '#', results);
+    results = split_string(ldap_search_result, '#');
     bool password_found = false;
     for ( auto& result : results )
     {
@@ -541,7 +541,7 @@ std::pair<int, std::vector<std::string>> get_domain_ips( std::string domain_name
         return std::make_pair( ips.first, list_of_ips );
     }
 
-    split_string(ips.second, '\n', list_of_ips);
+    list_of_ips = split_string(ips.second, '\n');
 
     return std::make_pair( EXIT_SUCCESS, list_of_ips );
 }
@@ -569,7 +569,7 @@ std::pair<int, std::string> get_fqdn_from_domain_ip( std::string domain_ip,
     }
 
     std::vector<std::string> list_of_dc_names;
-    split_string(reverse_dns_output.second, '\n', list_of_dc_names);
+    list_of_dc_names = split_string(reverse_dns_output.second, '\n');
     for ( auto fqdn_str : list_of_dc_names )
     {
         if ( fqdn_str.length() == 0 )
@@ -616,7 +616,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
         return std::make_pair( -1, std::string( "" ) );
     }
 
-    split_string(domain_name, '.', results);
+    results = split_string(domain_name, '.');
     std::string base_dn; /* Distinguished name */
     for ( auto& result : results )
     {
@@ -733,7 +733,7 @@ bool is_ticket_ready_for_renewal( std::string krb_cc_name )
 
     std::vector<std::string> results;
 
-    split_string(krb_ticket_info_result.second, '#', results);
+    results = split_string(krb_ticket_info_result.second, '#');
     std::string renew_until = "renew until";
     bool is_ready_for_renewal = false;
 
@@ -962,7 +962,7 @@ std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
     while ( std::getline( config_file, line ) )
     {
         // TBD: Error handling for incorrectly formatted /etc/ecs/ecs.config
-        split_string(line, '=', results);
+        results = split_string(line, '=');
         std::string key = results[0];
         std::string value = results[1];
         if ( ecs_variable_name.compare( key ) == 0 )
@@ -979,16 +979,18 @@ std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
  * 
  * @param input_string - input string to split
  * @param delimiter - char to split the input string on
- * @param results - results to strore vector of strings after `input_string` is split
+ * @return results - results to store vector of strings after `input_string` is split
 */
-void split_string(std::string input_string, char delimiter, std::vector<std::string> results)
+std::vector<std::string> split_string(std::string input_string, char delimiter)
 {
+    std::vector<std::string> results;
     std::istringstream input_string_stream(input_string);
     std::string token;
     while (std::getline(input_string_stream, token, delimiter))
     {
         results.push_back(token);
     }
+    return results;
 }
 
 /**
