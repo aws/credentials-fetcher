@@ -1,5 +1,6 @@
 #include "daemon.h"
-#include <boost/filesystem.hpp>
+#include <fstream>
+#include <filesystem>
 #include <dirent.h>
 #include <openssl/crypto.h>
 #include <sys/stat.h>
@@ -245,14 +246,14 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
     result = exec_shell_cmd( command );
 
     // deserialize json to krb_ticket_info object
-    namespace pt = boost::property_tree;
-    pt::ptree root;
+    Json::Value root;
+    Json::CharReaderBuilder reader;
+    std::istringstream string_stream(result.second);
+    std::string errors;
+    Json::parseFromStream(reader, string_stream, &root, &errors);
     // {"username":"user","password":"passw0rd"}
-    std::stringstream ss;
-    ss << result.second;
-    pt::read_json( ss, root );
-    std::string username = root.get<std::string>( "username" );
-    std::string password = root.get<std::string>( "password" );
+    std::string username = root["username"].asString();
+    std::string password = root["password"].asString();
 
     std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
                     []( unsigned char c ) { return std::toupper( c ); } );
@@ -378,8 +379,7 @@ static std::pair<size_t, void*> find_password( std::string ldap_search_result )
     std::vector<std::string> results;
 
     std::string password = std::string( "msDS-ManagedPassword::" );
-    boost::split( results, ldap_search_result, []( char c ) { return c == '#'; } );
-
+    results = split_string(ldap_search_result, '#');
     bool password_found = false;
     for ( auto& result : results )
     {
@@ -541,7 +541,7 @@ std::pair<int, std::vector<std::string>> get_domain_ips( std::string domain_name
         return std::make_pair( ips.first, list_of_ips );
     }
 
-    boost::split( list_of_ips, ips.second, []( char c ) { return c == '\n'; } );
+    list_of_ips = split_string(ips.second, '\n');
 
     return std::make_pair( EXIT_SUCCESS, list_of_ips );
 }
@@ -569,8 +569,7 @@ std::pair<int, std::string> get_fqdn_from_domain_ip( std::string domain_ip,
     }
 
     std::vector<std::string> list_of_dc_names;
-    boost::split( list_of_dc_names, reverse_dns_output.second, []( char c ) { return c == '\n'; } );
-
+    list_of_dc_names = split_string(reverse_dns_output.second, '\n');
     for ( auto fqdn_str : list_of_dc_names )
     {
         if ( fqdn_str.length() == 0 )
@@ -617,7 +616,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
         return std::make_pair( -1, std::string( "" ) );
     }
 
-    boost::split( results, domain_name, []( char c ) { return c == '.'; } );
+    results = split_string(domain_name, '.');
     std::string base_dn; /* Distinguished name */
     for ( auto& result : results )
     {
@@ -734,7 +733,7 @@ bool is_ticket_ready_for_renewal( std::string krb_cc_name )
 
     std::vector<std::string> results;
 
-    boost::split( results, krb_ticket_info_result.second, []( char c ) { return c == '#'; } );
+    results = split_string(krb_ticket_info_result.second, '#');
     std::string renew_until = "renew until";
     bool is_ready_for_renewal = false;
 
@@ -800,11 +799,11 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
     std::list<std::string> renewed_krb_ticket_paths;
     // identify the metadata files in the krb directory
     std::vector<std::string> metadatafiles;
-    for ( boost::filesystem::recursive_directory_iterator end, dir( krb_files_dir );
+    for ( std::filesystem::recursive_directory_iterator end, dir( krb_files_dir );
           dir != end; ++dir )
     {
         auto path = dir->path();
-        if ( boost::filesystem::is_regular_file( path ) )
+        if ( std::filesystem::is_regular_file( path ) )
         {
             // find the file with metadata extension
             std::string filename = path.filename().string();
@@ -940,7 +939,7 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
             closedir( curr_dir );
 
             // finally delete lease file and directory
-            boost::filesystem::remove_all( krb_tickets_path );
+            std::filesystem::remove_all( krb_tickets_path );
         }
     }
     catch ( ... )
@@ -963,7 +962,7 @@ std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
     while ( std::getline( config_file, line ) )
     {
         // TBD: Error handling for incorrectly formatted /etc/ecs/ecs.config
-        boost::split( results, line, []( char c ) { return c == '='; } );
+        results = split_string(line, '=');
         std::string key = results[0];
         std::string value = results[1];
         if ( ecs_variable_name.compare( key ) == 0 )
@@ -973,6 +972,25 @@ std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
         }
     }
     return "";
+}
+
+/**
+ * Given an input string split based on provided delimiter and return the split strings as vector
+ * 
+ * @param input_string - input string to split
+ * @param delimiter - char to split the input string on
+ * @return results - results to store vector of strings after `input_string` is split
+*/
+std::vector<std::string> split_string(std::string input_string, char delimiter)
+{
+    std::vector<std::string> results;
+    std::istringstream input_string_stream(input_string);
+    std::string token;
+    while (std::getline(input_string_stream, token, delimiter))
+    {
+        results.push_back(token);
+    }
+    return results;
 }
 
 /**

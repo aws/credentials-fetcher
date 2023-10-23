@@ -1,7 +1,5 @@
 #include "config.h"
-#include <boost/algorithm/string.hpp>
-#include <boost/program_options.hpp>
-#include <boost/property_tree/json_parser.hpp>
+#include <json/json.h>
 #include <csignal>
 #include <cstddef>
 #include <cstdint>
@@ -17,6 +15,10 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#include <getopt.h>
+#include <iomanip>
+#include <map>
+#include <algorithm>
 
 #ifndef _daemon_h_
 #define _daemon_h_
@@ -155,6 +157,7 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
 
 int parse_config_file( creds_fetcher::Daemon& cf_daemon );
 std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name);
+std::vector<std::string> split_string(std::string input_string, char delimiter);
 
 /**
  * Methods in api module
