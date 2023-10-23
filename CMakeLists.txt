@@ -136,11 +136,11 @@ target_include_directories(credentials-fetcherd PUBLIC common)
 if(${DISTRO_ID} MATCHES "ubuntu")
 	message(STATUS "Linux distro detected as ubuntu")
 target_link_libraries(credentials-fetcherd
-        PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private
+        PUBLIC systemd krb5 glib-2.0 cf_gmsa_service_private
         crypto protobuf kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto com_err krb5support resolv utf8_validity)
 else()
 target_link_libraries(credentials-fetcherd
-        PUBLIC systemd boost_program_options krb5 glib-2.0 cf_gmsa_service_private
+        PUBLIC systemd krb5 glib-2.0 cf_gmsa_service_private
         crypto
         kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
         com_err krb5support resolv)

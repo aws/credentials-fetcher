@@ -1,5 +1,4 @@
 #include "config.h"
-#include <boost/program_options.hpp>
 #include <json/json.h>
 #include <csignal>
 #include <cstddef>
@@ -16,6 +15,10 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#include <getopt.h>
+#include <iomanip>
+#include <map>
+#include <algorithm>
 
 #ifndef _daemon_h_
 #define _daemon_h_
