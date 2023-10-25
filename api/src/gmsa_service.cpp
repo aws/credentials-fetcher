@@ -1,6 +1,5 @@
 #include "daemon.h"
 
-#include <boost/filesystem.hpp>
 #include <credentialsfetcher.grpc.pb.h>
 #include <fstream>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
@@ -198,7 +197,7 @@ class CredentialsFetcherImpl final
                         }
 
                         std::string krb_file_path = krb_ticket->krb_file_path;
-                        if ( boost::filesystem::exists( krb_file_path ) )
+                        if ( std::filesystem::exists( krb_file_path ) )
                         {
                             cf_logger.logger( LOG_INFO,
                                               "Directory already exists: "
@@ -206,11 +205,11 @@ class CredentialsFetcherImpl final
 +                                              krb_file_path.c_str() );
                             break;
                         }
-                        boost::filesystem::create_directories( krb_file_path );
+                        std::filesystem::create_directories( krb_file_path );
 
                         std::string krb_ccname_str = krb_ticket->krb_file_path + "/krb5cc";
 
-                        if ( !boost::filesystem::exists( krb_ccname_str ) )
+                        if ( !std::filesystem::exists( krb_ccname_str ) )
                         {
                             std::ofstream file( krb_ccname_str );
                             file.close();
@@ -247,7 +246,7 @@ class CredentialsFetcherImpl final
                     // remove the directories on failure
                     for ( auto krb_ticket : krb_ticket_info_list )
                     {
-                        boost::filesystem::remove_all( krb_ticket->krb_file_path );
+                        std::filesystem::remove_all( krb_ticket->krb_file_path );
                     }
                     status_ = FINISH;
                     create_krb_responder_.Finish(
@@ -484,7 +483,7 @@ class CredentialsFetcherImpl final
                         }
 
                         std::string krb_file_path = krb_ticket->krb_file_path;
-                        if ( boost::filesystem::exists( krb_file_path ) )
+                        if ( std::filesystem::exists( krb_file_path ) )
                         {
                             cf_logger.logger( LOG_INFO,
                                               "Directory already exists: "
@@ -492,11 +491,11 @@ class CredentialsFetcherImpl final
                                               krb_file_path.c_str() );
                             break;
                         }
-                        boost::filesystem::create_directories( krb_file_path );
+                        std::filesystem::create_directories( krb_file_path );
 
                         std::string krb_ccname_str = krb_ticket->krb_file_path + "/krb5cc";
 
-                        if ( !boost::filesystem::exists( krb_ccname_str ) )
+                        if ( !std::filesystem::exists( krb_ccname_str ) )
                         {
                             std::ofstream file( krb_ccname_str );
                             file.close();
@@ -535,7 +534,7 @@ class CredentialsFetcherImpl final
                     // remove the directories on failure
                     for ( auto krb_ticket : krb_ticket_info_list )
                     {
-                        boost::filesystem::remove_all( krb_ticket->krb_file_path );
+                        std::filesystem::remove_all( krb_ticket->krb_file_path );
                     }
                     status_ = FINISH;
                     handle_krb_responder_.Finish(
@@ -1117,27 +1116,23 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
             return -1;
         }
 
-        namespace pt = boost::property_tree;
-        pt::ptree root;
-        std::istringstream credspec_stream( credspec_data );
-        pt::read_json( credspec_stream, root );
-
+        Json::Value root;
+        Json::CharReaderBuilder reader;
+        std::istringstream credspec_stream(credspec_data);
+        std::string errors;
+        Json::parseFromStream(reader, credspec_stream, &root, &errors);
         // get domain name from credspec
-        std::string domain_name = root.get<std::string>( "DomainJoinConfig.DnsName" );
-
+        std::string domain_name = root["DomainJoinConfig"]["DnsName"].asString();
         // get service account name from credspec
         std::string service_account_name;
-        const pt::ptree& child_tree_gmsa =
-            root.get_child( "ActiveDirectoryConfig.GroupManagedServiceAccounts" );
-        for ( const auto& kv : child_tree_gmsa )
+        const Json::Value& gmsa_array = root["ActiveDirectoryConfig"]["GroupManagedServiceAccounts"];
+        for (const Json::Value& gmsa : gmsa_array)
         {
-            service_account_name = kv.second.get<std::string>( "Name" );
-
-            if ( !service_account_name.empty() )
+            service_account_name = gmsa["Name"].asString();
+            if (!service_account_name.empty())
                 break;
         }
-
-        if ( service_account_name.empty() || domain_name.empty() )
+        if (service_account_name.empty() || domain_name.empty())
             return -1;
 
         krb_ticket_info->domain_name = domain_name;
@@ -1169,7 +1164,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     
     cf_logger.logger( LOG_INFO, "Generating lease id %s", cred_file_lease_id );
 
-    if ( !boost::filesystem::exists( credspec_filepath ) ){
+    if ( !std::filesystem::exists( credspec_filepath ) ){
         std::cerr << "The credential spec file " << credspec_filepath << " was not found!" << std::endl;
         cf_logger.logger( LOG_ERR, "The credential spec file %s was not found!",
                                     credspec_filepath.c_str() );
@@ -1222,19 +1217,19 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
         }
 
         std::string krb_file_path = krb_ticket_info->krb_file_path;
-        if ( boost::filesystem::exists( krb_file_path ) )
+        if ( std::filesystem::exists( krb_file_path ) )
         {
             cf_logger.logger( LOG_INFO,
                                 "Deleting existing credential file directory %s",
 +                                              krb_file_path.c_str() );
 
-            boost::filesystem::remove_all(krb_file_path);
+            std::filesystem::remove_all(krb_file_path);
         }
-        boost::filesystem::create_directories( krb_file_path );
+        std::filesystem::create_directories( krb_file_path );
 
         std::string krb_ccname_str = krb_ticket_info->krb_file_path + "/krb5cc";
 
-        if ( !boost::filesystem::exists( krb_ccname_str ) )
+        if ( !std::filesystem::exists( krb_ccname_str ) )
         {
             std::ofstream file( krb_ccname_str );
             file.close();
@@ -1269,7 +1264,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     if ( !err_msg.empty() )
     {
         // remove the directory on failure
-        boost::filesystem::remove_all( krb_ticket_info->krb_file_path );
+        std::filesystem::remove_all( krb_ticket_info->krb_file_path );
 
         std::cerr << err_msg << std::endl;
         cf_logger.logger( LOG_ERR, "%s", err_msg.c_str() );

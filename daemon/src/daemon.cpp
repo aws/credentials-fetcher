@@ -1,5 +1,4 @@
 #include "daemon.h"
-#include <boost/filesystem.hpp>
 #include <iostream>
 #include <libgen.h>
 #include <stdlib.h>
@@ -193,7 +192,7 @@ int main( int argc, const char* argv[] )
             exit( EXIT_FAILURE);
         }
 
-        if (!boost::filesystem::exists( cred_file))
+        if (!std::filesystem::exists( cred_file))
         {
             cred_file_lease_id.clear();
             std::cout << "Ignoring CF_CREF_FILE, file " << cred_file << " not found" << std::endl;

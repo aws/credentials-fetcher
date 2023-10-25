@@ -1,12 +1,10 @@
 #include "daemon.h"
-#include <boost/filesystem.hpp>
-#include <boost/property_tree/json_parser.hpp>
-#include <boost/property_tree/ptree.hpp>
+#include <filesystem>
 #include <fstream>
 #include <vector>
 
 static const std::vector<char> invalid_path_characters = {
-    '&', ':', '\\', '|', '*', '?', '<', '>', '`', '$', '{', '}', '(', ')', '"' ,';'};
+    '&', ':', '\\', '|', '*', '?', '<', '>', '`', '$', '{', '}', '(', ')', '"', ';' };
 /**
  *
  * @param path - string input that has to be validated
@@ -45,34 +43,41 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
         }
 
         // deserialize json to krb_ticket_info object
-        namespace pt = boost::property_tree;
-        pt::ptree root;
-        pt::read_json( file_path, root );
+        Json::Value root;
+        std::ifstream json_file( file_path );
 
-        const pt::ptree& child_tree_krb_info = root.get_child( "krb_ticket_info" );
-
-        for ( const auto& kv : child_tree_krb_info )
+        if ( json_file.is_open() )
         {
-            creds_fetcher::krb_ticket_info* krb_ticket_info = new creds_fetcher::krb_ticket_info;
-            std::string krb_file_path = kv.second.get<std::string>( "krb_file_path" );
+            json_file >> root;
+            json_file.close();
 
-            if ( contains_invalid_characters( krb_file_path ) )
+            // deserialize json to krb_ticket_info object
+            const Json::Value& child_tree_krb_info = root["krb_ticket_info"];
+
+            for ( const Json::Value& krb_info : child_tree_krb_info )
             {
-                fprintf( stderr, SD_CRIT "krb file path contains invalid characters" );
-                free( krb_ticket_info );
-                break;
-            }
+                creds_fetcher::krb_ticket_info* krb_ticket_info =
+                    new creds_fetcher::krb_ticket_info;
+                std::string krb_file_path = krb_info["krb_file_path"].asString();
 
-            // only add path if it exists
-            if ( boost::filesystem::exists( krb_file_path ) )
-            {
-                krb_ticket_info->krb_file_path = krb_file_path;
-                krb_ticket_info->service_account_name =
-                    kv.second.get<std::string>( "service_account_name" );
-                krb_ticket_info->domain_name = kv.second.get<std::string>( "domain_name" );
-                krb_ticket_info->domainless_user = kv.second.get<std::string>( "domainless_user" );
+                if ( contains_invalid_characters( krb_file_path ) )
+                {
+                    fprintf( stderr, SD_CRIT "krb file path contains invalid characters" );
+                    free( krb_ticket_info );
+                    break;
+                }
 
-                krb_ticket_info_list.push_back( krb_ticket_info );
+                // only add path if it exists
+                if ( std::filesystem::exists( krb_file_path ) )
+                {
+                    krb_ticket_info->krb_file_path = krb_file_path;
+                    krb_ticket_info->service_account_name =
+                        krb_info["service_account_name"].asString();
+                    krb_ticket_info->domain_name = krb_info["domain_name"].asString();
+                    krb_ticket_info->domainless_user = krb_info["domainless_user"].asString();
+
+                    krb_ticket_info_list.push_back( krb_ticket_info );
+                }
             }
         }
     }
@@ -131,26 +136,38 @@ int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_
         std::string file_path = krb_files_dir + "/" + lease_id + "/" + meta_file_name;
 
         // create the meta file in the lease directory
-        boost::filesystem::path dirPath( file_path );
-        boost::filesystem::create_directories( dirPath.parent_path() );
+        std::filesystem::path dirPath( file_path );
+        std::filesystem::create_directories( dirPath.parent_path() );
 
         // parse the kerberos info and serialize to json
-        boost::property_tree::ptree root;
-        boost::property_tree::ptree krb_ticket_info_parent;
+        Json::Value root;
+        Json::Value krb_ticket_info_parent;
 
         for ( auto krb_ticket_info : krb_ticket_info_list )
         {
-            boost::property_tree::ptree ticket_info;
-            ticket_info.put( "krb_file_path", krb_ticket_info->krb_file_path );
-            ticket_info.put( "service_account_name", krb_ticket_info->service_account_name );
-            ticket_info.put( "domain_name", krb_ticket_info->domain_name );
-            ticket_info.put( "domainless_user", krb_ticket_info->domainless_user );
+            Json::Value ticket_info;
+            ticket_info["krb_file_path"] = krb_ticket_info->krb_file_path;
+            ticket_info["service_account_name"] = krb_ticket_info->service_account_name;
+            ticket_info["domain_name"] = krb_ticket_info->domain_name;
+            ticket_info["domainless_user"] = krb_ticket_info->domainless_user;
 
-            krb_ticket_info_parent.push_back( std::make_pair( "", ticket_info ) );
+            krb_ticket_info_parent.append( ticket_info );
         }
 
-        root.add_child( "krb_ticket_info", krb_ticket_info_parent );
-        boost::property_tree::write_json( file_path, root );
+        root["krb_ticket_info"] = krb_ticket_info_parent;
+
+        Json::StreamWriterBuilder writer;
+        std::string jsonString = Json::writeString( writer, root );
+        std::ofstream json_file( file_path );
+        if ( json_file.is_open() )
+        {
+            json_file << jsonString;
+            json_file.close();
+        }
+        else
+        {
+            std::cerr << "Failed to write JSON file: " << file_path << std::endl;
+        }
     }
     catch ( const std::exception& ex )
     {

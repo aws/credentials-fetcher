@@ -1,5 +1,5 @@
 #include "daemon.h"
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <chrono>
 #include <stdlib.h>
 
@@ -25,11 +25,11 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
 
             // identify the metadata files in the krb directory
             std::vector<std::string> metadatafiles;
-            for ( boost::filesystem::recursive_directory_iterator end, dir( krb_files_dir );
+            for ( std::filesystem::recursive_directory_iterator end, dir( krb_files_dir );
                   dir != end; ++dir )
             {
                 auto path = dir->path();
-                if ( boost::filesystem::is_regular_file( path ) )
+                if ( std::filesystem::is_regular_file( path ) )
                 {
                     // find the file with metadata extension
                     std::string filename = path.filename().string();
