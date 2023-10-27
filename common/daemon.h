@@ -19,9 +19,12 @@
 #include <iomanip>
 #include <map>
 #include <algorithm>
+#include <filesystem>
 
 #ifndef _daemon_h_
 #define _daemon_h_
+
+#define DEFAULT_CRED_FILE_LEASE_ID "credspec"
 
 /*
  * This is a singleton class for the daemon, it is used
@@ -78,6 +81,7 @@ namespace creds_fetcher
         uint64_t watchdog_interval_usecs = 0;
         char* config_file = NULL;
         std::string krb_files_dir;
+        std::string cred_file;
         std::string unix_socket_dir;
         std::string logging_dir;
         std::string domain_name;
@@ -134,7 +138,9 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
 void krb_ticket_creation( const char* ldap_uri_arg, const char* gmsa_account_name_arg,
                           const char* krb_ccname = "" );
 
-bool is_ticket_ready_for_renewal( std::string krb_cc_name );
+bool is_ticket_ready_for_renewal( creds_fetcher::krb_ticket_info* krb_ticket_info );
+
+std::string get_ticket_expiration( std::string klist_ticket_info );
 
 std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::string lease_id );
 
@@ -169,6 +175,10 @@ int RunGrpcServer( std::string unix_socket_dir, std::string krb_file_path,
 
 int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info );
 
+int parse_cred_file_path(const std::string& cred_file_path, std::string& cred_file, std::string& cred_file_lease_id );
+
+int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id);
+
 std::string generate_lease_id();
 
 /**
@@ -181,6 +191,9 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon );
  */
 bool contains_invalid_characters( const std::string& path );
 std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path );
+
+int write_meta_data_json( creds_fetcher::krb_ticket_info* krb_ticket_info,
+                          std::string lease_id, std::string krb_files_dir );
 
 int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list,
                           std::string lease_id, std::string krb_files_dir );

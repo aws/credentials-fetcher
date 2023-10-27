@@ -102,6 +102,14 @@ journalctl -u credentials-fetcher
 | `CF_TEST_DOMAIN_NAME`       | 'contoso.com'                      | Test domain name                                                                             |
 | `CF_TEST_GMSA_ACCOUNT`      | 'webapp01'                         | Test gMSA account name                                                                       |
 
+
+#### Runtime environment variables
+
+| Environment Variable        | Examples values                          | Description                                                                                  |
+| :-------------------------- | ---------------------------------------- | :------------------------------------------------------------------------------------------- |
+| `CF_CRED_SPEC_FILE`         | '/var/credentials-fetcher/my-credspec.json' | Path to a credential spec file used as input. (Lease id default: credspec) |
+|                             | '/var/credentials-fetcher/my-credspec.json:myLeaseId' | An optional lease id specified after a colon
+
 ## Compatibility
 
 Running the Credentials-fetcher outside of Linux distributions is not

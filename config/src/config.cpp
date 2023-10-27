@@ -9,7 +9,12 @@ void print_help( const struct option* long_options,
                  const std::map<std::string, std::string>& options_descriptions )
 {
     std::cout << "Usage: " << std::endl;
-    std::cout << " Allowed options [OPTION...]" << std::endl;
+    std::cout << "Runtime Environment Variables:" << std::endl; 
+    std::cout << "CF_CRED_SPEC_FILE=<credential spec file>:<optional lease_id>" << std::endl; 
+    std::cout << "\t<credential spec file>\tSet to a path of a json credential file." << std::endl; 
+    std::cout << "\t<optional lease_id>\tUse an optional colon followed by a lease identifier (Default: " 
+              << DEFAULT_CRED_FILE_LEASE_ID << ")"  << std::endl; 
+    std::cout << "\nAllowed options" << std::endl;
     size_t max_option_length = 0;
     for ( const struct option* opt = long_options; opt->name != nullptr; ++opt )
     {
@@ -63,15 +68,17 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
                                          { "self_test", no_argument, nullptr, 't' },
                                          { "verbosity", required_argument, nullptr, 'v' },
                                          { "aws_sm_secret_name", required_argument, nullptr, 's' },
+                                         { "version", no_argument, nullptr, 'n' },
                                          { nullptr, 0, nullptr, 0 } };
         std::map<std::string, std::string> options_descriptions{
             { "help", "produce help message" },
             { "self_test", "Run tests such as utf16 decode" },
             { "verbosity", "set verbosity level" },
             { "aws_sm_secret_name", "Name of secret containing username/password in AWS Secrets "
-                                    "Manager (in same region)" } };
+                                    "Manager (in same region)" },
+            { "version", "Version of credentials-fetcher" } };
         int option;
-        while ( ( option = getopt_long( argc, (char* const*)argv, "htv:s:", long_options, nullptr ) ) != -1 )
+        while ( ( option = getopt_long( argc, (char* const*)argv, "htv:s:n", long_options, nullptr ) ) != -1 )
         {
             switch ( option )
             {
@@ -90,6 +97,9 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
                 std::cout << "Option selected for domainless operation, AWS secrets manager "
                              "secret-name = " << optarg << std::endl;
                 break;
+            case 'n':
+                std::cout << CMAKE_PROJECT_VERSION << std::endl;
+                return EXIT_FAILURE;
             default:
                 std::cout << "Run with --help to see options" << std::endl;
                 return EXIT_FAILURE;

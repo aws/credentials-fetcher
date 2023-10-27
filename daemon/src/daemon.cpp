@@ -33,6 +33,8 @@ static void systemd_shutdown_signal_catcher( int signo )
         perror( msg );                                                                             \
     } while ( 0 )
 
+#define ENV_CF_CRED_SPEC_FILE "CF_CRED_SPEC_FILE"
+
 /**
  * grpc_thread_start - used in pthread_create
  * @param arg - thread info
@@ -133,8 +135,36 @@ std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthrea
     return std::make_pair( EXIT_SUCCESS, tinfo );
 }
 
+int parse_cred_file_path(const std::string& cred_file_path, std::string& cred_file, std::string& cred_file_lease_id )
+{
+    size_t colon_delim_pos;
+    char path_lease_delimiter = ':';
+
+    if (cred_file_path.empty())
+        return EXIT_FAILURE;
+
+    colon_delim_pos = cred_file_path.find(path_lease_delimiter);
+
+    //If the : delimiter is not found, then assume the cred_file_path is just the path to cred spec file and use the default lease id
+    if (colon_delim_pos == std::string::npos)
+    {
+        cred_file = cred_file_path;
+        cred_file_lease_id = DEFAULT_CRED_FILE_LEASE_ID;
+
+        return EXIT_SUCCESS;
+    }
+
+    cred_file = cred_file_path.substr(0, colon_delim_pos);
+    cred_file_lease_id = cred_file_path.substr(colon_delim_pos+1);
+
+    return EXIT_SUCCESS;
+}
+
 int main( int argc, const char* argv[] )
 {
+    std::pair<int, void*> pthread_status;
+    std::string cred_file;
+    std::string cred_file_lease_id;
     void* grpc_pthread;
     void* krb_refresh_pthread;
 
@@ -148,6 +178,31 @@ int main( int argc, const char* argv[] )
     cf_daemon.logging_dir = CF_LOGGING_DIR;
     cf_daemon.unix_socket_dir = CF_UNIX_DOMAIN_SOCKET_DIR;
 
+    if ( getenv(ENV_CF_CRED_SPEC_FILE) != NULL)
+    {
+        int parseResult = parse_cred_file_path( getenv(ENV_CF_CRED_SPEC_FILE), 
+                                                cred_file,
+                                                cred_file_lease_id);
+
+        if (parseResult == EXIT_FAILURE)
+        {
+            std::cout << "Failed parsing environment variable " << getenv(ENV_CF_CRED_SPEC_FILE) << std::endl;
+            cf_daemon.cf_logger.logger( LOG_ERR, "Failed parsing environment variable %s", getenv(ENV_CF_CRED_SPEC_FILE) );
+
+            exit( EXIT_FAILURE);
+        }
+
+        if (!std::filesystem::exists( cred_file))
+        {
+            cred_file_lease_id.clear();
+            std::cout << "Ignoring CF_CREF_FILE, file " << cred_file << " not found" << std::endl;
+        }
+        else
+        {
+            cf_daemon.cred_file = cred_file;
+        }
+    }
+
     /**
      * Domain name and gmsa account are usually set in APIs.
      * The options below can be used as a test.
@@ -156,6 +211,7 @@ int main( int argc, const char* argv[] )
     cf_daemon.gmsa_account_name = CF_TEST_GMSA_ACCOUNT;
 
     std::cout << "krb_files_dir = " << cf_daemon.krb_files_dir << std::endl;
+    std::cout << "cred_file = " << cf_daemon.cred_file <<  " (lease id: " << cred_file_lease_id << ")" << std::endl;
     std::cout << "logging_dir = " << cf_daemon.logging_dir << std::endl;
     std::cout << "unix_socket_dir = " << cf_daemon.unix_socket_dir << std::endl;
 
@@ -181,8 +237,18 @@ int main( int argc, const char* argv[] )
     // 2. grpc server
     // 3. timer to run every 45 min
 
+    if ( !cf_daemon.cred_file.empty() ) {
+        cf_daemon.cf_logger.logger( LOG_INFO, "Credential file exists %s", cf_daemon.cred_file.c_str() );
+        
+        int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, cf_daemon.cred_file, cf_daemon.cf_logger, cred_file_lease_id);
+        if (specFileReturn == EXIT_FAILURE) {
+            std::cout << "ProcessCredSpecFile() non 0 " << std::endl;
+            exit( EXIT_FAILURE );
+        }
+    }
+    
     /* Create one pthread for gRPC processing */
-    std::pair<int, void*> pthread_status =
+    pthread_status =
         create_pthread( grpc_thread_start, grpc_thread_name, -1 );
     if ( pthread_status.first < 0 )
     {
@@ -192,7 +258,7 @@ int main( int argc, const char* argv[] )
     }
     grpc_pthread = pthread_status.second;
     cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
-
+        
     /* Create pthread for refreshing krb tickets */
     pthread_status =
         create_pthread( refresh_krb_tickets_thread_start, "krb_ticket_refresh_thread", -1 );

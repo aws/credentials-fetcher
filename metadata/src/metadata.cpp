@@ -105,12 +105,28 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
         }
     ]
 }
- * @param krb_ticket_info_list - info of the kerberos tickets created
+
+ * @param krb_ticket_info - info of the kerberos ticket to create
+ * @param lease_id - lease_id associated to the kerberos ticket created
+ * @param krb_files_dir - path of the dir for kerberos ticket
+ * @return 0 or 1 for successful or failed writes
+ */
+
+int write_meta_data_json( creds_fetcher::krb_ticket_info* krb_ticket_info,
+                          std::string lease_id, std::string krb_files_dir )
+{
+    std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
+
+    krb_ticket_info_list.push_back(krb_ticket_info);
+    
+    return write_meta_data_json(krb_ticket_info_list, lease_id, krb_files_dir);
+}
+
+/* @param krb_ticket_info_list - info of the kerberos tickets created
  * @param lease_id - lease_id associated to the kerberos tickets created
  * @param krb_files_dir - path of the dir for kerberos tickets
  * @return 0 or 1 for successful or failed writes
  */
-
 int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list,
                           std::string lease_id, std::string krb_files_dir )
 {

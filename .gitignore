@@ -1,4 +1,6 @@
 /build/
 **/obj/Debug/
+**/bin/Debug/
+**/obj/
 /.vscode/
 /auth/**/*.exe
