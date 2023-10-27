@@ -1,5 +1,6 @@
 #include "daemon.h"
-#include <boost/filesystem.hpp>
+#include <filesystem>
+#include <fstream>
 
 int read_meta_data_json_test()
 {
@@ -12,10 +13,10 @@ int read_meta_data_json_test()
     for ( auto file_path : paths )
     {
         // create the meta file in the lease directory
-        boost::filesystem::path dirPath( file_path );
-        boost::filesystem::create_directories( dirPath.parent_path() );
+        std::filesystem::path dirPath( file_path );
+        std::filesystem::create_directories( dirPath.parent_path() );
 
-        if ( !boost::filesystem::exists( file_path ) )
+        if ( !std::filesystem::exists( file_path ) )
         {
             std::ofstream file( file_path );
             file.close();
@@ -29,7 +30,7 @@ int read_meta_data_json_test()
         std::cout << "reading meta data file test is failed" << std::endl;
         for ( auto file_path : paths )
         {
-           boost::filesystem::remove_all(file_path );
+           std::filesystem::remove_all(file_path );
         }
         return EXIT_FAILURE;
     }
@@ -37,7 +38,7 @@ int read_meta_data_json_test()
     std::cout << "read meta data file test is successful" << std::endl;
     for ( auto file_path : paths )
     {
-        boost::filesystem::remove_all(file_path );
+        std::filesystem::remove_all(file_path );
     }
     return EXIT_SUCCESS;
 }
@@ -68,10 +69,10 @@ int write_meta_data_json_test()
     for ( auto file_path : paths )
     {
         // create the meta file in the lease directory
-        boost::filesystem::path dirPath( file_path );
-        boost::filesystem::create_directories( dirPath.parent_path() );
+        std::filesystem::path dirPath( file_path );
+        std::filesystem::create_directories( dirPath.parent_path() );
 
-        if ( !boost::filesystem::exists( file_path ) )
+        if ( !std::filesystem::exists( file_path ) )
         {
             std::ofstream file( file_path );
             file.close();
@@ -91,18 +92,18 @@ int write_meta_data_json_test()
         std::cout << "write meta data to file test is failed" << std::endl;
         for ( auto file_path : paths )
         {
-            boost::filesystem::remove_all(file_path );
+            std::filesystem::remove_all(file_path );
         }
         return EXIT_FAILURE;
     }
 
     // finally delete test lease directory
-    boost::filesystem::remove_all( krb_files_dir + "/" + test_lease_id );
+    std::filesystem::remove_all( krb_files_dir + "/" + test_lease_id );
 
     std::cout << "write meta data info to file test is successful" << std::endl;
     for ( auto file_path : paths )
     {
-        boost::filesystem::remove_all(file_path );
+        std::filesystem::remove_all(file_path );
     }
     return EXIT_SUCCESS;
 }
