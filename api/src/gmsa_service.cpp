@@ -85,6 +85,149 @@ class CredentialsFetcherImpl final
 
   private:
     // Class encompasing the state and logic needed to serve a request.
+    class CallDataHealthCheck
+    {
+    public:
+        std::string cookie;
+
+#define CLASS_NAME_CallDataHealthCheck "CallDataHealthCheck"
+        // Take in the "service" instance (in this case representing an asynchronous
+        // server) and the completion queue "cq" used for asynchronous communication
+        // with the gRPC runtime.
+        CallDataHealthCheck(
+                credentialsfetcher::CredentialsFetcherService::AsyncService* service,
+                grpc::ServerCompletionQueue* cq )
+                : service_( service )
+                , cq_( cq )
+                , health_check_responder_( &health_check_ctx_ )
+                , status_( CREATE )
+        {
+            cookie = CLASS_NAME_CallDataHealthCheck;
+            // Invoke the serving logic right away.
+            Proceed();
+        }
+
+        void Proceed(creds_fetcher::CF_logger& cf_logger)
+        {
+            if ( cookie.compare( CLASS_NAME_CallDataHealthCheck ) != 0 )
+            {
+                return;
+            }
+            printf( "CallDataHealthCheck %p status: %d\n", this, status_ );
+            if ( status_ == CREATE )
+            {
+                // Make this instance progress to the PROCESS state.
+                status_ = PROCESS;
+
+                // As part of the initial CREATE state, we *request* that the system
+                // start processing RequestHealthCheck requests. In this request, "this" acts
+                // are the tag uniquely identifying the request (so that different CallData
+                // instances can serve different requests concurrently), in this case
+                // the memory address of this CallData instance.
+
+                service_->RequestHealthCheck( &health_check_ctx_, &health_check_request_,
+                                                      &health_check_responder_, cq_, cq_, this );
+            }
+            else if ( status_ == PROCESS )
+            {
+                // Spawn a new CallData instance to serve new clients while we process
+                // the one for this CallData. The instance will deallocate itself as
+                // part of its FINISH state.
+                new CallDataHealthCheck( service_, cq_ );
+
+                // The actual processing.
+                health_check_reply_.set_status( "OK" );
+                status_ = FINISH;
+                health_check_responder_.Finish( health_check_reply_, grpc::Status::OK, this );
+
+            }
+            else
+            {
+                GPR_ASSERT( status_ == FINISH );
+                // Once in the FINISH state, deallocate ourselves (CallData).
+                delete this;
+            }
+
+            return;
+        }
+        void Proceed()
+        {
+            if ( cookie.compare( CLASS_NAME_CallDataHealthCheck ) != 0 )
+            {
+                return;
+            }
+            printf( "CallHealthCheck %p status: %d\n", this, status_ );
+            if ( status_ == CREATE )
+            {
+                // Make this instance progress to the PROCESS state.
+                status_ = PROCESS;
+
+                // As part of the initial CREATE state, we *request* that the system
+                // start processing RequestHealthCheck requests. In this request, "this" acts
+                // are the tag uniquely identifying the request (so that different CallData
+                // instances can serve different requests concurrently), in this case
+                // the memory address of this CallData instance.
+
+                service_->RequestHealthCheck( &health_check_ctx_, &health_check_request_,
+                                                      &health_check_responder_, cq_, cq_, this );
+            }
+            else if ( status_ == PROCESS )
+            {
+                // Spawn a new CallData instance to serve new clients while we process
+                // the one for this CallData. The instance will deallocate itself as
+                // part of its FINISH state.
+                new CallDataHealthCheck( service_, cq_ );
+
+                // The actual processing.
+                health_check_reply_.set_status( "OK" );
+
+                // And we are done! Let the gRPC runtime know we've finished, using the
+                // memory address of this instance as the uniquely identifying tag for
+                // the event.
+                status_ = FINISH;
+                health_check_responder_.Finish( health_check_reply_, grpc::Status::OK, this );
+            }
+            else
+            {
+                GPR_ASSERT( status_ == FINISH );
+                // Once in the FINISH state, deallocate ourselves (CallData).
+                delete this;
+            }
+
+            return;
+        }
+
+    private:
+        // The means of communication with the gRPC runtime for an asynchronous
+        // server.
+        credentialsfetcher::CredentialsFetcherService::AsyncService* service_;
+        // The producer-consumer queue where for asynchronous server notifications.
+        grpc::ServerCompletionQueue* cq_;
+        // Context for the rpc, allowing to tweak aspects of it such as the use
+        // of compression, authentication, as well as to send metadata back to the
+        // client.
+        grpc::ServerContext health_check_ctx_;
+
+        // What we get from the client.
+        credentialsfetcher::HealthCheckRequest health_check_request_;
+        // What we send back to the client.
+        credentialsfetcher::HealthCheckResponse health_check_reply_;
+
+        // The means to get back to the client.
+        grpc::ServerAsyncResponseWriter<credentialsfetcher::HealthCheckResponse>
+                health_check_responder_;
+
+        // Let's implement a tiny state machine with the following states.
+        enum CallStatus
+        {
+            CREATE,
+            PROCESS,
+            FINISH
+        };
+        CallStatus status_; // The current serving state.
+    };
+
+    // Class encompasing the state and logic needed to serve a request.
     class CallDataCreateKerberosLease
     {
       public:
@@ -1024,6 +1167,7 @@ class CredentialsFetcherImpl final
         new CallDataAddNonDomainJoinedKerberosLease ( &service_, cq_.get() );
         new CallDataRenewNonDomainJoinedKerberosLease ( &service_, cq_.get() );
         new CallDataDeleteKerberosLease( &service_, cq_.get() );
+        new CallDataHealthCheck( &service_, cq_.get() );
 
         while ( pthread_shutdown_signal != nullptr && !( *pthread_shutdown_signal ) )
         {
@@ -1046,6 +1190,7 @@ class CredentialsFetcherImpl final
                 aws_sm_secret_name );
             static_cast<CallDataDeleteKerberosLease*>( got_tag )->Proceed( krb_files_dir, cf_logger,
                                                                            aws_sm_secret_name );
+            static_cast<CallDataHealthCheck*>( got_tag )->Proceed( cf_logger);
         }
     }
 

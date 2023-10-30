@@ -37,6 +37,38 @@ class CredentialsFetcherClient
     }
 
     /**
+     * Health check method
+     * @return
+     */
+    std::string HealthCheckMethod( std::string service_name )
+    {
+        std::string result;
+        // Prepare request
+        credentialsfetcher::HealthCheckRequest request;
+        request.set_service( service_name );
+
+        credentialsfetcher::HealthCheckResponse response;
+        grpc::ClientContext context;
+        grpc::Status status;
+
+        // Send request
+        status = _stub->HealthCheck( &context, request, &response );
+
+        // Handle response
+        if ( status.ok() )
+        {
+            return response.status();
+        }
+        else
+        {
+            std::cerr << status.error_code() << ": " << status.error_message() << std::endl;
+            return response.status();
+        }
+    }
+
+
+
+    /**
      * Test method to create kerberos tickets
      * @param credspec_contents - information of service account
      * @return
@@ -235,6 +267,7 @@ static void show_usage( std::string name )
     std::cout << "Usage: " << name << " <option(s)> SOURCES"
               << "Options:\n"
               << "\t-h,--help\t\tShow this help message\n"
+              << "\t --check \t\thealth check of daemon\n"
               << "\t-no option\t\tcreate & delete kerberos tickets\n"
               << "\t --create \t\tcreate krb tickets for service account\n"
               << "\t --delete \t\tdelete krb tickets for a given lease_id\tprovide lease_id to be "
@@ -247,6 +280,17 @@ static void show_usage( std::string name )
               << "\t --invalidargs \t\ttest with invalid args, failure scenario\n"
               << "\t --run_stress_test \t\tstress test with multiple accounts and leases\n"
               << std::endl;
+}
+
+// health check daemon
+std::string health_check(
+        CredentialsFetcherClient& client)
+{
+    std::string health_check_response =
+            client.HealthCheckMethod("cfservice");
+    std::cout << "Client received output for health check: "
+              << health_check_response << std::endl;
+    return health_check_response;
 }
 
 // create kerberos tickets
@@ -436,6 +480,11 @@ int main( int argc, char** argv )
         if ( ( arg == "-h" ) || ( arg == "--help" ) )
         {
             show_usage( argv[0] );
+            return 0;
+        }
+        else if ( arg == "--check" )
+        {
+            health_check(client);
             return 0;
         }
         else if ( arg == "--delete" )
