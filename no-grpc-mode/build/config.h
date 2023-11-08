@@ -1,6 +1,0 @@
-#define CF_KRB_DIR "/var/credentials-fetcher/krbdir"
-#define CF_UNIX_DOMAIN_SOCKET_DIR "/var/credentials-fetcher/socket"
-#define CF_LOGGING_DIR "/var/credentials-fetcher/logging"
-#define CF_TEST_DOMAIN_NAME  "contoso.com"
-#define CF_TEST_GMSA_ACCOUNT "webapp01"
-#define CMAKE_PROJECT_VERSION  "1.2.0"
