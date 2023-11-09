@@ -52,6 +52,7 @@
 ```
 
 #Copy helper app to /usr/sbin
+```
   sudo cp credentials_fetcher_utf16_private.exe /usr/sbin/
   sudo cp credentials_fetcher_utf16_private.runtimeconfig.json /usr/sbin/
  ```
