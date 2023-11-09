@@ -3,19 +3,21 @@ sudo yum install gcc10-c++ -y
 sudo mv /usr/bin/gcc /usr/bin/gcc-7.3
 sudo ln -s /usr/bin/gcc10-cc /usr/bin/gcc
 sudo mv /usr/bin/g++ /usr/bin/g++-7.3
-ln -s /usr/bin/gcc10-c++ /usr/bin/g++
+sudo ln -s /usr/bin/gcc10-c++ /usr/bin/g++
 sudo ln -s /usr/bin/gcc10-c++ /usr/bin/g++
 sudo mv /usr/bin/c++ /usr/bin/c++-7.3
-ln -s /usr/bin/gcc10-c++ /usr/bin/c++
+sudo ln -s /usr/bin/gcc10-c++ /usr/bin/c++
 sudo ln -s /usr/bin/gcc10-c++ /usr/bin/c++
 
 sudo yum install openssl-devel -y
 sudo yum install openssl-devel -y
+
   
 #need a newer version of CMake so compile from source
+pushd ~
 git clone https://github.com/Kitware/CMake.git -b release \
    && cd CMake && ./configure && make -j8 &&  pwd && sudo make install
-  
+popd
 #install DotNet 6  
 sudo rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm  
 sudo yum install aspnetcore-runtime-6.0 -y

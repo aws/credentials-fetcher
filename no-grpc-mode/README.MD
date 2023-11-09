@@ -53,19 +53,59 @@
  
   #prereqs to run
 ```
-  export CF_CRED_SPEC_FILE=/home/ec2-user/credentials-fetcher/no-grpc-mode/build/credspec.json
   sudo yum install realmd -y
   sudo yum install krb5-workstation -y
   sudo yum install openldap -y
   sudo yum install openldap-clients -y
   sudo yum install cyrus-sasl-gssapi -y
   
-  
+
+  export CF_CRED_SPEC_FILE=/home/ec2-user/credentials-fetcher/no-grpc-mode/build/credspec.json  
   #todo:make sure EC2 Instance Profile has permissions to AWS Secrets Manager
   export AWS_REGION=us-east-1
 ```
 
-#run it
+#run it in domainless mode.
+#Replace gmsa-plugin-input with your AWS SecretsManager secret name.
+
 ```
  ./credentials-fetcherd --aws_sm_secret_name gmsa-plugin-input
 ```
+
+#You should see output similar to this
+```
+[root@ip-10-0-61-81 build]#  ./credentials-fetcherd --aws_sm_secret_name gmsa-plugin-input
+Option selected for domainless operation, AWS secrets manager secret-name = gmsa-plugin-input
+krb_files_dir = /var/credentials-fetcher/krbdir
+cred_file = /home/ec2-user/credentials-fetcher/no-grpc-mode/build/credspec.json (lease id: credspec)
+logging_dir = /var/credentials-fetcher/logging
+unix_socket_dir = /var/credentials-fetcher/socket
+Credential file exists %s
+Generating lease id %s
+Using existing cache: persistent:0:0
+Using principal: eks-portable-ident@EXAMPLE.COM
+prompt at 0x970ea702, 0x400, 0���
+prompt at 0x970ea702, 0x400, 0���
+Authenticated to Kerberos v5
+Deleting existing credential file directory %s
+%s
+ldapsearch -H ldap://DC1.example.com -b 'CN=gmsaeks,CN=Managed Service Accounts,DC=example,DC=com' -s sub  "(objectClass=msDs-GroupManagedServiceAccount)"  msDS-ManagedPassword
+SASL/GSSAPI authentication started
+SASL username: eks-portable-ident@EXAMPLE.COM
+SASL SSF: 256
+SASL data security layer installed.
+dotnet /usr/sbin/credentials_fetcher_utf16_private.exe | kinit  -c /var/credentials-fetcher/krbdir/credspec/gmsaeks/krb5cc -V 'gmsaeks$'@EXAMPLE.COM
+Using specified cache: /var/credentials-fetcher/krbdir/credspec/gmsaeks/krb5cc
+Using principal: gmsaeks$@EXAMPLE.COM
+Password for gmsaeks$@EXAMPLE.COM: 
+Authenticated to Kerberos v5
+kinit return value = 0
+gMSA ticket is at %s
+gMSA ticket is at /var/credentials-fetcher/krbdir/credspec/gmsaeks/krb5cc
+krb refresh pthread is at %p
+Thread 0: top of stack near 0x7fc1ba017c88; argv_string=krb_ticket_refresh_thread
+
+
+```
+
+
