@@ -41,37 +41,38 @@
   sudo yum install systemd-devel -y
  ```
 
-  #Download Credentials-Fetcher code
+  #build Credentials-Fetcher
 ```
-  git clone https://github.com/awsjohns/credentials-fetcher
-  cd credentials-fetcher/
-  git switch no_grpc_mode
   cd no-grpc-mode/
   mkdir build
   cd build
    
   cmake ../
   make -j 4
+```
 
+#Copy helper app to /usr/sbin
   sudo cp credentials_fetcher_utf16_private.exe /usr/sbin/
   sudo cp credentials_fetcher_utf16_private.runtimeconfig.json /usr/sbin/
  ```
  
-  #prereqs to run
+  #install prereqs to run
 ```
   sudo yum install realmd -y
   sudo yum install krb5-workstation -y
   sudo yum install openldap -y
   sudo yum install openldap-clients -y
   sudo yum install cyrus-sasl-gssapi -y
-  
+```  
 
+#set environment variables need to run in CLI mode 
+```
   export CF_CRED_SPEC_FILE=/home/ec2-user/credentials-fetcher/no-grpc-mode/build/credspec.json  
   #todo:make sure EC2 Instance Profile has permissions to AWS Secrets Manager
   export AWS_REGION=us-east-1
 ```
 
-#run it in domainless mode.
+#run it in domainless mode by specific the AWS SecretsManger secret
 #Replace gmsa-plugin-input with your AWS SecretsManager secret name.
 
 ```
