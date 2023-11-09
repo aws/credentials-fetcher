@@ -218,7 +218,8 @@ int main( int argc, const char* argv[] )
     if ( !cf_daemon.cred_file.empty() ) {
         cf_daemon.cf_logger.logger( LOG_INFO, "Credential file exists %s", cf_daemon.cred_file.c_str() );
         
-        int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, cf_daemon.cred_file, cf_daemon.cf_logger, cred_file_lease_id);
+        int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, cf_daemon.cred_file, cf_daemon.cf_logger, 
+cred_file_lease_id,cf_daemon.aws_sm_secret_name);
         if (specFileReturn == EXIT_FAILURE) {
             std::cout << "ProcessCredSpecFile() non 0 " << std::endl;
             exit( EXIT_FAILURE );

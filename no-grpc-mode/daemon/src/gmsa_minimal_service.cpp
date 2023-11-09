@@ -69,7 +69,9 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
  * @param cred_file_lease_id - The lease id to use for this credential spec file
  * @return - return 0 on success
  */
-int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id) {
+int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger,
+ std::string cred_file_lease_id,
+ std::string aws_sm_secret_name) {
     std::unordered_set<std::string> krb_ticket_dirs;
     std::string err_msg;
     std::string credspec_contents;
@@ -118,15 +120,32 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     
     if ( err_msg.empty() )
     {
-        // invoke to get machine ticket
-        status = get_machine_krb_ticket( krb_ticket_info->domain_name, cf_logger );
-        if ( status < 0 )
+        if ( aws_sm_secret_name.length() != 0 )
         {
-            cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
-                                status );
-            delete krb_ticket_info;      
-                  
-            return EXIT_FAILURE;
+            status = get_user_krb_ticket( krb_ticket_info->domain_name,
+                                          aws_sm_secret_name, cf_logger );
+            krb_ticket_info->domainless_user =
+                "awsdomainlessusersecret:"+aws_sm_secret_name;
+	
+            if ( status < 0 )
+            {
+                cf_logger.logger( LOG_ERR, "Error %d: Cannot get usr krb ticket",
+                                    status );
+                delete krb_ticket_info;
+               return EXIT_FAILURE;
+            }
+	}
+        else
+        {
+            // invoke to get machine ticket
+            status = get_machine_krb_ticket( krb_ticket_info->domain_name, cf_logger );
+            if ( status < 0 )
+	    {
+	        cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
+	                            status );
+	        delete krb_ticket_info;
+               return EXIT_FAILURE;
+            }
         }
 
         std::string krb_file_path = krb_ticket_info->krb_file_path;
