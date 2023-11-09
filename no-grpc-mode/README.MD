@@ -1,3 +1,9 @@
+"No gRPC Mode" is intended to be used for this scenario:
+* Neeeds to run on Amazon Linux 2 which does not have packages available for gRPC
+* EKS host not ECS
+* Need to run via command line and not configured via gRPC api calls
+* Containers do not need access to kerbos tickets
+
 #compile no_grpc_mode on AmazonLinux2
 
 ```
