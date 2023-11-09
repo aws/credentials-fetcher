@@ -80,16 +80,12 @@ krb_files_dir = /var/credentials-fetcher/krbdir
 cred_file = /home/ec2-user/credentials-fetcher/no-grpc-mode/build/credspec.json (lease id: credspec)
 logging_dir = /var/credentials-fetcher/logging
 unix_socket_dir = /var/credentials-fetcher/socket
-Credential file exists %s
-Generating lease id %s
 Using existing cache: persistent:0:0
 Using principal: eks-portable-ident@EXAMPLE.COM
-prompt at 0x970ea702, 0x400, 0���
-prompt at 0x970ea702, 0x400, 0���
+prompt at 0x970ea702, 0x400,  '��
+prompt at 0x970ea702, 0x400,  '��
 Authenticated to Kerberos v5
-Deleting existing credential file directory %s
-%s
-ldapsearch -H ldap://DC1.example.com -b 'CN=gmsaeks,CN=Managed Service Accounts,DC=example,DC=com' -s sub  "(objectClass=msDs-GroupManagedServiceAccount)"  msDS-ManagedPassword
+ldapsearch -H ldap://DC2.example.com -b 'CN=gmsaeks,CN=Managed Service Accounts,DC=example,DC=com' -s sub  "(objectClass=msDs-GroupManagedServiceAccount)"  msDS-ManagedPassword
 SASL/GSSAPI authentication started
 SASL username: eks-portable-ident@EXAMPLE.COM
 SASL SSF: 256
@@ -100,11 +96,8 @@ Using principal: gmsaeks$@EXAMPLE.COM
 Password for gmsaeks$@EXAMPLE.COM: 
 Authenticated to Kerberos v5
 kinit return value = 0
-gMSA ticket is at %s
 gMSA ticket is at /var/credentials-fetcher/krbdir/credspec/gmsaeks/krb5cc
-krb refresh pthread is at %p
-Thread 0: top of stack near 0x7fc1ba017c88; argv_string=krb_ticket_refresh_thread
-
+Thread 0: top of stack near 0x7fc7f18c7c88; argv_string=krb_ticket_refresh_thread
 
 ```
 

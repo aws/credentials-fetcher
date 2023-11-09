@@ -66,7 +66,6 @@ namespace creds_fetcher
 
         template <typename... Logs> void logger( const int level, const char* fmt, Logs... logs )
         {
-            std::cout << fmt << std::endl;
             if ( level >= log_level )
             {
                 sd_journal_print( level, fmt, logs... );
