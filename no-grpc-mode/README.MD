@@ -123,6 +123,7 @@ mkdir ~/tmp
 
 cp -r credentials-fetcher/no-grpc-mode/ ~/tmp
 
+cd ~/tmp && mv no-grpc-mode credentials-fetcher-v.1.2.0
 tar cvfz v.1.2.0.tar.gz credentials-fetcher-v.1.2.0
 cp v.1.2.0.tar.gz ~/rpmbuild/SOURCES/
 

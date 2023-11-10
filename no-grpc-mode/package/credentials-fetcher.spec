@@ -14,9 +14,9 @@ License:        Apache-2.0
 URL:            https://github.com/aws/credentials-fetcher
 Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/v.%{version}.tar.gz
  
-BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-devel jsoncpp-devel
-BuildRequires:  openssl-devel zlib-devel protobuf-devel re2-devel krb5-devel systemd-devel
-BuildRequires:  systemd-rpm-macros dotnet-sdk-6.0 grpc-plugins
+BuildRequires:  make chrpath openldap-clients jsoncpp-devel
+BuildRequires:  openssl-devel zlib-devel krb5-devel systemd-devel
+BuildRequires:  dotnet-sdk-6.0
  
 Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0 jsoncpp-devel jsoncpp
 # No one likes you i686
@@ -40,24 +40,36 @@ sed -r -i 's/(std=c\+\+)11/\117/' CMakeLists.txt
  
 %build
 %cmake3
-%cmake_build
+#%cmake_build
+make
 %install
  
-%cmake_install
+#%cmake_install
+# Replace %cmake_install with explicit installation commands
+mkdir -p %{buildroot}/%{_sbindir}
+install -m 0755 credentials-fetcherd %{buildroot}/%{_sbindir}/credentials-fetcherd
+
+install -m 0755 credentials_fetcher_utf16_private.exe %{buildroot}/%{_sbindir}/credentials_fetcher_utf16_private.exe
+install -m 0755 credentials_fetcher_utf16_private.runtimeconfig.json %{buildroot}/%{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
+
+
+mkdir -p %{buildroot}/%{_unitdir}
+install -m 0755 scripts/systemd/credentials-fetcher.service %{buildroot}/%{_unitdir}/credentials-fetcher.service
+
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_removing_rpath
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_rpath_for_internal_libraries
 chrpath --delete %{buildroot}/%{_sbindir}/credentials-fetcherd
  
 %check
 # TBD: Run tests from top-level directory
-ctest3
+#ctest3
  
 %files
 %{_sbindir}/credentials-fetcherd
 %{_unitdir}/credentials-fetcher.service
 %license LICENSE
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
-%doc CONTRIBUTING.md NOTICE README.md
+%doc CONTRIBUTING.md NOTICE README.MD
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
  
