@@ -18,7 +18,7 @@ BuildRequires:  make chrpath openldap-clients jsoncpp-devel
 BuildRequires:  openssl-devel zlib-devel krb5-devel systemd-devel
 BuildRequires:  dotnet-sdk-6.0
  
-Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0 jsoncpp-devel jsoncpp
+Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0 jsoncpp-devel jsoncpp realmd krb5-workstation openldap openldap-clients cyrus-sasl-gssapi
 # No one likes you i686
 ExclusiveArch: x86_64 aarch64 s390x
  
