@@ -109,4 +109,23 @@ Thread 0: top of stack near 0x7fc7f18c7c88; argv_string=krb_ticket_refresh_threa
 
 ```
 
+#build the RPM for distribution
 
+```
+sudo yum install -y rpmdevtools rpmlint -y
+rpmdev-setuptree
+
+sudo ln -s /usr/local/bin/cmake /usr/bin/cmake3
+
+
+cp ~/credentials-fetcher/no-grpc-mode/package/credentials-fetcher.spec ~/rpmbuild/SPECS
+mkdir ~/tmp
+
+cp -r credentials-fetcher/no-grpc-mode/ ~/tmp
+
+tar cvfz v.1.2.0.tar.gz credentials-fetcher-v.1.2.0
+cp v.1.2.0.tar.gz ~/rpmbuild/SOURCES/
+
+rpmbuild -ba ~/rpmbuild/SPECS/credentials-fetcher.spec 
+
+```
