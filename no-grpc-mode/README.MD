@@ -160,6 +160,7 @@ Implement the SMB CSI Driver with Kerberos authentication settings to enable the
 * SMB File share permissions assigned for read/write to the gMSA account
 * Amazon EKS Cluster
 * Amazon EKS Worker Node operating on Amazon Linux 2
+* EKS Worknode EC2 Instance Role configured with policy to read Secrets Manager secret
 * kubectl installed and configured for EKS Cluster
 
 
@@ -283,6 +284,10 @@ yum install credentials-fetcher-1.2.0-3.amzn2.x86_64.rpm -y
 ```
 ### store credspec.json in /var/credentials-fetcher/credspec.json
 
+### configure AWS region to your region
+```
+aws configure set default.region us-east-1
+```
 ### Set Environment Variables for  [credentials-fetcher.service](https://github.com/awsjohns/credentials-fetcher/blob/34777570e5c49d93258038d6d4c6d8bef33d306b/scripts/systemd/credentials-fetcher.service)
 
 * Edit /usr/lib/systemd/system/credentials-fetcher.service
