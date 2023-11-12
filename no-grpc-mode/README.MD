@@ -155,11 +155,12 @@ Implement the SMB CSI Driver with Kerberos authentication settings to enable the
 * Microsoft Active Directory
 * gMSA Account in AD
 * credspec.json generated from the gMSA Account
+* AWS Secrets Manager secret with username/password for account that can query gMSA account 
 * FSx NetApp with an SMB File share on a Volume configured with NTFS permissions style
 * SMB File share permissions assigned for read/write to the gMSA account
 * Amazon EKS Cluster
 * Amazon EKS Worker Node operating on Amazon Linux 2
-
+* kubectl installed and configured for EKS Cluster
 
 
 ### Install SMB CSI Driver
@@ -200,6 +201,7 @@ kubectl create secret generic smbcreds --from-literal krb5cc_0=$EMPTYCACHE
 
 ### Apply Persistent Volume (PV)
 
+create pv-smb.yaml with below contents:
 ```
 ---
 apiVersion: v1
@@ -247,6 +249,7 @@ kubectl apply -f pv-smb.yaml
 
 ### Apply Persistent Volume Claim (PVC)
 
+Create pvc-smb.yaml with contents below:
 ```
 ---
 kind: PersistentVolumeClaim
@@ -278,6 +281,7 @@ sudo rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-
 yum install credentials-fetcher-1.2.0-3.amzn2.x86_64.rpm -y
 
 ```
+### store credspec.json in /var/credentials-fetcher/credspec.json
 
 ### Set Environment Variables for  [credentials-fetcher.service](https://github.com/awsjohns/credentials-fetcher/blob/34777570e5c49d93258038d6d4c6d8bef33d306b/scripts/systemd/credentials-fetcher.service)
 
