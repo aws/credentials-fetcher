@@ -6,15 +6,15 @@ include(GNUInstallDirs)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(CMAKE_CXX_FLAGS " -std=c++17 -g -Wall -Werror -pthread")
+#These commands are not supported in CMake available for Amazon Linux 2
+#cmake_host_system_information(RESULT PRETTY_NAME QUERY DISTRIB_PRETTY_NAME)
+#message(STATUS "${PRETTY_NAME}")
+#
+#cmake_host_system_information(RESULT DISTRO QUERY DISTRIB_INFO)
 
-cmake_host_system_information(RESULT PRETTY_NAME QUERY DISTRIB_PRETTY_NAME)
-message(STATUS "${PRETTY_NAME}")
-
-cmake_host_system_information(RESULT DISTRO QUERY DISTRIB_INFO)
-
-foreach(VAR IN LISTS DISTRO)
-  message(STATUS "${VAR}=`${${VAR}}`")
-endforeach()
+#foreach(VAR IN LISTS DISTRO)
+#  message(STATUS "${VAR}=`${${VAR}}`")
+#endforeach()
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
