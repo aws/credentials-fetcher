@@ -134,10 +134,6 @@ rpmbuild -ba ~/rpmbuild/SPECS/credentials-fetcher.spec
 
 # Using Credentials-Fetcher with EKS/SMB
 
-[EKS Sidecar for SMB via Kerberos](https://quip-amazon.com/BQb4AhmfO6YV)
-[Build Credentials-Helper on Amazon Linux 2](https://quip-amazon.com/f2W0AUfGPWdO)
-
-
 
 ### Scenario
 
