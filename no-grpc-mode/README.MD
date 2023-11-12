@@ -153,10 +153,11 @@ Implement the SMB CSI Driver with Kerberos authentication settings to enable the
 ### Prerequisites:
 
 * Microsoft Active Directory
-* gMSA Account in AD
+* gMSA Account in Active Directory
 * credspec.json generated from the gMSA Account
 * AWS Secrets Manager secret with username/password for account that can query gMSA account 
 * FSx NetApp with an SMB File share on a Volume configured with NTFS permissions style
+* FSx Netapp is joined to Active Directory
 * SMB File share permissions assigned for read/write to the gMSA account
 * Amazon EKS Cluster
 * Amazon EKS Worker Node operating on Amazon Linux 2
