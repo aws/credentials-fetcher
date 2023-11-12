@@ -168,6 +168,7 @@ Implement the SMB CSI Driver with Kerberos authentication settings to enable the
 
 ```
 curl -skSL https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/v1.13.0/deploy/install-driver.sh | bash -s v1.13.0 --
+mkdir -p /var/lib/kubelet/kerberos/
 ```
 
 ```
