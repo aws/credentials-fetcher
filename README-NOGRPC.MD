@@ -7,6 +7,7 @@
 #compile no_grpc_mode on AmazonLinux2
 
 ```
+  sudo yum install cmake3
   sudo yum install git -y
   sudo yum install gcc10-c++ -y
   sudo mv /usr/bin/gcc /usr/bin/gcc-7.3
@@ -19,12 +20,6 @@
   sudo ln -s /usr/bin/gcc10-c++ /usr/bin/c++
   sudo yum install openssl-devel -y
   sudo yum install openssl-devel -y
-```
-  
-  need a newer version of CMake so compile from source
-``` 
- git clone https://github.com/Kitware/CMake.git -b release \
-    && cd CMake && ./configure && make -j8 &&  pwd && sudo make install
 ```
   
   #install DotNet 6  
@@ -47,7 +42,7 @@
   mkdir build
   cd build
    
-  cmake ../
+  cmake3 ../
   make -j 4
 ```
 
