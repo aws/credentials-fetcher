@@ -561,6 +561,11 @@ k5_kinit(struct k_opts *opts, struct k5_data *k5)
         if (opts->verbose)
             fprintf(stderr, _("Initialized cache\n"));
 
+        //call krb5_cc_store_cred() instead of k5_cc_store_primary_cred()
+        //k5_cc_store_primary_cred() is not in Krb5 package available for Amazon Linux 2
+        //k5_cc_store_primary_cred() contains conditional logic we do not need 
+        //ret = k5_cc_store_primary_cred(k5->ctx, mcc, &my_creds);
+        
         ret = krb5_cc_store_cred(k5->ctx, mcc, &my_creds);
         if (ret) {
             com_err(progname, ret, _("while storing credentials"));

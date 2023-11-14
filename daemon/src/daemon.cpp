@@ -197,8 +197,10 @@ int main( int argc, const char* argv[] )
 
     if ( cf_daemon.run_diagnostic )
     {
-        exit(1); 
-              
+        exit(  read_meta_data_json_test() ||
+        read_meta_data_invalid_json_test() || renewal_failure_krb_dir_not_found_test() ||
+        write_meta_data_json_test() );
+                     
     }
 
     struct sigaction sa;
