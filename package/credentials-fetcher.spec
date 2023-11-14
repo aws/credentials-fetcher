@@ -69,7 +69,7 @@ chrpath --delete %{buildroot}/%{_sbindir}/credentials-fetcherd
 %{_unitdir}/credentials-fetcher.service
 %license LICENSE
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
-%doc CONTRIBUTING.md NOTICE README.MD
+%doc CONTRIBUTING.md NOTICE README.md
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
  

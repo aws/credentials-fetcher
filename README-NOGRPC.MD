@@ -38,7 +38,7 @@
 
   #build Credentials-Fetcher
 ```
-  cd no-grpc-mode/
+  
   mkdir build
   cd build
    
@@ -119,17 +119,19 @@ Thread 0: top of stack near 0x7fc7f18c7c88; argv_string=krb_ticket_refresh_threa
 
 ```
 sudo yum install -y rpmdevtools rpmlint -y
+sudo yum install chrpath
+
 rpmdev-setuptree
 
 sudo ln -s /usr/local/bin/cmake /usr/bin/cmake3
 
 
-cp ~/credentials-fetcher/no-grpc-mode/package/credentials-fetcher.spec ~/rpmbuild/SPECS
+cp ~/credentials-fetcher/package/credentials-fetcher.spec ~/rpmbuild/SPECS
 mkdir ~/tmp
 
-cp -r credentials-fetcher/no-grpc-mode/ ~/tmp
+cp -r credentials-fetcher/ ~/tmp
 
-cd ~/tmp && mv no-grpc-mode credentials-fetcher-v.1.2.0
+cd ~/tmp && mv credentials-fetcher credentials-fetcher-v.1.2.0
 tar cvfz v.1.2.0.tar.gz credentials-fetcher-v.1.2.0
 cp v.1.2.0.tar.gz ~/rpmbuild/SOURCES/
 
