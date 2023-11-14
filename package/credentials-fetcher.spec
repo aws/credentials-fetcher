@@ -5,7 +5,7 @@
 # For handling bump release by rpmdev-bumpspec and mass rebuild
 %global baserelease 3
  
-Name:           credentials-fetcher
+Name:           credentials-fetcher-no-grpc
 Version:        %{major_version}.%{minor_version}.%{patch_version}
 Release:        %{baserelease}%{?dist}
 Summary:        credentials-fetcher is a daemon that refreshes tickets or tokens periodically
