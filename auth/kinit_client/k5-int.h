@@ -1887,8 +1887,8 @@ krb5_ser_unpack_bytes(krb5_octet *, size_t, krb5_octet **, size_t *);
 krb5_error_code KRB5_CALLCONV
 krb5int_cc_default(krb5_context, krb5_ccache *);
 
-//krb5_error_code
-//k5_cc_store_primary_cred(krb5_context, krb5_ccache, krb5_creds *);
+krb5_error_code
+k5_cc_store_primary_cred(krb5_context, krb5_ccache, krb5_creds *);
 
 /* Fill in the buffer with random alphanumeric data. */
 krb5_error_code
