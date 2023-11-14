@@ -13,8 +13,6 @@ struct thread_info
     char* argv_string;   /* From command-line argument */
 };
 
-static const char* grpc_thread_name = "grpc_thread";
-
 static void systemd_shutdown_signal_catcher( int signo )
 {
     cf_daemon.got_systemd_shutdown_signal = 1;
@@ -35,23 +33,6 @@ static void systemd_shutdown_signal_catcher( int signo )
 
 #define ENV_CF_CRED_SPEC_FILE "CF_CRED_SPEC_FILE"
 
-/**
- * grpc_thread_start - used in pthread_create
- * @param arg - thread info
- * @return pthread name
- */
-void* grpc_thread_start( void* arg )
-{
-    struct thread_info* tinfo = (struct thread_info*)arg;
-
-    printf( "Thread %d: top of stack near %p; argv_string=%s\n", tinfo->thread_num, (void*)&tinfo,
-            tinfo->argv_string );
-
-    RunGrpcServer( cf_daemon.unix_socket_dir, cf_daemon.krb_files_dir, cf_daemon.cf_logger,
-                   &cf_daemon.got_systemd_shutdown_signal, cf_daemon.aws_sm_secret_name );
-
-    return tinfo->argv_string;
-}
 
 /**
  * refresh_krb_tickets - used in pthread_create
@@ -164,8 +145,7 @@ int main( int argc, const char* argv[] )
 {
     std::pair<int, void*> pthread_status;
     std::string cred_file;
-    std::string cred_file_lease_id;
-    void* grpc_pthread;
+    std::string cred_file_lease_id("fixed_lease_id");
     void* krb_refresh_pthread;
 
     int status = parse_options( argc, argv, cf_daemon );
@@ -217,9 +197,8 @@ int main( int argc, const char* argv[] )
 
     if ( cf_daemon.run_diagnostic )
     {
-        exit(  read_meta_data_json_test() ||
-              read_meta_data_invalid_json_test() || renewal_failure_krb_dir_not_found_test() ||
-              write_meta_data_json_test() );
+        exit(1); 
+              
     }
 
     struct sigaction sa;
@@ -234,31 +213,19 @@ int main( int argc, const char* argv[] )
 
     /* We need to run three parallel processes */
     // 1. Systemd - daemon
-    // 2. grpc server
-    // 3. timer to run every 45 min
+    // 2. timer to run every 45 min
 
     if ( !cf_daemon.cred_file.empty() ) {
         cf_daemon.cf_logger.logger( LOG_INFO, "Credential file exists %s", cf_daemon.cred_file.c_str() );
         
-        int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, cf_daemon.cred_file, cf_daemon.cf_logger, cred_file_lease_id);
+        int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, cf_daemon.cred_file, cf_daemon.cf_logger, 
+cred_file_lease_id,cf_daemon.aws_sm_secret_name);
         if (specFileReturn == EXIT_FAILURE) {
             std::cout << "ProcessCredSpecFile() non 0 " << std::endl;
             exit( EXIT_FAILURE );
         }
     }
     
-    /* Create one pthread for gRPC processing */
-    pthread_status =
-        create_pthread( grpc_thread_start, grpc_thread_name, -1 );
-    if ( pthread_status.first < 0 )
-    {
-        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
-                                    pthread_status.first );
-        exit( EXIT_FAILURE );
-    }
-    grpc_pthread = pthread_status.second;
-    cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
-        
     /* Create pthread for refreshing krb tickets */
     pthread_status =
         create_pthread( refresh_krb_tickets_thread_start, "krb_ticket_refresh_thread", -1 );

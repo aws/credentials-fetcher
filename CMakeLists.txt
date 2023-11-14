@@ -6,36 +6,28 @@ include(GNUInstallDirs)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(CMAKE_CXX_FLAGS " -std=c++17 -g -Wall -Werror -pthread")
+#These commands are not supported in CMake available for Amazon Linux 2
+#cmake_host_system_information(RESULT PRETTY_NAME QUERY DISTRIB_PRETTY_NAME)
+#message(STATUS "${PRETTY_NAME}")
+#
+#cmake_host_system_information(RESULT DISTRO QUERY DISTRIB_INFO)
 
-set(protobuf_MODULE_COMPATIBLE TRUE)
-find_package(Protobuf REQUIRED)
-find_package(gRPC REQUIRED)
-set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
-set(_REFLECTION gRPC::grpc++_reflection)
-find_program(_PROTOBUF_PROTOC protoc)
-find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
-
-cmake_host_system_information(RESULT PRETTY_NAME QUERY DISTRIB_PRETTY_NAME)
-message(STATUS "${PRETTY_NAME}")
-
-cmake_host_system_information(RESULT DISTRO QUERY DISTRIB_INFO)
-
-foreach(VAR IN LISTS DISTRO)
-  message(STATUS "${VAR}=`${${VAR}}`")
-endforeach()
+#foreach(VAR IN LISTS DISTRO)
+#  message(STATUS "${VAR}=`${${VAR}}`")
+#endforeach()
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(config)
 add_subdirectory(config)
-set(api)
-add_subdirectory(api)
 set(renewal)
 add_subdirectory(renewal)
-set(daemon)
-add_subdirectory(daemon)
 set(metadata)
 add_subdirectory(metadata)
+set(auth)
+add_subdirectory(auth)
+set(daemon)
+add_subdirectory(daemon)
 
 if (NOT CF_KRB_DIR)
     set(CF_KRB_DIR "/var/credentials-fetcher/krbdir")
@@ -97,7 +89,7 @@ else()
             )
 endif()
 
-set(sources ${daemon} ${config} ${renewal})
+set(sources ${daemon} ${config} ${renewal} ${auth} ${metadata})
 
 add_executable(credentials-fetcherd ${sources})
 
@@ -107,19 +99,21 @@ check_pie_supported()
 if (CMAKE_C_LINK_PIE_SUPPORTED)
    set_property(TARGET credentials-fetcherd
                 PROPERTY POSITION_INDEPENDENT_CODE TRUE)
-   set_property(TARGET cf_gmsa_service_private
-                PROPERTY POSITION_INDEPENDENT_CODE TRUE)
 endif ()
 
 find_path(GLIB_INCLUDE_DIR glib.h "/usr/include" "/usr/include/glib-2.0")
 find_path(GLIB_CONFIG_DIR glibconfig.h "/usr/include" "/usr/lib64/glib-2.0/include" "/usr/lib/x86_64-linux-gnu/glib-2.0/include/")
+set(BOOST_FILESYSTEM_H "/usr/include/boost/filesystem")
+set(KRB5_CLIENT_H ${CMAKE_CURRENT_SOURCE_DIR}/auth/kinit_client/)
 
 target_include_directories(credentials-fetcherd
         PUBLIC
         common
         ${GLIB_INCLUDE_DIR}
         ${GLIB_CONFIG_DIR}
-        ${CMAKE_CURRENT_BINARY_DIR})
+	${BOOST_FILESYSTEM_H}
+        ${CMAKE_CURRENT_BINARY_DIR}
+	${KRB5_CLIENT_H})
 
 find_program(DOTNET dotnet ~/.dotnet /usr/bin)
 if (NOT DOTNET)
@@ -137,14 +131,16 @@ target_include_directories(credentials-fetcherd PUBLIC common)
 if(${DISTRO_ID} MATCHES "ubuntu")
 	message(STATUS "Linux distro detected as ubuntu")
 target_link_libraries(credentials-fetcherd
-        PUBLIC systemd krb5 glib-2.0 cf_gmsa_service_private
-        crypto protobuf kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto com_err krb5support resolv utf8_validity)
+        PUBLIC systemd krb5 glib-2.0
+        crypto protobuf kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto com_err krb5support resolv utf8_validity jsoncpp)
 else()
+
 target_link_libraries(credentials-fetcherd
-        PUBLIC systemd krb5 glib-2.0 cf_gmsa_service_private
+        PUBLIC systemd krb5 glib-2.0
         crypto
+        -L/usr/local/lib
         kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
-        com_err krb5support resolv)
+        com_err krb5support resolv jsoncpp)
 endif()
 
 install(FILES ${CMAKE_BINARY_DIR}/credentials-fetcherd
