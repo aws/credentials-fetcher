@@ -724,7 +724,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
  */
 std::string get_ticket_expiration( std::string klist_ticket_info )
 {
-    std::regex pattern(".+\n.{21}(.{19}).+");
+    std::regex pattern(".+\n[^\s]+\s+.{8}\s+([^\s]+\s+.{8}).+");
     std::smatch expires_match;
 
     if (!std::regex_search(klist_ticket_info, expires_match, pattern))
