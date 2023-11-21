@@ -19,6 +19,8 @@ RUN cd /root && git clone --recurse-submodules -b v1.58.0 https://github.com/grp
     && cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_CXX_STANDARD=17 ../ \
     && make -j4 \
     && make install
+    && cd grpc/ && mkdir -p cmake/build && cd cmake/build && cmake -DgRPC_BUILD_TESTS=ON ../.. && make grpc_cli
+    cp 	grpc/cmake/build/grpc_cli /usr/local/bin
 
 RUN apt-get install wget -y && wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
     && dpkg -i packages-microsoft-prod.deb \
