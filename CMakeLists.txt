@@ -101,6 +101,12 @@ set(sources ${daemon} ${config} ${renewal})
 
 add_executable(credentials-fetcherd ${sources})
 
+# If rpath is needed later
+set_target_properties(credentials-fetcherd PROPERTIES
+  BUILD_WITH_INSTALL_RPATH TRUE
+  INSTALL_RPATH_USE_LINK_PATH TRUE
+  INSTALL_RPATH "/usr/lib/x86_64-linux-gnu/:/usr/lib64/:/usr/local/lib")
+
 cmake_policy(SET CMP0083 NEW)
 include(CheckPIESupported)
 check_pie_supported()
