@@ -1307,7 +1307,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     std::string credspec_contents;
     int status;
     
-    cf_logger.logger( LOG_INFO, "Generating lease id %s", cred_file_lease_id );
+    cf_logger.logger( LOG_INFO, "Generating lease id %s", cred_file_lease_id.c_str());
 
     if ( !std::filesystem::exists( credspec_filepath ) ){
         std::cerr << "The credential spec file " << credspec_filepath << " was not found!" << std::endl;
@@ -1326,7 +1326,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     } 
     else 
     {
-        cf_logger.logger( LOG_ERR, "Unable to open credential spec file: %s", credspec_filepath);
+        cf_logger.logger( LOG_ERR, "Unable to open credential spec file: %s", credspec_filepath.c_str());
         std::cerr << "Unable to open credential spec file: " << credspec_filepath << std::endl;
 
         return EXIT_FAILURE;
