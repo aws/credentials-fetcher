@@ -7,11 +7,14 @@ FILE(GLOB SRC_FILES src/*.cpp)
 get_filename_component(credentialsfetcher_proto "../protos/credentialsfetcher.proto" ABSOLUTE)
 get_filename_component(credentialsfetcher_proto_path "${credentialsfetcher_proto}" PATH)
 message(${credentialsfetcher_proto})
+set(AWSSDK_INSTALL_LIBDIR /usr/lib64)
 
+set(SERVICE_COMPONENTS s3 secretsmanager)
 set(credentialsfetcher_proto_sources "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.pb.cc")
 set(credentialsfetcher_proto_headers "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.pb.h")
 set(credentialsfetcher_grpc_sources "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.grpc.pb.cc")
 set(credentialsfetcher_grpc_headers "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.grpc.pb.h")
+find_package(AWSSDK REQUIRED COMPONENTS ${SERVICE_COMPONENTS})
 add_custom_command(
         OUTPUT "${credentialsfetcher_proto_sources}" "${credentialsfetcher_proto_headers}" "${credentialsfetcher_grpc_sources}" "${credentialsfetcher_grpc_headers}"
         COMMAND ${_PROTOBUF_PROTOC}
@@ -73,7 +76,7 @@ else()
         glib-2.0
         jsoncpp
         krb5 kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
-        com_err krb5support resolv)
+        com_err krb5support resolv ${AWSSDK_LINK_LIBRARIES})
 endif()
 
 enable_testing()

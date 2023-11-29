@@ -21,6 +21,10 @@
 #include <algorithm>
 #include <filesystem>
 
+#if AMAZON_LINUX_DISTRO
+#include <aws/core/Aws.h>
+#endif
+
 #ifndef _daemon_h_
 #define _daemon_h_
 
@@ -35,6 +39,17 @@ namespace creds_fetcher
     /**
      * TBD: move the classes to the corresponding header files
      */
+
+    /**
+    * krb_ticket_info defines the information of the kerberos ticket created
+    */
+    class krb_ticket_arn_mapping
+    {
+      public:
+        std::string krb_file_path;
+        std::string credential_spec_arn;
+        std::string credential_domainless_user_arn;
+    };
 
     /**
      * krb_ticket_info defines the information of the kerberos ticket created
@@ -175,11 +190,20 @@ int RunGrpcServer( std::string unix_socket_dir, std::string krb_file_path,
 
 int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info );
 
+int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info, creds_fetcher::krb_ticket_arn_mapping* krb_ticket_mapping );
+
 int parse_cred_file_path(const std::string& cred_file_path, std::string& cred_file, std::string& cred_file_lease_id );
 
 int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id);
 
 std::string generate_lease_id();
+
+#if AMAZON_LINUX_DISTRO
+std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aws::Auth::AWSCredentials credentials,  bool test);
+std::tuple<std::string, std::string> retrieve_credspec_from_secrets_manager(std::string sm_arn, std::string region, Aws::Auth::AWSCredentials credentials);
+
+Aws::Auth::AWSCredentials get_credentials(std::string accessKeyId, std::string secretKey, std::string sessionToken);
+#endif
 
 /**
  * Methods in renewal module

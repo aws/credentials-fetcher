@@ -24,6 +24,10 @@ foreach(VAR IN LISTS DISTRO)
   message(STATUS "${VAR}=`${${VAR}}`")
 endforeach()
 
+if((${DISTRO_ID} MATCHES "amzn"))
+    add_definitions(-DAMAZON_LINUX_DISTRO=1)
+endif()
+
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(config)
@@ -60,7 +64,8 @@ endif()
 configure_file(${CMAKE_SOURCE_DIR}/config/config.h.in
     ${CMAKE_BINARY_DIR}/config.h @ONLY)
 
-if((${DISTRO_ID} MATCHES "Amazon Linux") OR (${DISTRO_ID} MATCHES "ubuntu"))
+
+if((${DISTRO_ID} MATCHES "amzn") OR (${DISTRO_ID} MATCHES "ubuntu"))
   file(WRITE scripts/systemd/credentials-fetcher.service
     "[Unit]\n"
     "Description=credentials-fetcher systemd service unit file.\n\n"
@@ -157,6 +162,9 @@ install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.exe
         DESTINATION "/usr/sbin/"
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
 install(FILES ${CMAKE_BINARY_DIR}/credentials_fetcher_utf16_private.runtimeconfig.json
+        DESTINATION "/usr/sbin/"
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
+install(FILES ${CMAKE_BINARY_DIR}/krb5.conf
         DESTINATION "/usr/sbin/"
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
 

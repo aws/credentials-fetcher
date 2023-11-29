@@ -1,5 +1,6 @@
 #include "daemon.h"
 
+#include <iostream>
 #include <credentialsfetcher.grpc.pb.h>
 #include <fstream>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
@@ -7,6 +8,17 @@
 #include <grpcpp/health_check_service_interface.h>
 #include <random>
 #include <sys/stat.h>
+#include <regex>
+
+#if AMAZON_LINUX_DISTRO
+#include <aws/core/Aws.h>
+#include <aws/s3/S3Client.h>
+#include <aws/s3/model/GetObjectRequest.h>
+#include <aws/core/utils/logging/LogLevel.h>
+#include <aws/core/auth/AWSCredentialsProviderChain.h>
+#include <aws/secretsmanager/SecretsManagerClient.h>
+#include <aws/secretsmanager/model/GetSecretValueRequest.h>
+#endif
 
 
 #define LEASE_ID_LENGTH 10
@@ -15,6 +27,9 @@
 
 static const std::vector<char> invalid_characters = {
     '&', '|', ';', '$', '*', '?', '<', '>', '!',' '};
+
+std::string dummy_credspec =
+        "{\"CmsPlugins\":[\"ActiveDirectory\"],\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4066351383-705263209-1606769140\",\"MachineAccountName\":\"webapp01\",\"Guid\":\"ac822f13-583e-49f7-aa7b-284f9a8c97b6\",\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"webapp01\",\"Scope\":\"contoso.com\"},{\"Name\":\"webapp01\",\"Scope\":\"contoso\"}],\"HostAccountConfig\":{\"PortableCcgVersion\":\"1\",\"PluginGUID\":\"{859E1386-BDB4-49E8-85C7-3070B13920E1}\",\"PluginInput\":{\"CredentialArn\":\"arn:aws:secretsmanager:us-west-2:123456789:secret:gMSAUserSecret-PwmPaO\"}}}}";
 
 
 /**
@@ -226,6 +241,559 @@ class CredentialsFetcherImpl final
         };
         CallStatus status_; // The current serving state.
     };
+
+#if AMAZON_LINUX_DISTRO
+
+    // Class encompasing the state and logic needed to serve a request.
+    class CallDataCreateKerberosArnLease
+    {
+    public:
+        std::string cookie;
+#define CLASS_NAME_CallDataCreateKerberosArnLease "CallDataCreateKerberosArnLease"
+        // Take in the "service" instance (in this case representing an asynchronous
+        // server) and the completion queue "cq" used for asynchronous communication
+        // with the gRPC runtime.
+        CallDataCreateKerberosArnLease(
+                credentialsfetcher::CredentialsFetcherService::AsyncService* service,
+                grpc::ServerCompletionQueue* cq )
+                : service_( service )
+                , cq_( cq )
+                , create_arn_krb_responder_( &add_krb_ctx_ )
+                , status_( CREATE )
+        {
+            cookie = CLASS_NAME_CallDataCreateKerberosArnLease;
+            // Invoke the serving logic right away.
+            Proceed();
+        }
+
+        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
+                      std::string aws_sm_secret_name )
+        {
+            if ( cookie.compare( CLASS_NAME_CallDataCreateKerberosArnLease ) != 0 )
+            {
+                return;
+            }
+
+            printf( "CallDataCreateKerberosArnLease %p status: %d\n", this, status_ );
+            if ( status_ == CREATE )
+            {
+                // Make this instance progress to the PROCESS state.
+                status_ = PROCESS;
+
+                // As part of the initial CREATE state, we *request* that the system
+                // start processing RequestAddKerberosLease requests. In this request, "this" acts
+                // are the tag uniquely identifying the request (so that different CallData
+                // instances can serve different requests concurrently), in this case
+                // the memory address of this CallData instance.
+
+                service_->RequestAddKerberosArnLease( &add_krb_ctx_, &create_arn_krb_request_,
+                                                   &create_arn_krb_responder_, cq_, cq_, this );
+            }
+            else if ( status_ == PROCESS ) {
+                // Spawn a new CallData instance to serve new clients while we process
+                // the one for this CallData. The instance will deallocate itself as
+                // part of its FINISH state.
+                new CallDataCreateKerberosArnLease(service_, cq_);
+                // The actual processing.
+                std::string lease_id = generate_lease_id();
+                std::list<creds_fetcher::krb_ticket_info *> krb_ticket_info_list;
+                std::list<creds_fetcher::krb_ticket_arn_mapping *> krb_ticket_arn_mapping_list;
+                std::unordered_set<std::string> krb_ticket_dirs;
+                std::string accessId = create_arn_krb_request_.access_key_id();
+                std::string secretKey = create_arn_krb_request_.secret_access_key();
+                std::string sessionToken = create_arn_krb_request_.session_token();
+                std::string region = create_arn_krb_request_.region();
+
+                std::string username = "";
+                std::string password = "";
+                std::string domain = "";
+
+                std::string err_msg;
+                if ( !accessId.empty() && !secretKey.empty() && !sessionToken.empty() && !region.empty() ) {
+                    create_arn_krb_reply_.set_lease_id(lease_id);
+                    for (int i = 0;
+                         i < create_arn_krb_request_.credspec_arns_size(); i++) {
+                        creds_fetcher::krb_ticket_info *krb_ticket_info =
+                                new creds_fetcher::krb_ticket_info;
+                        creds_fetcher::krb_ticket_arn_mapping *krb_ticket_arns =
+                                new creds_fetcher::krb_ticket_arn_mapping;
+
+                        // get credentialspec contents:
+                        Aws::Auth::AWSCredentials creds = get_credentials(accessId, secretKey, sessionToken);
+                        std::string response = retrieve_credspec_from_s3(create_arn_krb_request_.credspec_arns(i), region, creds, false);
+
+                        if(response.empty())
+                        {
+                            err_msg = "Error: credentialspec cannot be retrieved from s3";
+                            break;
+                        }
+                        krb_ticket_arns->credential_spec_arn = create_arn_krb_request_.credspec_arns(i);
+                        int parse_result = parse_cred_spec_domainless(
+                                response,
+                                krb_ticket_info, krb_ticket_arns);
+
+                        // only add the ticket info if the parsing is successful
+                        if (parse_result == 0) {
+                            //retrieve domainless user credentials
+                            std::tuple<std::string, std::string>  userCreds = retrieve_credspec_from_secrets_manager(krb_ticket_arns->credential_domainless_user_arn, region, creds);
+
+                            username = std::get<0>(userCreds);
+                            password = std::get<1>(userCreds);
+                            domain = krb_ticket_info->domain_name;
+
+                            std::string krb_files_path = krb_files_dir + "/" + lease_id + "/" +
+                                                         krb_ticket_info->service_account_name;
+                            krb_ticket_info->krb_file_path = krb_files_path;
+                            krb_ticket_info->domainless_user = username;
+                            krb_ticket_arns->krb_file_path = krb_files_path;
+
+                            // handle duplicate service accounts
+                            if (!krb_ticket_dirs.count(krb_files_path)) {
+                                krb_ticket_dirs.insert(krb_files_path);
+                                krb_ticket_info_list.push_back(krb_ticket_info);
+                                krb_ticket_arn_mapping_list.push_back(krb_ticket_arns);
+                            }
+                        } else {
+                            err_msg = "Error: credential spec provided is not properly "
+                                      "formatted";
+                            break;
+                        }
+                    }
+                } else{
+                    err_msg = "Error: user credentials should not be empty";
+                }
+
+                if ( err_msg.empty() )
+                {
+                    // create the kerberos tickets for the service accounts
+                    for ( auto krb_ticket : krb_ticket_info_list )
+                    {
+                        // invoke to get machine ticket
+                        int status = 0;
+                        if ( username.empty()  ||  password.empty() )
+                        {
+                            cf_logger.logger( LOG_ERR, "Invalid credentials for "
+                                                       "domainless user ", username.c_str());
+                            err_msg = "ERROR: Invalid credentials for domainless user";
+                            break;
+                        }
+                        status = get_domainless_user_krb_ticket( domain,
+                                                                 username, password,
+                                                                 cf_logger );
+                        if ( status < 0 )
+                        {
+                            cf_logger.logger( LOG_ERR, "Error %d: cannot domainless user kerberos tickets",
+                                              status );
+                            err_msg = "ERROR: cannot domainless user kerberos tickets";
+                            break;
+                        }
+
+                        std::string krb_file_path = krb_ticket->krb_file_path;
+                        if ( std::filesystem::exists( krb_file_path ) )
+                        {
+                            cf_logger.logger( LOG_INFO,
+                                              "Directory already exists: "
+                                              "%s",
+                                              krb_file_path.c_str() );
+                            break;
+                        }
+                        std::filesystem::create_directories( krb_file_path );
+
+                        std::string krb_ccname_str = krb_ticket->krb_file_path + "/krb5cc";
+
+                        if ( !std::filesystem::exists( krb_ccname_str ) )
+                        {
+                            std::ofstream file( krb_ccname_str );
+                            file.close();
+
+                            krb_ticket->krb_file_path = krb_ccname_str;
+                        }
+
+                        std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
+                                domain, krb_ticket->service_account_name,
+                                krb_ccname_str, cf_logger );
+                        if ( gmsa_ticket_result.first != 0 )
+                        {
+                            err_msg = "ERROR: Cannot get gMSA krb ticket";
+                            std::cout << err_msg << std::endl;
+                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket",
+                                              status );
+                            break;
+                        }
+                        else
+                        {
+                            cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
+                                              gmsa_ticket_result.second.c_str() );
+                            std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
+                                      << std::endl;
+                        }
+                    }
+                }
+                // And we are done! Let the gRPC runtime know we've finished, using the
+                // memory address of this instance as the uniquely identifying tag for
+                // the event.
+                if ( !err_msg.empty() )
+                {
+                    username = "xxxx";
+                    password = "xxxx";
+                    accessId = "xxxx";
+                    sessionToken = "xxxx";
+                    secretKey = "xxxx";
+                    // remove the directories on failure
+                    for ( auto krb_ticket : krb_ticket_info_list )
+                    {
+                        std::filesystem::remove_all( krb_ticket->krb_file_path );
+                    }
+                    status_ = FINISH;
+                    create_arn_krb_responder_.Finish(
+                          create_arn_krb_reply_, grpc::Status( grpc::StatusCode::INTERNAL, err_msg ),
+                            this );
+                }
+                else
+                {
+                    for(auto arn_mapping : krb_ticket_arn_mapping_list)
+                    {
+                        credentialsfetcher::KerberosTicketArnResponse krb_ticket_response;
+                        krb_ticket_response.set_credspec_arns(arn_mapping->credential_spec_arn);
+                        krb_ticket_response.set_created_kerberos_file_paths(arn_mapping->krb_file_path);
+                        create_arn_krb_reply_.add_krb_ticket_response_map()->CopyFrom(krb_ticket_response);
+                    }
+
+                    username = "xxxx";
+                    password = "xxxx";
+                    accessId = "xxxx";
+                    sessionToken = "xxxx";
+                    secretKey = "xxxx";
+                    // write the ticket information to meta data file
+                    write_meta_data_json( krb_ticket_info_list, lease_id, krb_files_dir );
+                    status_ = FINISH;
+                    create_arn_krb_responder_.Finish( create_arn_krb_reply_, grpc::Status::OK,
+                                                  this );
+                }
+            }
+            else
+            {
+                GPR_ASSERT( status_ == FINISH );
+                // Once in the FINISH state, deallocate ourselves (CallData).
+                delete this;
+            }
+
+            return;
+        }
+
+        void Proceed()
+        {
+            if ( cookie.compare( CLASS_NAME_CallDataCreateKerberosArnLease ) != 0 )
+            {
+                return;
+            }
+            printf( "CallDataCreateKerberosArnLease %p status: %d\n", this, status_ );
+            if ( status_ == CREATE )
+            {
+                // Make this instance progress to the PROCESS state.
+                status_ = PROCESS;
+
+                // As part of the initial CREATE state, we *request* that the system
+                // start processing RequestAddKerberosLease requests. In this request, "this" acts
+                // are the tag uniquely identifying the request (so that different CallData
+                // instances can serve different requests concurrently), in this case
+                // the memory address of this CallData instance.
+
+                service_->RequestAddKerberosArnLease( &add_krb_ctx_, &create_arn_krb_request_,
+                                                   &create_arn_krb_responder_, cq_, cq_, this );
+            }
+            else if ( status_ == PROCESS )
+            {
+                // Spawn a new CallData instance to serve new clients while we process
+                // the one for this CallData. The instance will deallocate itself as
+                // part of its FINISH state.
+                new CallDataCreateKerberosArnLease( service_, cq_ );
+                // The actual processing.
+                create_arn_krb_reply_.set_lease_id( "12345" );
+
+                // And we are done! Let the gRPC runtime know we've finished, using the
+                // memory address of this instance as the uniquely identifying tag for
+                // the event.
+                status_ = FINISH;
+                create_arn_krb_responder_.Finish( create_arn_krb_reply_, grpc::Status::OK, this );
+            }
+            else
+            {
+                GPR_ASSERT( status_ == FINISH );
+                // Once in the FINISH state, deallocate ourselves (CallData).
+                delete this;
+            }
+
+            return;
+        }
+
+    private:
+        // The means of communication with the gRPC runtime for an asynchronous
+        // server.
+        credentialsfetcher::CredentialsFetcherService::AsyncService* service_;
+        // The producer-consumer queue where for asynchronous server notifications.
+        grpc::ServerCompletionQueue* cq_;
+        // Context for the rpc, allowing to tweak aspects of it such as the use
+        // of compression, authentication, as well as to send metadata back to the
+        // client.
+        grpc::ServerContext add_krb_ctx_;
+
+        // What we get from the client.
+        credentialsfetcher::KerberosArnLeaseRequest create_arn_krb_request_;
+        // What we send back to the client.
+        credentialsfetcher::CreateKerberosArnLeaseResponse create_arn_krb_reply_;
+
+        // The means to get back to the client.
+        grpc::ServerAsyncResponseWriter<credentialsfetcher::CreateKerberosArnLeaseResponse>
+                create_arn_krb_responder_;
+
+        // Let's implement a tiny state machine with the following states.
+        enum CallStatus
+        {
+            CREATE,
+            PROCESS,
+            FINISH
+        };
+        CallStatus status_; // The current serving state.
+    };
+
+    // Class encompasing the state and logic needed to serve a request.
+    class CallDataRenewKerberosArnLease
+    {
+      public:
+        std::string cookie;
+#define CLASS_NAME_CallDataRenewKerberosArnLease \
+    "CallDataRenewKerberosArnLease"
+        // Take in the "service" instance (in this case representing an asynchronous
+        // server) and the completion queue "cq" used for asynchronous communication
+        // with the gRPC runtime.
+        CallDataRenewKerberosArnLease(
+            credentialsfetcher::CredentialsFetcherService::AsyncService* service,
+            grpc::ServerCompletionQueue* cq )
+            : service_( service )
+            , cq_( cq )
+            , handle_krb_responder_( &add_krb_ctx_ )
+            , status_( CREATE )
+        {
+            cookie = CLASS_NAME_CallDataRenewKerberosArnLease;
+            // Invoke the serving logic right away.
+            Proceed();
+        }
+
+        void Proceed( std::string krb_files_dir, creds_fetcher::CF_logger& cf_logger,
+                      std::string aws_sm_secret_name )
+        {
+            if ( cookie.compare( CLASS_NAME_CallDataRenewKerberosArnLease ) != 0 )
+            {
+                return;
+            }
+
+            printf( "RenewKerberosArnLease %p status: %d\n", this, status_ );
+            if ( status_ == CREATE )
+            {
+                // Make this instance progress to the PROCESS state.
+                status_ = PROCESS;
+
+                // As part of the initial CREATE state, we *request* that the system
+                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this request, "this" acts
+                // are the tag uniquely identifying the request (so that different CallData
+                // instances can serve different requests concurrently), in this case
+                // the memory address of this CallData instance.
+
+                service_->RequestRenewKerberosArnLease( &add_krb_ctx_,
+                                                        &renew_krb_arn_request_,
+                                                        &handle_krb_responder_, cq_, cq_, this );
+            }
+            else if ( status_ == PROCESS )
+            {
+                // Spawn a new CallData instance to serve new clients while we process
+                // the one for this CallData. The instance will deallocate itself as
+                // part of its FINISH state.
+                new CallDataRenewKerberosArnLease( service_, cq_ );
+                // The actual processing.
+                std::string accessId = renew_krb_arn_request_.access_key_id();
+                std::string secretKey = renew_krb_arn_request_.secret_access_key();
+                std::string sessionToken = renew_krb_arn_request_.session_token();
+                std::string region = renew_krb_arn_request_.region();
+                std::string username = "";
+                std::string password = "";
+                std::string domain = "";
+
+                std::string err_msg;
+                if ( !accessId.empty() && !secretKey.empty() && !sessionToken.empty() && !region.empty() ) {
+                    for (int i = 0;
+                          i < renew_krb_arn_request_.credspec_arns_size(); i++) {
+                        creds_fetcher::krb_ticket_info *krb_ticket_info =
+                            new creds_fetcher::krb_ticket_info;
+                        creds_fetcher::krb_ticket_arn_mapping *krb_ticket_arns =
+                            new creds_fetcher::krb_ticket_arn_mapping;
+
+                        // get credentialspec contents:
+                        Aws::Auth::AWSCredentials creds = get_credentials(accessId, secretKey, sessionToken);
+                        std::string response = retrieve_credspec_from_s3(renew_krb_arn_request_.credspec_arns(i),
+                                                                          region, creds, false);
+                        
+                        if(response.empty())
+                        {
+                            err_msg = "Error: credentialspec cannot be retrieved from s3";
+                            break;
+                        }
+
+                        krb_ticket_arns->credential_spec_arn = renew_krb_arn_request_.credspec_arns(i);
+                        int parse_result = parse_cred_spec_domainless(
+                            response,
+                            krb_ticket_info, krb_ticket_arns);
+
+                        // only add the ticket info if the parsing is successful
+                        if (parse_result == 0) {
+                            //retrieve domainless user credentials
+                            std::tuple<std::string, std::string> userCreds = retrieve_credspec_from_secrets_manager(
+                                krb_ticket_arns->credential_domainless_user_arn, region, creds);
+
+                            username = std::get<0>(userCreds);
+                            password = std::get<1>(userCreds);
+                            domain = krb_ticket_info->domain_name;
+
+                            if(!contains_invalid_characters_in_credentials(domain))
+                            {
+                                if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
+                                                                                                                                                      INPUT_CREDENTIALS_LENGTH )
+                                {
+                                    std::list<std::string> renewed_krb_file_paths =
+                                        renew_kerberos_tickets_domainless( krb_files_dir, domain, username,
+                                                                           password, cf_logger );
+                                }
+                                else
+                                {
+                                    err_msg = "Error: domainless AD user credentials is not valid/ "
+                                              "credentials should not be more than 256 charaters";
+                                }
+                            }
+                            else
+                            {
+                                err_msg = "Error: invalid domainName";
+                            }
+                        }
+                    }
+                }
+
+
+                username = "xxxx";
+                password = "xxxx";
+                accessId = "xxxx";
+                secretKey = "xxxx";
+                sessionToken = "xxxx";
+
+                // And we are done! Let the gRPC runtime know we've finished, using the
+                // memory address of this instance as the uniquely identifying tag for
+                // the event.
+                if ( !err_msg.empty() )
+                {
+                    renew_krb_arn_reply_.set_status("failed");
+                    status_ = FINISH;
+                    handle_krb_responder_.Finish(
+                        renew_krb_arn_reply_, grpc::Status( grpc::StatusCode::INTERNAL, err_msg ),
+                        this );
+                }
+                else
+                {
+                    renew_krb_arn_reply_.set_status("successful");
+                    status_ = FINISH;
+                    handle_krb_responder_.Finish( renew_krb_arn_reply_, grpc::Status::OK, this );
+                }
+            }
+            else
+            {
+                GPR_ASSERT( status_ == FINISH );
+                // Once in the FINISH state, deallocate ourselves (CallData).
+                delete this;
+            }
+
+            return;
+        }
+
+        void Proceed()
+        {
+            if ( cookie.compare( CLASS_NAME_CallDataRenewKerberosArnLease ) != 0 )
+            {
+                return;
+            }
+            printf( "RenewKerberosArnLease %p status: %d\n", this, status_ );
+            if ( status_ == CREATE )
+            {
+                // Make this instance progress to the PROCESS state.
+                status_ = PROCESS;
+
+                // As part of the initial CREATE state, we *request* that the system
+                // start processing RequestHandleNonDomainJoinedKerberosLease requests. In this request, "this" acts
+                // are the tag uniquely identifying the request (so that different CallData
+                // instances can serve different requests concurrently), in this case
+                // the memory address of this CallData instance.
+
+                service_->RequestRenewKerberosArnLease( &add_krb_ctx_,
+                                                        &renew_krb_arn_request_,
+                                                        &handle_krb_responder_, cq_, cq_, this );
+            }
+            else if ( status_ == PROCESS )
+            {
+                // Spawn a new CallData instance to serve new clients while we process
+                // the one for this CallData. The instance will deallocate itself as
+                // part of its FINISH state.
+                new CallDataRenewKerberosArnLease(service_, cq_ );
+                // The actual processing.
+                renew_krb_arn_reply_.set_status(
+                    "Successful" );
+
+                // And we are done! Let the gRPC runtime know we've finished, using the
+                // memory address of this instance as the uniquely identifying tag for
+                // the event.
+                status_ = FINISH;
+                handle_krb_responder_.Finish( renew_krb_arn_reply_, grpc::Status::OK,
+                                              this );
+            }
+            else
+            {
+                GPR_ASSERT( status_ == FINISH );
+                // Once in the FINISH state, deallocate ourselves (CallData).
+                delete this;
+            }
+
+            return;
+        }
+
+      private:
+        // The means of communication with the gRPC runtime for an asynchronous
+        // server.
+        credentialsfetcher::CredentialsFetcherService::AsyncService* service_;
+        // The producer-consumer queue where for asynchronous server notifications.
+        grpc::ServerCompletionQueue* cq_;
+        // Context for the rpc, allowing to tweak aspects of it such as the use
+        // of compression, authentication, as well as to send metadata back to the
+        // client.
+        grpc::ServerContext add_krb_ctx_;
+
+        // What we get from the client.
+        credentialsfetcher::KerberosArnLeaseRequest
+            renew_krb_arn_request_;
+        // What we send back to the client.
+        credentialsfetcher::RenewKerberosArnLeaseResponse renew_krb_arn_reply_;
+
+        // The means to get back to the client.
+        grpc::ServerAsyncResponseWriter<credentialsfetcher
+                                        ::RenewKerberosArnLeaseResponse>
+            handle_krb_responder_;
+
+        // Let's implement a tiny state machine with the following states.
+        enum CallStatus
+        {
+            CREATE,
+            PROCESS,
+            FINISH
+        };
+        CallStatus status_; // The current serving state.
+    };
+
+#endif
 
     // Class encompasing the state and logic needed to serve a request.
     class CallDataCreateKerberosLease
@@ -1169,6 +1737,11 @@ class CredentialsFetcherImpl final
         new CallDataDeleteKerberosLease( &service_, cq_.get() );
         new CallDataHealthCheck( &service_, cq_.get() );
 
+#if AMAZON_LINUX_DISTRO
+        new CallDataCreateKerberosArnLease( &service_, cq_.get() );
+        new CallDataRenewKerberosArnLease( &service_, cq_.get() );
+#endif
+
         while ( pthread_shutdown_signal != nullptr && !( *pthread_shutdown_signal ) )
         {
             // Spawn a new CallData instance to serve new clients.
@@ -1191,6 +1764,13 @@ class CredentialsFetcherImpl final
             static_cast<CallDataDeleteKerberosLease*>( got_tag )->Proceed( krb_files_dir, cf_logger,
                                                                            aws_sm_secret_name );
             static_cast<CallDataHealthCheck*>( got_tag )->Proceed( cf_logger);
+
+#if AMAZON_LINUX_DISTRO
+            static_cast<CallDataCreateKerberosArnLease*>( got_tag )->Proceed( krb_files_dir, cf_logger,
+                                                                           aws_sm_secret_name );
+            static_cast<CallDataRenewKerberosArnLease*>( got_tag )->Proceed( krb_files_dir, cf_logger,
+                                                                         aws_sm_secret_name );
+#endif
         }
     }
 
@@ -1291,6 +1871,61 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
 
     return 0;
 }
+
+/**
+ * This function parses the cred spec file.
+ * The cred spec file is in json format.
+ * @param credspec - service account information
+ * @param krb_ticket_info - return service account info
+ * @param krb_ticket_mapping - return service account info
+ * @return
+ */
+int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info, creds_fetcher::krb_ticket_arn_mapping* krb_ticket_mapping )
+{
+    try
+    {
+        if ( credspec_data.empty() )
+        {
+            fprintf( stderr, SD_CRIT "credspec is empty" );
+            return -1;
+        }
+
+        Json::Value root;
+        Json::CharReaderBuilder reader;
+        std::istringstream credspec_stream(credspec_data);
+        std::string errors;
+        Json::parseFromStream(reader, credspec_stream, &root, &errors);
+        // get domain name from credspec
+        std::string domain_name = root["DomainJoinConfig"]["DnsName"].asString();
+        // get service account name from credspec
+        std::string service_account_name;
+        const Json::Value& gmsa_array = root["ActiveDirectoryConfig"]["GroupManagedServiceAccounts"];
+        for (const Json::Value& gmsa : gmsa_array)
+        {
+            service_account_name = gmsa["Name"].asString();
+            if (!service_account_name.empty())
+                break;
+        }
+        if (service_account_name.empty() || domain_name.empty())
+            return -1;
+
+        krb_ticket_info->domain_name = domain_name;
+        krb_ticket_info->service_account_name = service_account_name;
+
+        // get credentialspec arn
+        std::string domainless_user_arn = root["ActiveDirectoryConfig"]["HostAccountConfig"]["PluginInput"]["CredentialArn"].asString();
+        krb_ticket_mapping->credential_domainless_user_arn = domainless_user_arn;
+        krb_ticket_mapping->krb_file_path =  krb_ticket_info->krb_file_path;
+    }
+    catch ( ... )
+    {
+        fprintf( stderr, SD_CRIT "credspec is not properly formatted" );
+        return -1;
+    }
+
+    return 0;
+}
+
 
 
 /**
@@ -1425,3 +2060,129 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
 
     return EXIT_SUCCESS;
 }
+
+#if AMAZON_LINUX_DISTRO
+// initialize credentials
+Aws::Auth::AWSCredentials get_credentials(std::string accessKeyId, std::string secretKey, std::string sessionToken)
+{
+    Aws::Auth::AWSCredentials credentials;
+    credentials.SetAWSAccessKeyId(Aws::String(accessKeyId));
+    credentials.SetAWSSecretKey(Aws::String(secretKey));
+    credentials.SetSessionToken(Aws::String(sessionToken));
+    return credentials;
+}
+
+// retrieve credspec from s3
+// example : arn:aws:s3:::gmsacredspec/gmsa-cred-spec.json
+std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aws::Auth::AWSCredentials credentials, bool test = false)
+{
+    std::string response = "";
+    Aws::SDKOptions options;
+    try {
+        Aws::InitAPI(options);
+        {
+            Aws::Client::ClientConfiguration clientConfig;
+            clientConfig.region = region;
+            auto provider = Aws::MakeShared<Aws::Auth::SimpleAWSCredentialsProvider>("alloc-tag", credentials);
+            auto creds = provider->GetAWSCredentials();
+            if (creds.IsEmpty()) {
+                std::cerr << "Failed authentication invalid creds" << std::endl;
+                Aws::ShutdownAPI(options);
+                return std::string("");
+            }
+            std::smatch arn_match;
+            std::regex pattern("arn:([^:]+):s3:::([^/]+)/(.+)");
+            if (!std::regex_search(s3_arn, arn_match, pattern)) {
+                std::cout << "s3 arn provided is not valid " << s3_arn << std::endl;
+                Aws::ShutdownAPI(options);
+                return std::string("");
+            }
+            std::string s3Bucket = std::string(arn_match[2]);
+            std::string objectName = std::string(arn_match[3]);
+
+            if(test)
+            {
+                std::cout << s3Bucket;
+                std::cout << objectName;
+                return dummy_credspec;
+            }
+
+            Aws::S3::S3Client s3Client(clientConfig);
+            Aws::S3::Model::GetObjectRequest request;
+            request.SetBucket(s3Bucket);
+            request.SetKey(objectName);
+            Aws::S3::Model::GetObjectOutcome outcome =
+                    s3Client.GetObject(request);
+
+            if (!outcome.IsSuccess()) {
+                const Aws::S3::S3Error &err = outcome.GetError();
+                std::cerr << "Error: GetObject: " <<
+                          err.GetExceptionName() << ": " << err.GetMessage() << std::endl;
+                Aws::ShutdownAPI(options);
+                return std::string("");
+            }
+            std::stringstream ss;
+            ss << outcome.GetResult().GetBody().rdbuf();
+            response = ss.str();
+        }
+    }
+    catch ( ... )
+    {
+        fprintf( stderr, SD_CRIT "retrieve from s3 failed" );
+        Aws::ShutdownAPI(options);
+        return std::string("");
+    }
+    Aws::ShutdownAPI(options);
+    return response;
+}
+
+
+// retrieve secrets from secrets manager
+// example : arn:aws:secretsmanager:us-west-2:618112483929:secret:gMSAUserSecret-PwmPaO
+std::tuple<std::string, std::string> retrieve_credspec_from_secrets_manager(std::string sm_arn, std::string region, Aws::Auth::AWSCredentials credentials)
+{
+    std::string response = "";
+    Aws::SDKOptions options;
+    try {
+        Aws::InitAPI(options);
+        {
+            Aws::Client::ClientConfiguration clientConfig;
+            clientConfig.region = region;
+            auto provider = Aws::MakeShared<Aws::Auth::SimpleAWSCredentialsProvider>("alloc-tag", credentials);
+            auto creds = provider->GetAWSCredentials();
+            if (creds.IsEmpty()) {
+                std::cerr << "Failed authentication invalid creds" << std::endl;
+                Aws::ShutdownAPI(options);
+                return {"",""};
+            }
+            Aws::SecretsManager::SecretsManagerClient sm_client(clientConfig);
+            Aws::SecretsManager::Model::GetSecretValueRequest requestsec;
+            requestsec.SetSecretId(sm_arn);
+
+            auto getSecretValueOutcome = sm_client.GetSecretValue(requestsec);
+            if (getSecretValueOutcome.IsSuccess()) {
+                response = getSecretValueOutcome.GetResult().GetSecretString();
+            } else {
+                std::cout << "Failed with Error: " << getSecretValueOutcome.GetError() << std::endl;
+                Aws::ShutdownAPI(options);
+                return {"",""};
+            }
+        }
+
+        Json::Value root;
+        Json::CharReaderBuilder reader;
+        std::istringstream sm_stream(response);
+        std::string errors;
+        Json::parseFromStream(reader, sm_stream, &root, &errors);
+        return {root["username"].asString(),root["password"].asString()};
+    }
+    catch ( ... )
+    {
+        fprintf( stderr, SD_CRIT "retrieve from s3 failed" );
+        Aws::ShutdownAPI(options);
+        return {"",""};
+    }
+    Aws::ShutdownAPI(options);
+    return {"",""};
+}
+#endif
