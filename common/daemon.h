@@ -177,8 +177,9 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
 
 int parse_cred_file_path(const std::string& cred_file_path, std::string& cred_file, std::string& cred_file_lease_id );
 
-int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger, 
-std::string cred_file_lease_id,std::string aws_sm_secret_name);
+int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath,
+		creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id,
+		std::string aws_sm_secret_name, bool is_diagnostic);
 
 std::string generate_lease_id();
 

@@ -28,6 +28,8 @@ set(auth)
 add_subdirectory(auth)
 set(daemon)
 add_subdirectory(daemon)
+set(sample_credspec)
+add_subdirectory(sample_credspec)
 
 if (NOT CF_KRB_DIR)
     set(CF_KRB_DIR "/var/credentials-fetcher/krbdir")

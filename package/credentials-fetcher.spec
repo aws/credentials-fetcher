@@ -52,6 +52,7 @@ install -m 0755 credentials-fetcherd %{buildroot}/%{_sbindir}/credentials-fetche
 install -m 0755 credentials_fetcher_utf16_private.exe %{buildroot}/%{_sbindir}/credentials_fetcher_utf16_private.exe
 install -m 0755 credentials_fetcher_utf16_private.runtimeconfig.json %{buildroot}/%{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
 install -m 0755 metadata_sample.json %{buildroot}/%{_sbindir}/credentials_fetcher_metadata_sample.json
+install -m 0755 sample_credspec.json %{buildroot}/%{_sbindir}/credentials_fetcher_sample_credspec.json
 
 
 mkdir -p %{buildroot}/%{_unitdir}
@@ -62,12 +63,12 @@ install -m 0755 scripts/systemd/credentials-fetcher.service %{buildroot}/%{_unit
 chrpath --delete %{buildroot}/%{_sbindir}/credentials-fetcherd
  
 %check
-# TBD: Run tests from top-level directory
-ctest3 %{buildroot}/%{_sbindir}/credentials-fetcherd -t
+CF_CRED_SPEC_FILE=%{buildroot}/%{_sbindir}/credentials_fetcher_sample_credspec.json ctest3 -V %{buildroot}/%{_sbindir}/credentials-fetcherd -t
  
 %files
 %{_sbindir}/credentials-fetcherd
 %{_sbindir}/credentials_fetcher_metadata_sample.json
+%{_sbindir}/credentials_fetcher_sample_credspec.json
 %{_unitdir}/credentials-fetcher.service
 %license LICENSE
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/

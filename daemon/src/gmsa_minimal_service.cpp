@@ -71,8 +71,7 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
  * @return - return 0 on success
  */
 int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger,
- std::string cred_file_lease_id,
- std::string aws_sm_secret_name) {
+ std::string cred_file_lease_id, std::string aws_sm_secret_name, bool self_test) {
     std::unordered_set<std::string> krb_ticket_dirs;
     std::string err_msg;
     std::string credspec_contents;
@@ -113,10 +112,12 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
                                         krb_ticket_info->service_account_name;
         krb_ticket_info->krb_file_path = krb_files_path;
         krb_ticket_info->domainless_user = "";
+	if (self_test) return EXIT_SUCCESS;
     }
     else
     {
         err_msg = "Error: credential spec provided is not properly formatted";
+	if (self_test) return EXIT_FAILURE;
     }
     
     if ( err_msg.empty() )
