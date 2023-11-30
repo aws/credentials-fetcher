@@ -4,11 +4,21 @@
 
 int read_meta_data_json_test()
 {
-    std::string metadata_file_path = "metadata_sample.json";
+    std::string metadata_file_path = "/usr/sbin/credentials_fetcher_metadata_sample.json";
+    std::string metadata_alt_file_path = "metadata_sample.json";
+    std::string krb_files_dir = std::string("/tmp/") + CF_KRB_DIR + std::string("/");
+    std::string logging_dir = std::string("/tmp/") + CF_LOGGING_DIR + std::string("/");
+
+    std::string cmd = "mkdir -p " + krb_files_dir + " " + logging_dir;
+    FILE* pFile = popen( cmd.c_str(), "r" );
+    if ( pFile == nullptr )
+    {
+        return EXIT_FAILURE;
+    }
 
     std::vector<std::string> paths = {
-        "/usr/share/credentials-fetcher/krbdir/73099acdb5807b4bbf91/ccname_WebApp01_7K4PEM",
-        "/usr/share/credentials-fetcher/krbdir/73099acdb5807b4bbf91/ccname_WebApp03_53Yg4I" };
+        krb_files_dir + std::string("73099acdb5807b4bbf91/ccname_WebApp01_7K4PEM"),
+        krb_files_dir + std::string("73099acdb5807b4bbf91/ccname_WebApp03_53Yg4I") };
 
     for ( auto file_path : paths )
     {
@@ -23,7 +33,9 @@ int read_meta_data_json_test()
         }
     }
 
-    std::list<creds_fetcher::krb_ticket_info*> result = read_meta_data_json( metadata_file_path );
+    std::list<creds_fetcher::krb_ticket_info*> result
+	    = read_meta_data_json( metadata_file_path, metadata_alt_file_path,
+			    krb_files_dir + std::string("73099acdb5807b4bbf91/ccname_WebApp01_7K4PEM") );
 
     if ( result.empty() || result.size() != 2 )
     {
@@ -61,15 +73,17 @@ int read_meta_data_invalid_json_test()
 int write_meta_data_json_test()
 {
     std::string metadata_file_path = "metadata_sample.json";
+    std::string krb_files_dir = std::string("/tmp/") + CF_KRB_DIR + std::string("/");
+    std::string logging_dir = std::string("/tmp/") + CF_LOGGING_DIR + std::string("/");
 
     std::vector<std::string> paths = {
-        "/usr/share/credentials-fetcher/krbdir/73099acdb5807b4bbf91/ccname_WebApp01_7K4PEM",
-        "/usr/share/credentials-fetcher/krbdir/73099acdb5807b4bbf91/ccname_WebApp03_53Yg4I" };
+        "73099acdb5807b4bbf91/ccname_WebApp01_7K4PEM",
+        "73099acdb5807b4bbf91/ccname_WebApp03_53Yg4I" };
 
     for ( auto file_path : paths )
     {
         // create the meta file in the lease directory
-        std::filesystem::path dirPath( file_path );
+        std::filesystem::path dirPath( krb_files_dir + file_path );
         std::filesystem::create_directories( dirPath.parent_path() );
 
         if ( !std::filesystem::exists( file_path ) )
@@ -82,7 +96,6 @@ int write_meta_data_json_test()
     std::list<creds_fetcher::krb_ticket_info*> test_ticket_info =
         read_meta_data_json( metadata_file_path );
 
-    std::string krb_files_dir = "/usr/share/credentials-fetcher/krbdir";
     std::string test_lease_id = "test1234567890";
 
     int result = write_meta_data_json( test_ticket_info, test_lease_id, krb_files_dir );

@@ -160,7 +160,7 @@ int main( int argc, const char* argv[] )
 
     if ( getenv(ENV_CF_CRED_SPEC_FILE) != NULL)
     {
-        int parseResult = parse_cred_file_path( getenv(ENV_CF_CRED_SPEC_FILE), 
+        int parseResult = parse_cred_file_path( getenv(ENV_CF_CRED_SPEC_FILE),
                                                 cred_file,
                                                 cred_file_lease_id);
 

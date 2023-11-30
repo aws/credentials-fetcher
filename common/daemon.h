@@ -192,6 +192,8 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon );
  */
 bool contains_invalid_characters( const std::string& path );
 std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path );
+std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path,
+		std::string alt_file_path, std::string krb_file_path );
 
 int write_meta_data_json( creds_fetcher::krb_ticket_info* krb_ticket_info,
                           std::string lease_id, std::string krb_files_dir );
