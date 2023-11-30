@@ -1,9 +1,9 @@
 %global major_version 1
-%global minor_version 2
+%global minor_version 3
 %global patch_version 0
  
 # For handling bump release by rpmdev-bumpspec and mass rebuild
-%global baserelease 3
+%global baserelease 0
  
 Name:           credentials-fetcher
 Version:        %{major_version}.%{minor_version}.%{patch_version}
@@ -17,6 +17,10 @@ Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/v.%
 BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-devel jsoncpp-devel
 BuildRequires:  openssl-devel zlib-devel protobuf-devel re2-devel krb5-devel systemd-devel
 BuildRequires:  systemd-rpm-macros dotnet-sdk-6.0 grpc-plugins
+
+%if 0%{?amzn} >= 2023
+BuildRequires:  aws-sdk-cpp-devel aws-sdk-cpp aws-sdk-cpp-static
+%endif
  
 Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0 jsoncpp-devel jsoncpp
 # No one likes you i686
@@ -60,8 +64,13 @@ ctest3
 %doc CONTRIBUTING.md NOTICE README.md
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.exe
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
- 
+%attr(0755, -, -) %{_sbindir}/krb5.conf
+
 %changelog
+* Tue Nov 7 2023 Sai Kiran Akula <saakla@amazon.com> - 1.3.0
+- Create 1.3.0 release, add support to retrieve credspec from s3
+- Added dependency for aws-sdk-cpp
+
 * Thu Aug 31 2023 Tom Callaway <spot@fedoraproject.org> - 1.2.0-3
 - rebuild for abseil
  
@@ -92,37 +101,54 @@ ctest3
 
 * Thu Oct 27 2022 Sai Kiran Akula <saakla@amazon.com> - 1.1.0
 - Create 1.1 release
+
 * Mon Oct 24 2022 Samiullah Mohammed <samiull@amazon.com> - 1.0.0
 - Add domainless gmsa
+
 * Wed Oct 12 2022 Sai Kiran Akula <saakla@amazon.com> - 1.0.0
 - Create 1.0 release
+
 * Mon Sep 19 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-2
 - rebuild for rawhide
+
 * Sat Sep 10 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.94-1
 - Replace mono with dotnet
+
 * Mon Aug 29 2022 Tom Callaway <spotaws@amazon.com> - 0.0.94-1
 - systemd clean up
+
 * Mon Aug 22 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.93
 - Add validation for read metadata file and rpm install require openldap-clients
+
 * Wed Aug 10 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.92
 - Move binaries to standard Linux directories
+
 - Add directory paths as configurable variables in cmake
 - Generate systemd service file from cmake
+
 * Sun Aug 7 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.91
 - Relocate binary, library files and change permissions
+
 * Sat Jul 30 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.90
 - add ctests and bump revision to 0.0.90
+
 * Thu Jul 28 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Add mono-based utf16 decoder
+
 * Tue Jul 12 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Resolve rpath for Fedora and change macros
+
 * Sat Jun 18 2022 Sai Kiran Akula <saakla@amazon.com> - 0.0.1
 - Refactor cmake for all the directories
+
 * Thu Jun 16 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Compile subdirectory into a shared library
+
 * Wed Jun 15 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Add daemon infra
+
 * Wed Jun 8 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Fixes to rpm spec
+
 * Mon Jun 6 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Initial commit
