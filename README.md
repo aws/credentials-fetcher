@@ -109,6 +109,7 @@ journalctl -u credentials-fetcher
 | :-------------------------- | ---------------------------------------- | :------------------------------------------------------------------------------------------- |
 | `CF_CRED_SPEC_FILE`         | '/var/credentials-fetcher/my-credspec.json' | Path to a credential spec file used as input. (Lease id default: credspec) |
 |                             | '/var/credentials-fetcher/my-credspec.json:myLeaseId' | An optional lease id specified after a colon
+| `CF_GMSA_OU`                | 'CN=Managed Service Accounts' | Component of GMSA distinguished name (see docs/cf_gmsa_ou.md) |
 
 ## Compatibility
 
