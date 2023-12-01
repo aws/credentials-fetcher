@@ -166,7 +166,7 @@ yum install credentials-fetcher-1.2.0-3.amzn2.x86_64.rpm -y
 ```
 aws configure set default.region us-east-1
 ```
-### Set Environment Variables for  [credentials-fetcher.service](https://github.com/awsjohns/credentials-fetcher/blob/34777570e5c49d93258038d6d4c6d8bef33d306b/scripts/systemd/credentials-fetcher.service)
+### Set environment variables and command line params for  [credentials-fetcher.service](https://github.com/awsjohns/credentials-fetcher/blob/34777570e5c49d93258038d6d4c6d8bef33d306b/scripts/systemd/credentials-fetcher.service)
 
 * Edit /usr/lib/systemd/system/credentials-fetcher.service
 
