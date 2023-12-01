@@ -1,21 +1,16 @@
-"No gRPC Mode" is intended to be used for this scenario:
-* Neeeds to run on Amazon Linux 2 which does not have packages available for gRPC
-* EKS host not ECS
-* Need to run via command line and not configured via gRPC api calls
-* Containers do not need access to kerbos tickets
-
-
 
 # Using Credentials-Fetcher with EKS/SMB
 
 
-### Scenario
+### Example use case
 
-If you have EKS pods operating on Amazon Linux 2 and require access to SMB file shares using Kerberos authentication, even when the EKS worker nodes are not part of the Windows Active Directory domain. The use of Kerberos authentication is crucial to guarantee SMB encryption-in-transit for compliance purposes.
+You run EKS pods on EC2 using Amazon Linux 2 and require access to SMB file shares using Kerberos authentication, even when the EKS worker nodes are not part of the Windows Active Directory domain. The use of Kerberos authentication is crucial to guarantee SMB encryption-in-transit for compliance purposes.
 
 ### Solution
 
 Implement the SMB CSI Driver with Kerberos authentication settings to enable the mounting of SMB shares onto the pods. Employ the Credentials-Fetcher to generate and update Kerberos tickets as needed.
+
+![Alt text](eks_smb_use_case_diagram.png)
 
 ### References
 
@@ -29,10 +24,11 @@ Implement the SMB CSI Driver with Kerberos authentication settings to enable the
 * Microsoft Active Directory
 * gMSA Account in Active Directory
 * credspec.json generated from the gMSA Account
-* AWS Secrets Manager secret with username/password for account that can query gMSA account 
+* User account with permissions to query gMSA account
+* AWS Secrets Manager secret with username/password/domainName to the User Account
 * FSx NetApp with an SMB File share on a Volume configured with NTFS permissions style
-* FSx Netapp is joined to Active Directory
-* SMB File share permissions assigned for read/write to the gMSA account
+* FSx Netapp joined to Active Directory
+* SMB File share permissions assigned to the gMSA account granting read/write
 * Amazon EKS Cluster
 * Amazon EKS Worker Node operating on Amazon Linux 2
 * EKS Worknode EC2 Instance Role configured with policy to read Secrets Manager secret
@@ -152,6 +148,7 @@ spec:
 kubectl apply -f pvc-smb.yaml
 ```
 
+![Alt text](eks_smb_use_case_pv.png)
 
 
 ### Install Credentials-Fetcher Amazon Linux 2 RPM
@@ -191,6 +188,7 @@ sudo systemctl start credentials-fetcher.service
 sudo journalctl -u credentials-fetcher
 ```
 
+![Alt text](eks_smb_use_case_start_service.png)
 
 
 ### Test with EKS Pod that reads/writes to SMB file share
@@ -231,6 +229,7 @@ spec:
 kubectl apply -f pv-smb-pod.yaml
 ```
 
+### Confirm the pod has a Running status
 ```
 
 # kubectl get pods
@@ -239,4 +238,6 @@ pod-smb-reader-writer   2/2     Running   0          22s
 ```
 
 
-
+### Open the file on file share to confirm
+![View the output](eks_smb_use_case_output.png
+)
