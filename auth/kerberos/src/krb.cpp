@@ -665,7 +665,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     std::string gmsa_ou = std::string( ",CN=Managed Service Accounts," );
     if ( getenv(ENV_CF_GMSA_OU) != NULL)
     {
-        gmsa_ou = std::string( "," ) + getenv(ENV_CF_GMSA_OU)+ std::string( "," );
+        gmsa_ou = std::string( "," ) + std::string( getenv(ENV_CF_GMSA_OU) ) + std::string( "," );
     }
     std::string cmd = std::string( "ldapsearch -H ldap://" ) + fqdn;
     cmd += std::string( " -b 'CN=" ) + gmsa_account_name + gmsa_ou + base_dn + std::string( "'" ) + 
