@@ -155,6 +155,7 @@ int read_meta_data_json_test();
 int read_meta_data_invalid_json_test();
 int write_meta_data_json_test();
 int renewal_failure_krb_dir_not_found_test();
+int test_get_ticket_expiration();
 
 /**
  * Methods in config module

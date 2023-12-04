@@ -198,13 +198,15 @@ int main( int argc, const char* argv[] )
                 std::cout << "***ERROR**: Cred spec tests failed" << std::endl;
             }
         }
+        bool is_ticket_expiration_test_sucessful =  (test_get_ticket_expiration() == EXIT_SUCCESS);
         bool exit_status = ( read_meta_data_json_test() == EXIT_SUCCESS ) &&
               ( read_meta_data_invalid_json_test() == EXIT_SUCCESS ) &&
               ( renewal_failure_krb_dir_not_found_test() == EXIT_SUCCESS ) &&
               ( write_meta_data_json_test() == EXIT_SUCCESS ) &&
               ( found_cred_spec_result == EXIT_SUCCESS ) &&
               ( not_found_cred_spec_result == EXIT_FAILURE ) &&
-              ( is_good_cred_spec == EXIT_SUCCESS );
+              ( is_good_cred_spec == EXIT_SUCCESS ) &&
+	      is_ticket_expiration_test_sucessful;
         if ( exit_status )
         {
             exit( 0 );
