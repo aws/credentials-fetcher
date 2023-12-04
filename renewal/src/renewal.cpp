@@ -21,7 +21,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
         {
             auto x = std::chrono::steady_clock::now() + std::chrono::minutes( interval );
             std::this_thread::sleep_until( x );
-            std::cout << "###### renewal started ######" << std::endl;
+            std::cout << getCurrentTime() << '\t' << "INFO: renewal started" << std::endl;
 
             // identify the metadata files in the krb directory
             std::vector<std::string> metadatafiles;
@@ -55,12 +55,9 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                     std::string krb_cc_name = krb_ticket->krb_file_path;
                     std::string domainless_user = krb_ticket->domainless_user;
                     // check if the ticket is ready for renewal and not created in domainless mode
-                    if ( domainless_user.empty() && is_ticket_ready_for_renewal( krb_ticket ))
+                    if ((domainless_user.empty() || domainless_user.find("awsdomainlessusersecret") !=
+                                                          std::string::npos) && is_ticket_ready_for_renewal( krb_ticket ))
                     {
-                        std::cout << "gMSA ticket is at " + krb_cc_name +
-                                        " is ready for renewal!"
-                                        << std::endl;
-
                         int num_retries = 1;
                         for ( int i = 0; i <= num_retries; i++ )
                         {
@@ -100,18 +97,16 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                     else
                     {
                         cf_logger.logger( LOG_INFO, "gMSA ticket is at %s", krb_cc_name.c_str() );
-                        std::cout << "gMSA ticket is at " + krb_cc_name +
-                                         " is not yet ready for "
-                                         "renewal"
-                                  << std::endl;
                     }
                 }
             }
         }
         catch ( const std::exception& ex  )
         {
-            std::cout << "Exception: '" << ex.what() << "'!" << std::endl;
-            fprintf( stderr, SD_CRIT "failed to run the ticket renewal" );
+            std::cout << getCurrentTime() << '\t' << "ERROR: '" << ex.what() << "'!" <<
+                                                         std::endl;
+            std::cout << getCurrentTime() << '\t' << "ERROR: failed to run the ticket renewal"
+                      << std::endl;
             break;
         }
     }

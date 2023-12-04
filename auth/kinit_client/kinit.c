@@ -380,10 +380,12 @@ kinit_prompter(krb5_context ctx, void *data, const char *name,
             *pwprompt = TRUE;
     }
 
-    printf("prompt at 0x%x, 0x%x, %s\n", prompts->reply->magic, prompts->reply->length, prompts->reply->data);
+    printf("INFO: prompt at 0x%x, 0x%x, %s\n", prompts->reply->magic, prompts->reply->length,
+            prompts->reply->data);
     //ret =  krb5_prompter_posix(ctx, data, name, banner, num_prompts, prompts);
     //printf("ret = %d\n", ret);
-    printf("prompt at 0x%x, 0x%x, %s\n", prompts->reply->magic, prompts->reply->length, prompts->reply->data);
+    printf("INFO: prompt at 0x%x, 0x%x, %s\n", prompts->reply->magic, prompts->reply->length,
+            prompts->reply->data);
     prompts->reply->length = strlen(udata.pass);
     memcpy(prompts->reply->data, udata.pass, strlen(udata.pass));
 
