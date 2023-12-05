@@ -721,18 +721,95 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
  */
 std::string get_ticket_expiration( std::string klist_ticket_info )
 {
-    std::regex pattern(".+\n.{21}(.{19}).+");
+    /*
+     * Ticket cache: KEYRING:persistent:1000:1000
+     * Default principal: admin@CUSTOMERTEST.LOCAL
+
+    * Valid starting       Expires              Service principal
+        * 12/04/2023 19:39:06  12/05/2023 05:39:06  krbtgt/CUSTOMERTEST.LOCAL@CUSTOMERTEST.LOCAL
+                                                                               * renew until 12/11/2023 19:39:04
+        */
+
+    std::string any_regex( ".+" );
+    std::string day_regex( "[0-9]{2}" );
+    std::string month_regex( "[0-9]{2}" );
+    std::string year_in_four_digits_regex( "[0-9]{4}" );
+    std::string year_in_two_digits_regex( "[0-9]{2}" );
+    std::string time_regex( "([0-9]{2}:[0-9]{2}:[0-9]{2})" );
+    std::string separator_regex( "[/]{1}" );
+    std::string space_regex( "[ ]+" );
+    std::string left_paren_regex( "(" );
+    std::string right_paren_regex( ")" );
+    std::string krbtgt_regex( "krbtgt" );
+
+    std::string date_regex = left_paren_regex + day_regex + separator_regex + month_regex +
+                             separator_regex + year_in_four_digits_regex + right_paren_regex;
+
+    /* 12/04/2023 19:39:06  12/05/2023 05:39:06  krbtgt/CUSTOMERTEST.LOCAL@CUSTOMERTEST.LOCAL */
+    std::string expires_regex = date_regex + space_regex + time_regex + space_regex + date_regex +
+                                space_regex + time_regex + space_regex + krbtgt_regex;
+
+    std::string regex_pattern( expires_regex );
+    std::regex pattern( expires_regex );
     std::smatch expires_match;
 
-    if (!std::regex_search(klist_ticket_info, expires_match, pattern))
+    if ( !std::regex_search( klist_ticket_info, expires_match, pattern ) )
     {
-        std::cout << getCurrentTime() << '\t' << "ERROR: Unable to parse klist for ticket "
-                                                      "expiration: " << klist_ticket_info <<
-            std::endl;
-        return std::string("");
+        // Retry with 2 digit year
+        /* 12/04/23 21:58:51  12/05/23 07:58:51  krbtgt/CUSTOMERTEST.LOCAL@CUSTOMERTEST.LOCAL */
+        date_regex = left_paren_regex + day_regex + separator_regex + month_regex +
+                     separator_regex + year_in_two_digits_regex + right_paren_regex;
+        expires_regex = date_regex + space_regex + time_regex + space_regex + date_regex +
+                        space_regex + time_regex + space_regex + krbtgt_regex;
+        pattern = expires_regex;
+        if ( !std::regex_search( klist_ticket_info, expires_match, pattern ) )
+        {
+            std::cout << "Unable to parse klist for ticket expiration: " << klist_ticket_info
+                      << std::endl;
+            return std::string( "" );
+        }
     }
 
-    return std::string(expires_match[1]);
+    /*
+     * From example above:
+     * 12/04/2023
+     * 19:39:06
+     * 12/05/2023
+     * 05:39:06
+     */
+    std::string klist_valid_date;
+    std::string klist_valid_time;
+    std::string klist_expires_date;
+    std::string klist_expires_time;
+    for ( auto it = expires_match.cbegin(); it != expires_match.cend(); it++ )
+    {
+        // First one is the full string
+        if ( it != expires_match.cbegin() )
+        {
+            if ( klist_valid_date.empty() )
+            {
+                klist_valid_date = *it;
+                continue;
+            }
+            if ( klist_valid_time.empty() )
+            {
+                klist_valid_time = *it;
+                continue;
+            }
+            if ( klist_expires_date.empty() )
+            {
+                klist_expires_date = *it;
+                continue;
+            }
+            if ( klist_expires_time.empty() )
+            {
+                klist_expires_time = *it;
+                continue;
+            }
+        }
+    }
+
+    return klist_expires_date + " " + klist_expires_time;
 }
 
 /**
