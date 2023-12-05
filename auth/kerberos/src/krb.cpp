@@ -13,6 +13,7 @@
 // Active Directory uses NetBIOS computer names that do not exceed 15 characters.
 // https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/naming-conventions-for-computer-domain-site-ou
 #define HOST_NAME_LENGTH_LIMIT 15
+#define ENV_CF_GMSA_OU "CF_GMSA_OU"
 
 static const std::string install_path_for_decode_exe =
     "/usr/sbin/credentials_fetcher_utf16_private.exe";
@@ -661,9 +662,13 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
      *   Accounts,DC=contoso,DC=com' -s sub  "(objectClass=msDs-GroupManagedServiceAccount)"
      *   msDS-ManagedPassword
      */
+    std::string gmsa_ou = std::string( ",CN=Managed Service Accounts," );
+    if ( getenv(ENV_CF_GMSA_OU) != NULL)
+    {
+        gmsa_ou = std::string( "," ) + std::string( getenv(ENV_CF_GMSA_OU) ) + std::string( "," );
+    }
     std::string cmd = std::string( "ldapsearch -H ldap://" ) + fqdn;
-    cmd += std::string( " -b 'CN=" ) + gmsa_account_name +
-           std::string( ",CN=Managed Service Accounts," ) + base_dn + std::string( "'" ) +
+    cmd += std::string( " -b 'CN=" ) + gmsa_account_name + gmsa_ou + base_dn + std::string( "'" ) + 
            std::string( " -s sub  \"(objectClass=msDs-GroupManagedServiceAccount)\" "
                         " msDS-ManagedPassword" );
 
