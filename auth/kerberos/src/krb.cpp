@@ -1,11 +1,11 @@
 #include "daemon.h"
-#include <fstream>
-#include <filesystem>
 #include <dirent.h>
+#include <filesystem>
+#include <fstream>
 #include <openssl/crypto.h>
+#include <regex>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <regex>
 
 // renew the ticket 1 hrs before the expiration
 #define RENEW_TICKET_HOURS 1
@@ -18,7 +18,7 @@ static const std::string install_path_for_decode_exe =
     "/usr/sbin/credentials_fetcher_utf16_private.exe";
 static const std::string install_path_for_aws_cli = "/usr/bin/aws";
 
-extern "C" int my_kinit_main(int, char **);
+extern "C" int my_kinit_main( int, char** );
 
 /**
  * Check if binary is writable other than root
@@ -77,7 +77,8 @@ static std::pair<int, std::string> exec_shell_cmd( std::string cmd )
  * @return result pair<int, std::string> (error-code - 0 if successful
  *                          string of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM')
  */
-static std::pair<int, std::string> get_machine_principal( std::string domain_name, creds_fetcher::CF_logger& cf_logger )
+static std::pair<int, std::string> get_machine_principal( std::string domain_name,
+                                                          creds_fetcher::CF_logger& cf_logger )
 {
     std::pair<int, std::string> result;
 
@@ -115,11 +116,14 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
     std::string host_name = hostname_result.second;
 
     // truncate the hostname to the host name size limit defined by microsoft
-    if(host_name.length() > HOST_NAME_LENGTH_LIMIT){
-        cf_logger.logger( LOG_ERR, "WARNING: %s:%d hostname exceeds 15 characters,"
-             "this can cause problems in getting kerberos tickets, please reduce hostname length",
-             __func__, __LINE__ );
-        host_name = host_name.substr(0,HOST_NAME_LENGTH_LIMIT);
+    if ( host_name.length() > HOST_NAME_LENGTH_LIMIT )
+    {
+        cf_logger.logger(
+            LOG_ERR,
+            "WARNING: %s:%d hostname exceeds 15 characters,"
+            "this can cause problems in getting kerberos tickets, please reduce hostname length",
+            __func__, __LINE__ );
+        host_name = host_name.substr( 0, HOST_NAME_LENGTH_LIMIT );
     }
 
     /**
@@ -177,11 +181,12 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
     result = get_machine_principal( std::move( domain_name ), cf_logger );
     if ( result.first != 0 )
     {
-        std::cout << "ERROR: " << __func__ << ":" << __LINE__ << " invalid machine principal" << std::endl;
+        std::cout << "ERROR: " << __func__ << ":" << __LINE__ << " invalid machine principal"
+                  << std::endl;
         cf_logger.logger( LOG_ERR, "ERROR: %s:%d invalid machine principal", __func__, __LINE__ );
         return result.first;
     }
-    
+
     // kinit -kt /etc/krb5.keytab  'EC2AMAZ-GG97ZL$'@CONTOSO.COM
     std::transform( result.second.begin(), result.second.end(), result.second.begin(),
                     []( unsigned char c ) { return std::toupper( c ); } );
@@ -242,17 +247,19 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
         return -1;
     }
 
-    std::string command =
-        install_path_for_aws_cli + std::string( " secretsmanager get-secret-value --secret-id " ) + aws_sm_secret_name + " --query 'SecretString' --output text";
-    // /usr/bin/aws secretsmanager get-secret-value --secret-id aws/directoryservices/d-xxxxxxxxxx/gmsa --query 'SecretString' --output text
+    std::string command = install_path_for_aws_cli +
+                          std::string( " secretsmanager get-secret-value --secret-id " ) +
+                          aws_sm_secret_name + " --query 'SecretString' --output text";
+    // /usr/bin/aws secretsmanager get-secret-value --secret-id
+    // aws/directoryservices/d-xxxxxxxxxx/gmsa --query 'SecretString' --output text
     result = exec_shell_cmd( command );
 
     // deserialize json to krb_ticket_info object
     Json::Value root;
     Json::CharReaderBuilder reader;
-    std::istringstream string_stream(result.second);
+    std::istringstream string_stream( result.second );
     std::string errors;
-    Json::parseFromStream(reader, string_stream, &root, &errors);
+    Json::parseFromStream( reader, string_stream, &root, &errors );
     // {"username":"user","password":"passw0rd"}
     std::string username = root["username"].asString();
     std::string password = root["password"].asString();
@@ -261,13 +268,13 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
                     []( unsigned char c ) { return std::toupper( c ); } );
 
     // kinit using api interface
-    char *kinit_argv[3];
+    char* kinit_argv[3];
 
-    kinit_argv[0] = (char *)"my_kinit";
+    kinit_argv[0] = (char*)"my_kinit";
     username = username + "@" + domain_name;
-    kinit_argv[1] = (char *)username.c_str();
-    kinit_argv[2] = (char *)password.c_str();
-    ret = my_kinit_main(2, kinit_argv);
+    kinit_argv[1] = (char*)username.c_str();
+    kinit_argv[2] = (char*)password.c_str();
+    ret = my_kinit_main( 2, kinit_argv );
 #if 0
     /* The old way */
     std::string kinit_cmd = "echo '"  + password +  "' | kinit -V " + username + "@" +
@@ -282,7 +289,6 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
     return ret;
 }
 
-
 /**
  * This function generates kerberos ticket with user with access to gMSA password credentials
  * User credentials must have adequate privileges to read gMSA passwords
@@ -290,9 +296,8 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
  * @param cf_daemon - parent daemon object
  * @return error-code - 0 if successful
  */
-int get_domainless_user_krb_ticket( std::string domain_name, std::string username, std::string
-                                                                                       password,
-                         creds_fetcher::CF_logger& cf_logger )
+int get_domainless_user_krb_ticket( std::string domain_name, std::string username,
+                                    std::string password, creds_fetcher::CF_logger& cf_logger )
 {
     std::pair<int, std::string> result;
     int ret;
@@ -322,20 +327,19 @@ int get_domainless_user_krb_ticket( std::string domain_name, std::string usernam
                     []( unsigned char c ) { return std::toupper( c ); } );
 
     // kinit using api interface
-    char *kinit_argv[3];
+    char* kinit_argv[3];
 
-    kinit_argv[0] = (char *)"my_kinit";
+    kinit_argv[0] = (char*)"my_kinit";
     username = username + "@" + domain_name;
-    kinit_argv[1] = (char *)username.c_str();
-    kinit_argv[2] = (char *)password.c_str();
-    ret = my_kinit_main(2, kinit_argv);
+    kinit_argv[1] = (char*)username.c_str();
+    kinit_argv[2] = (char*)password.c_str();
+    ret = my_kinit_main( 2, kinit_argv );
     username = "xxxx";
     password = "xxxx";
 
-    //TODO: nit - return pair later
+    // TODO: nit - return pair later
     return ret;
 }
-
 
 /**
  * base64_decode - Decodes base64 encoded string
@@ -381,7 +385,7 @@ static std::pair<size_t, void*> find_password( std::string ldap_search_result )
     std::vector<std::string> results;
 
     std::string password = std::string( "msDS-ManagedPassword::" );
-    results = split_string(ldap_search_result, '#');
+    results = split_string( ldap_search_result, '#' );
     bool password_found = false;
     for ( auto& result : results )
     {
@@ -543,7 +547,7 @@ std::pair<int, std::vector<std::string>> get_domain_ips( std::string domain_name
         return std::make_pair( ips.first, list_of_ips );
     }
 
-    list_of_ips = split_string(ips.second, '\n');
+    list_of_ips = split_string( ips.second, '\n' );
 
     return std::make_pair( EXIT_SUCCESS, list_of_ips );
 }
@@ -571,7 +575,7 @@ std::pair<int, std::string> get_fqdn_from_domain_ip( std::string domain_ip,
     }
 
     std::vector<std::string> list_of_dc_names;
-    list_of_dc_names = split_string(reverse_dns_output.second, '\n');
+    list_of_dc_names = split_string( reverse_dns_output.second, '\n' );
     for ( auto fqdn_str : list_of_dc_names )
     {
         if ( fqdn_str.length() == 0 )
@@ -618,7 +622,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
         return std::make_pair( -1, std::string( "" ) );
     }
 
-    results = split_string(domain_name, '.');
+    results = split_string( domain_name, '.' );
     std::string base_dn; /* Distinguished name */
     for ( auto& result : results )
     {
@@ -626,11 +630,10 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     }
     base_dn.pop_back(); // Remove last comma
 
-
     std::string fqdn;
-    fqdn = retrieve_secret_from_ecs_config(domain_controller_gmsa);
+    fqdn = retrieve_secret_from_ecs_config( domain_controller_gmsa );
 
-    if(fqdn.empty())
+    if ( fqdn.empty() )
     {
         std::pair<int, std::vector<std::string>> domain_ips = get_domain_ips( domain_name );
         if ( domain_ips.first != 0 )
@@ -692,7 +695,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     std::string default_principal = "'" + gmsa_account_name + "$'" + "@" + domain_name;
 
     /* Pipe password to the utf16 decoder and kinit */
-    std::string kinit_cmd = std::string("dotnet ") + std::string( install_path_for_decode_exe ) +
+    std::string kinit_cmd = std::string( "dotnet " ) + std::string( install_path_for_decode_exe ) +
                             std::string( " | kinit " ) + std::string( " -c " ) + krb_cc_name +
                             " -V " + default_principal;
     std::cout << kinit_cmd << std::endl;
@@ -718,22 +721,147 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
 }
 
 /**
- * Parses the string that is a result of the klist command for the ticket experation date and time
+ * Parses the string that is a result of the klist command for the ticket expiration date and time
  * @param klist_ticket_info  - String output of the klist command to parse
- * @return - returns the date and time of the ticket experation otherwise an empty string
+ * @return - returns the date and time of the ticket expiration otherwise an empty string
  */
 std::string get_ticket_expiration( std::string klist_ticket_info )
 {
-    std::regex pattern(".+\n.{21}(.{19}).+");
+    /*
+     * Ticket cache: KEYRING:persistent:1000:1000
+     * Default principal: admin@CUSTOMERTEST.LOCAL
+
+     * Valid starting       Expires              Service principal
+     * 12/04/2023 19:39:06  12/05/2023 05:39:06  krbtgt/CUSTOMERTEST.LOCAL@CUSTOMERTEST.LOCAL
+     * renew until 12/11/2023 19:39:04
+     */
+
+    std::string any_regex( ".+" );
+    std::string day_regex( "[0-9]{2}" );
+    std::string month_regex( "[0-9]{2}" );
+    std::string year_in_four_digits_regex( "[0-9]{4}" );
+    std::string year_in_two_digits_regex( "[0-9]{2}" );
+    std::string time_regex( "([0-9]{2}:[0-9]{2}:[0-9]{2})" );
+    std::string separator_regex( "[/]{1}" );
+    std::string space_regex( "[ ]+" );
+    std::string left_paren_regex( "(" );
+    std::string right_paren_regex( ")" );
+    std::string krbtgt_regex( "krbtgt" );
+
+    std::string date_regex = left_paren_regex + day_regex + separator_regex + month_regex +
+                             separator_regex + year_in_four_digits_regex + right_paren_regex;
+
+    /* 12/04/2023 19:39:06  12/05/2023 05:39:06  krbtgt/CUSTOMERTEST.LOCAL@CUSTOMERTEST.LOCAL */
+    std::string expires_regex = date_regex + space_regex + time_regex + space_regex + date_regex +
+                                space_regex + time_regex + space_regex + krbtgt_regex;
+
+    std::string regex_pattern( expires_regex );
+    std::regex pattern( expires_regex );
     std::smatch expires_match;
 
-    if (!std::regex_search(klist_ticket_info, expires_match, pattern))
+    if ( !std::regex_search( klist_ticket_info, expires_match, pattern ) )
     {
-        std::cout << "Unable to parse klist for ticket experation: " << klist_ticket_info << std::endl;
-        return std::string("");
+        // Retry with 2 digit year
+        /* 12/04/23 21:58:51  12/05/23 07:58:51  krbtgt/CUSTOMERTEST.LOCAL@CUSTOMERTEST.LOCAL */
+        date_regex = left_paren_regex + day_regex + separator_regex + month_regex +
+                     separator_regex + year_in_two_digits_regex + right_paren_regex;
+        expires_regex = date_regex + space_regex + time_regex + space_regex + date_regex +
+                        space_regex + time_regex + space_regex + krbtgt_regex;
+        pattern = expires_regex;
+        if ( !std::regex_search( klist_ticket_info, expires_match, pattern ) )
+        {
+            std::cout << "Unable to parse klist for ticket expiration: " << klist_ticket_info
+                      << std::endl;
+            return std::string( "" );
+        }
     }
 
-    return std::string(expires_match[1]);
+    /*
+     * From example above:
+     * 12/04/2023
+     * 19:39:06
+     * 12/05/2023
+     * 05:39:06
+     */
+    std::string klist_valid_date;
+    std::string klist_valid_time;
+    std::string klist_expires_date;
+    std::string klist_expires_time;
+    for ( auto it = expires_match.cbegin(); it != expires_match.cend(); it++ )
+    {
+        // First one is the full string
+        if ( it != expires_match.cbegin() )
+        {
+            if ( klist_valid_date.empty() )
+            {
+                klist_valid_date = *it;
+                continue;
+            }
+            if ( klist_valid_time.empty() )
+            {
+                klist_valid_time = *it;
+                continue;
+            }
+            if ( klist_expires_date.empty() )
+            {
+                klist_expires_date = *it;
+                continue;
+            }
+            if ( klist_expires_time.empty() )
+            {
+                klist_expires_time = *it;
+                continue;
+            }
+        }
+    }
+
+    return klist_expires_date;
+}
+
+int test_get_ticket_expiration()
+{
+    std::string klist_string_with_4_digit_year( "Ticket cache: KEYRING:persistent:1000:1000\n\
+			Default principal: admin@CUSTOMERTEST.LOCAL\n\
+			\n\
+			Valid starting       Expires              Service principal\n\
+			12/04/2023 19:39:06  12/05/2023 05:39:06  krbtgt/CUSTOMERTEST.LOCAL@CUSTOMERTEST.LOCAL\n\
+			renew until 12/11/2023 19:39:04" );
+
+    std::string klist_string_with_2_digit_year( "Ticket cache: FILE:/tmp/krb5cc_2001112\n\
+			Default principal: Admin@CUSTOMERTEST.LOCAL\n\
+			\n\
+			Valid starting     Expires            Service principal\n\
+			12/04/23 21:58:51  12/05/23 07:58:51  krbtgt/CUSTOMERTEST.LOCAL@CUSTOMERTEST.LOCAL\n\
+			renew until 12/11/23 21:58:51\n\
+			12/04/23 21:58:51  12/05/23 07:58:51  EC2AMAZ-4MQOKF$@CUSTOMERTEST.LOCAL" );
+
+    std::string expire_date_4_digit_year( "12/05/2023" );
+    std::string expire_date_2_digit_year( "12/05/23" );
+    bool test_4_digit_year = false;
+    bool test_2_digit_year = false;
+
+    test_4_digit_year =
+        ( get_ticket_expiration( klist_string_with_4_digit_year ) == expire_date_4_digit_year );
+
+    if ( test_4_digit_year )
+    {
+        std::cout << "Self test for ticket expiration with 4 digit year is successful" << std::endl;
+    }
+
+    test_2_digit_year =
+        ( get_ticket_expiration( klist_string_with_2_digit_year ) == expire_date_2_digit_year );
+    if ( test_2_digit_year )
+    {
+        std::cout << "Self test for ticket expiration with 2 digit year is successful" << std::endl;
+    }
+
+    if ( test_4_digit_year && test_2_digit_year )
+    {
+        return EXIT_SUCCESS;
+    }
+
+    std::cout << "**ERROR**: Failed self test for ticket expiration" << std::endl;
+    return EXIT_FAILURE;
 }
 
 /**
@@ -755,10 +883,10 @@ bool is_ticket_ready_for_renewal( creds_fetcher::krb_ticket_info* krb_ticket_inf
 
     std::vector<std::string> results;
 
-    results = split_string(krb_ticket_info_result.second, '#');
+    results = split_string( krb_ticket_info_result.second, '#' );
     std::string renew_until = "renew until";
     bool is_ready_for_renewal = false;
-    
+
     for ( auto& result : results )
     {
         auto found = result.find( renew_until );
@@ -766,7 +894,17 @@ bool is_ticket_ready_for_renewal( creds_fetcher::krb_ticket_info* krb_ticket_inf
         {
             std::string renewal_date_time;
 
-            renewal_date_time = get_ticket_expiration(result);
+            /*
+             * Ticket cache: KEYRING:persistent:1000:1000
+                 * Default principal: admin@CUSTOMERTEST.LOCAL
+
+                 * Valid starting       Expires              Service principal
+                 * 12/04/2023 19:39:06  12/05/2023 05:39:06
+             krbtgt/CUSTOMERTEST.LOCAL@CUSTOMERTEST.LOCAL
+             * renew until 12/11/2023 19:39:04
+             */
+
+            renewal_date_time = get_ticket_expiration( result );
 
             char renewal_date[80];
             char renewal_time[80];
@@ -814,16 +952,17 @@ bool is_ticket_ready_for_renewal( creds_fetcher::krb_ticket_info* krb_ticket_inf
  * @param username
  * @param password
  */
-std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_dir, std::string
-                                                                                         domain_name,
-                                               std::string username, std::string password,
-                                               creds_fetcher::CF_logger& cf_logger )
+std::list<std::string> renew_kerberos_tickets_domainless( std::string krb_files_dir,
+                                                          std::string domain_name,
+                                                          std::string username,
+                                                          std::string password,
+                                                          creds_fetcher::CF_logger& cf_logger )
 {
     std::list<std::string> renewed_krb_ticket_paths;
     // identify the metadata files in the krb directory
     std::vector<std::string> metadatafiles;
-    for ( std::filesystem::recursive_directory_iterator end, dir( krb_files_dir );
-          dir != end; ++dir )
+    for ( std::filesystem::recursive_directory_iterator end, dir( krb_files_dir ); dir != end;
+          ++dir )
     {
         auto path = dir->path();
         if ( std::filesystem::is_regular_file( path ) )
@@ -849,12 +988,14 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
         for ( auto krb_ticket : krb_ticket_info_list )
         {
             std::string domainlessuser = krb_ticket->domainless_user;
-            if(!username.empty()  && username == domainlessuser)
+            if ( !username.empty() && username == domainlessuser )
             {
                 std::pair<int, std::string> gmsa_ticket_result;
                 std::string krb_cc_name = krb_ticket->krb_file_path;
                 // gMSA kerberos ticket generation needs to have ldap over kerberos
-                // if the ticket exists for the machine/user already reuse it for getting gMSA password else retry the ticket creation again after generating user/machine kerberos ticket
+                // if the ticket exists for the machine/user already reuse it for getting gMSA
+                // password else retry the ticket creation again after generating user/machine
+                // kerberos ticket
                 int num_retries = 2;
                 for ( int i = 0; i < num_retries; i++ )
                 {
@@ -865,16 +1006,18 @@ std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_d
                     {
                         if ( num_retries == 0 )
                         {
-                            cf_logger.logger( LOG_WARNING,
-                                              "WARNING: Cannot get gMSA krb ticket "
-                                              "because of expired user/machine ticket, "
-                                              "will be retried automatically, service_account_name = %s",
-                                              krb_ticket->service_account_name.c_str() );
+                            cf_logger.logger(
+                                LOG_WARNING,
+                                "WARNING: Cannot get gMSA krb ticket "
+                                "because of expired user/machine ticket, "
+                                "will be retried automatically, service_account_name = %s",
+                                krb_ticket->service_account_name.c_str() );
                         }
                         else
                         {
-                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket using account %s",
-                                                krb_ticket->service_account_name.c_str() );
+                            cf_logger.logger( LOG_ERR,
+                                              "ERROR: Cannot get gMSA krb ticket using account %s",
+                                              krb_ticket->service_account_name.c_str() );
                         }
                         // if tickets are created in domainless mode
                         std::string domainless_user = krb_ticket->domainless_user;
@@ -974,7 +1117,7 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
     return delete_krb_ticket_paths;
 }
 
-std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
+std::string retrieve_secret_from_ecs_config( std::string ecs_variable_name )
 {
     const char* ecs_config_file_name = "/etc/ecs/ecs.config"; // TBD:: Add commandline if needed
 
@@ -985,7 +1128,7 @@ std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
     while ( std::getline( config_file, line ) )
     {
         // TBD: Error handling for incorrectly formatted /etc/ecs/ecs.config
-        results = split_string(line, '=');
+        results = split_string( line, '=' );
         std::string key = results[0];
         std::string value = results[1];
         if ( ecs_variable_name.compare( key ) == 0 )
@@ -999,19 +1142,19 @@ std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
 
 /**
  * Given an input string split based on provided delimiter and return the split strings as vector
- * 
+ *
  * @param input_string - input string to split
  * @param delimiter - char to split the input string on
  * @return results - results to store vector of strings after `input_string` is split
-*/
-std::vector<std::string> split_string(std::string input_string, char delimiter)
+ */
+std::vector<std::string> split_string( std::string input_string, char delimiter )
 {
     std::vector<std::string> results;
-    std::istringstream input_string_stream(input_string);
+    std::istringstream input_string_stream( input_string );
     std::string token;
-    while (std::getline(input_string_stream, token, delimiter))
+    while ( std::getline( input_string_stream, token, delimiter ) )
     {
-        results.push_back(token);
+        results.push_back( token );
     }
     return results;
 }

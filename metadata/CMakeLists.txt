@@ -5,7 +5,6 @@ project(metadata)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 
 FILE(GLOB SRC_FILES src/*.cpp tests/*.cpp)
-
 set(metadata "${SRC_FILES}" PARENT_SCOPE)
 
 # test sample for unit tests
@@ -19,5 +18,6 @@ file(
         DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/../
         FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
 )
+
 
 enable_testing ()

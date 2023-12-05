@@ -1,13 +1,13 @@
 {
   "krb_ticket_info": [
     {
-      "krb_file_path": "\/usr\/share\/credentials-fetcher\/krbdir\/73099acdb5807b4bbf91\/ccname_WebApp01_7K4PEM",
+      "krb_file_path": "\/tmp\/var\/credentials-fetcher\/krbdir\/73099acdb5807b4bbf91\/ccname_WebApp01_7K4PEM",
       "service_account_name": "WebApp01",
       "domain_name": "contoso.com",
       "domainless_user": "user1"
     },
     {
-      "krb_file_path": "\/usr\/share\/credentials-fetcher\/krbdir\/73099acdb5807b4bbf91\/ccname_WebApp03_53Yg4I",
+      "krb_file_path": "\/tmp\/var\/credentials-fetcher\/krbdir\/73099acdb5807b4bbf91\/ccname_WebApp03_53Yg4I",
       "service_account_name": "WebApp03",
       "domain_name": "contoso.com",
       "domainless_user": "user2"

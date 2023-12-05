@@ -25,6 +25,83 @@ bool contains_invalid_characters( const std::string& path )
     }
     return result;
 }
+
+/**
+ * read the kerberos ticket information from the cache
+ * @param file_path - file path for the metadata associated to a lease
+ * @param alt_file_path - alt file path for the metadata associated to a lease
+ * @param krb_files_dir - path of the dir for kerberos tickets
+ * @return vector of kerberos ticket info
+ */
+std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path,
+		std::string alt_file_path, std::string krb_files_dir )
+{
+    std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
+    std::string metadata_file = file_path;
+
+    if ( !metadata_file.empty() && !std::filesystem::exists( metadata_file ) )
+    {
+        metadata_file = alt_file_path;
+    }
+
+    try
+    {
+        if ( metadata_file.empty() )
+        {
+            fprintf( stderr, SD_CRIT "meta data file is empty" );
+            return krb_ticket_info_list;
+        }
+
+        // deserialize json to krb_ticket_info object
+        Json::Value root;
+        std::ifstream json_file( metadata_file );
+
+        if ( json_file.is_open() )
+        {
+            json_file >> root;
+            json_file.close();
+
+            // deserialize json to krb_ticket_info object
+            const Json::Value& child_tree_krb_info = root["krb_ticket_info"];
+
+            for ( const Json::Value& krb_info : child_tree_krb_info )
+            {
+                creds_fetcher::krb_ticket_info* krb_ticket_info =
+                    new creds_fetcher::krb_ticket_info;
+                std::string krb_file_path = krb_info["krb_file_path"].asString();
+
+                if ( contains_invalid_characters( krb_file_path ) )
+                {
+                    fprintf( stderr, SD_CRIT "krb file path contains invalid characters" );
+                    free( krb_ticket_info );
+                    break;
+                }
+
+                // only add path if it exists
+                if ( std::filesystem::exists( krb_file_path ) )
+                {
+                    krb_ticket_info->krb_file_path = krb_file_path;
+                    krb_ticket_info->service_account_name =
+                        krb_info["service_account_name"].asString();
+                    krb_ticket_info->domain_name = krb_info["domain_name"].asString();
+                    krb_ticket_info->domainless_user = krb_info["domainless_user"].asString();
+
+                    krb_ticket_info_list.push_back( krb_ticket_info );
+                }
+            }
+        }
+    }
+    catch ( const std::exception& ex )
+    {
+        std::cout << "Exception: '" << ex.what() << "'!" << std::endl;
+        fprintf( stderr, SD_CRIT "meta data file is not properly formatted" );
+        return krb_ticket_info_list;
+    }
+
+    return krb_ticket_info_list;
+
+}
+
 /**
  * read the kerberos ticket information from the cache
  * @param file_path - file path for the metadata associated to a lease
@@ -34,6 +111,7 @@ bool contains_invalid_characters( const std::string& path )
 std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path )
 {
     std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
+
     try
     {
         if ( file_path.empty() )

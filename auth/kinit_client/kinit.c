@@ -562,6 +562,7 @@ k5_kinit(struct k_opts *opts, struct k5_data *k5)
             fprintf(stderr, _("Initialized cache\n"));
 
         ret = k5_cc_store_primary_cred(k5->ctx, mcc, &my_creds);
+        
         if (ret) {
             com_err(progname, ret, _("while storing credentials"));
             goto cleanup;
@@ -605,7 +606,30 @@ cleanup:
         krb5_kt_close(k5->ctx, keytab);
     return notix ? 0 : 1;
 }
+#define IS_TGS_PRINC(p) ((p)->length == 2 &&                            \
+                         data_eq_string((p)->data[0], KRB5_TGS_NAME))
 
+//k5_cc_store_primary_cred() is not in Krb5 package available for Amazon Linux 2 so lets pull the code in here
+
+krb5_error_code
+k5_cc_store_primary_cred(krb5_context context, krb5_ccache cache,
+                         krb5_creds *creds)
+{
+    krb5_error_code ret;
+
+    /* Write a start realm if we're writing a TGT and the client realm isn't
+     * the same as the TGS realm. */
+    if (IS_TGS_PRINC(creds->server) &&
+        !data_eq(creds->client->realm, creds->server->data[1])) {
+        ret = krb5_cc_set_config(context, cache, NULL,
+                                 KRB5_CC_CONF_START_REALM,
+                                 &creds->server->data[1]);
+        if (ret)
+            return ret;
+    }
+
+    return krb5_cc_store_cred(context, cache, creds);
+}
 int
 my_kinit_main(int argc, char *argv[])
 {

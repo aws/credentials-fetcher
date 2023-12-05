@@ -5,7 +5,7 @@
 # For handling bump release by rpmdev-bumpspec and mass rebuild
 %global baserelease 3
  
-Name:           credentials-fetcher
+Name:           credentials-fetcher-no-grpc
 Version:        %{major_version}.%{minor_version}.%{patch_version}
 Release:        %{baserelease}%{?dist}
 Summary:        credentials-fetcher is a daemon that refreshes tickets or tokens periodically
@@ -14,11 +14,11 @@ License:        Apache-2.0
 URL:            https://github.com/aws/credentials-fetcher
 Source0:        https://github.com/aws/credentials-fetcher/archive/refs/tags/v.%{version}.tar.gz
  
-BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-devel jsoncpp-devel
-BuildRequires:  openssl-devel zlib-devel protobuf-devel re2-devel krb5-devel systemd-devel
-BuildRequires:  systemd-rpm-macros dotnet-sdk-6.0 grpc-plugins
+BuildRequires:  make chrpath openldap-clients jsoncpp-devel
+BuildRequires:  openssl-devel zlib-devel krb5-devel systemd-devel
+BuildRequires:  dotnet-sdk-6.0
  
-Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0 jsoncpp-devel jsoncpp
+Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0 jsoncpp-devel jsoncpp realmd krb5-workstation openldap openldap-clients cyrus-sasl-gssapi
 # No one likes you i686
 ExclusiveArch: x86_64 aarch64 s390x
  
@@ -40,20 +40,35 @@ sed -r -i 's/(std=c\+\+)11/\117/' CMakeLists.txt
  
 %build
 %cmake3
-%cmake_build
+#%cmake_build
+make
 %install
  
-%cmake_install
+#%cmake_install
+# Replace %cmake_install with explicit installation commands
+mkdir -p %{buildroot}/%{_sbindir}
+install -m 0755 credentials-fetcherd %{buildroot}/%{_sbindir}/credentials-fetcherd
+
+install -m 0755 credentials_fetcher_utf16_private.exe %{buildroot}/%{_sbindir}/credentials_fetcher_utf16_private.exe
+install -m 0755 credentials_fetcher_utf16_private.runtimeconfig.json %{buildroot}/%{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
+install -m 0755 metadata_sample.json %{buildroot}/%{_sbindir}/credentials_fetcher_metadata_sample.json
+install -m 0755 sample_credspec.json %{buildroot}/%{_sbindir}/credentials_fetcher_sample_credspec.json
+
+
+mkdir -p %{buildroot}/%{_unitdir}
+install -m 0755 scripts/systemd/credentials-fetcher.service %{buildroot}/%{_unitdir}/credentials-fetcher.service
+
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_removing_rpath
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_rpath_for_internal_libraries
 chrpath --delete %{buildroot}/%{_sbindir}/credentials-fetcherd
  
 %check
-# TBD: Run tests from top-level directory
-ctest3
+CF_CRED_SPEC_FILE=%{buildroot}/%{_sbindir}/credentials_fetcher_sample_credspec.json ctest3 -V %{buildroot}/%{_sbindir}/credentials-fetcherd -t
  
 %files
 %{_sbindir}/credentials-fetcherd
+%{_sbindir}/credentials_fetcher_metadata_sample.json
+%{_sbindir}/credentials_fetcher_sample_credspec.json
 %{_unitdir}/credentials-fetcher.service
 %license LICENSE
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/
@@ -126,3 +141,4 @@ ctest3
 - Fixes to rpm spec
 * Mon Jun 6 2022 Samiullah Mohammed <samiull@amazon.com> - 0.0.1
 - Initial commit
+

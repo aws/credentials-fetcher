@@ -155,6 +155,7 @@ int read_meta_data_json_test();
 int read_meta_data_invalid_json_test();
 int write_meta_data_json_test();
 int renewal_failure_krb_dir_not_found_test();
+int test_get_ticket_expiration();
 
 /**
  * Methods in config module
@@ -177,7 +178,9 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
 
 int parse_cred_file_path(const std::string& cred_file_path, std::string& cred_file, std::string& cred_file_lease_id );
 
-int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id);
+int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath,
+		creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id,
+		std::string aws_sm_secret_name, bool is_diagnostic);
 
 std::string generate_lease_id();
 
@@ -191,6 +194,8 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon );
  */
 bool contains_invalid_characters( const std::string& path );
 std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path );
+std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path,
+		std::string alt_file_path, std::string krb_file_path );
 
 int write_meta_data_json( creds_fetcher::krb_ticket_info* krb_ticket_info,
                           std::string lease_id, std::string krb_files_dir );
