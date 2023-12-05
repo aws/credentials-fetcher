@@ -29,6 +29,7 @@
 #define _daemon_h_
 
 #define DEFAULT_CRED_FILE_LEASE_ID "credspec"
+#define LOG_FILE_PATH "/var/credentials-fetcher/logging/credentials-fetcher.log"
 
 /*
  * This is a singleton class for the daemon, it is used
@@ -86,6 +87,12 @@ namespace creds_fetcher
                 sd_journal_print( level, fmt, logs... );
             }
         }
+
+        void init_file_logger ()
+        {
+            std::string log_file_path = LOG_FILE_PATH;
+            freopen( log_file_path.c_str() , "a+", stdout );
+        }
     };
 
     class Daemon
@@ -131,8 +138,10 @@ namespace creds_fetcher
 /**
  * Methods in auth module
  */
+void truncate_log_files();
+std::string getCurrentTime();
 int generate_host_machine_krb_ticket( const char* krb_ccname = "" );
-
+std::pair<int, std::string> exec_shell_cmd( std::string cmd );
 int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger );
 int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name,
                          creds_fetcher::CF_logger& cf_logger );
