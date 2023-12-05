@@ -815,7 +815,7 @@ std::string get_ticket_expiration( std::string klist_ticket_info )
         }
     }
 
-    return klist_expires_date;
+    return klist_expires_date + " " + klist_expires_time;
 }
 
 int test_get_ticket_expiration()
@@ -835,8 +835,8 @@ int test_get_ticket_expiration()
 			renew until 12/11/23 21:58:51\n\
 			12/04/23 21:58:51  12/05/23 07:58:51  EC2AMAZ-4MQOKF$@CUSTOMERTEST.LOCAL" );
 
-    std::string expire_date_4_digit_year( "12/05/2023" );
-    std::string expire_date_2_digit_year( "12/05/23" );
+    std::string expire_date_4_digit_year( "12/05/2023 05:39:06" );
+    std::string expire_date_2_digit_year( "12/05/23 07:58:51" );
     bool test_4_digit_year = false;
     bool test_2_digit_year = false;
 
