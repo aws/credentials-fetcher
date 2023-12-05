@@ -9,6 +9,7 @@
 #include <random>
 #include <sys/stat.h>
 #include <regex>
+#include <unistd.h>
 
 #if AMAZON_LINUX_DISTRO
 #include <aws/core/Aws.h>
@@ -20,7 +21,6 @@
 #include <aws/secretsmanager/model/GetSecretValueRequest.h>
 #endif
 
-
 #define LEASE_ID_LENGTH 10
 #define UNIX_SOCKET_NAME "credentials_fetcher.sock"
 #define INPUT_CREDENTIALS_LENGTH 256
@@ -31,6 +31,27 @@ static const std::vector<char> invalid_characters = {
 std::string dummy_credspec =
         "{\"CmsPlugins\":[\"ActiveDirectory\"],\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4066351383-705263209-1606769140\",\"MachineAccountName\":\"webapp01\",\"Guid\":\"ac822f13-583e-49f7-aa7b-284f9a8c97b6\",\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"webapp01\",\"Scope\":\"contoso.com\"},{\"Name\":\"webapp01\",\"Scope\":\"contoso\"}],\"HostAccountConfig\":{\"PortableCcgVersion\":\"1\",\"PluginGUID\":\"{859E1386-BDB4-49E8-85C7-3070B13920E1}\",\"PluginInput\":{\"CredentialArn\":\"arn:aws:secretsmanager:us-west-2:123456789:secret:gMSAUserSecret-PwmPaO\"}}}}";
 
+static void _chgrp(const char* file, const char* env_name)
+{
+    if ( getenv( env_name ) != NULL)
+    {
+        char* c_str = getenv( env_name );
+        std::stringstream s_str;
+        s_str << c_str;
+        gid_t gid;
+        s_str >> gid;
+        chown( file, (uid_t)-1, gid );
+    }
+}
+
+static void _chmod(const char* file, const char* env_name)
+{
+    if ( getenv( env_name ) != NULL)
+    {
+        mode_t mode = strtol( getenv( env_name ), NULL, 8 );
+        chmod( file, (mode_t)mode );
+    }
+}
 
 /**
  *
@@ -77,8 +98,8 @@ class CredentialsFetcherImpl final
     void RunServer( std::string unix_socket_dir, std::string krb_files_dir,
                     creds_fetcher::CF_logger& cf_logger, std::string aws_sm_secret_name )
     {
-        std::string unix_socket_address =
-            std::string( "unix:" ) + unix_socket_dir + "/" + std::string( UNIX_SOCKET_NAME );
+        std::string unix_socket_file = unix_socket_dir + "/" + std::string( UNIX_SOCKET_NAME );
+        std::string unix_socket_address = std::string( "unix:" ) + unix_socket_file;
         std::string server_address( unix_socket_address );
 
         grpc::ServerBuilder builder;
@@ -93,6 +114,8 @@ class CredentialsFetcherImpl final
         // Finally assemble the server.
         server_ = builder.BuildAndStart();
         std::cout << "Server listening on " << server_address << std::endl;
+        _chgrp( unix_socket_file.c_str(), "CF_SOCKET_GID" );
+        _chmod( unix_socket_file.c_str(), "CF_SOCKET_MODE" );
 
         // Proceed to the server's main loop.
         HandleRpcs( krb_files_dir, cf_logger, aws_sm_secret_name );
@@ -2029,8 +2052,6 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
         }
         else
         {
-            chmod(krb_ccname_str.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-
             cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
                                 gmsa_ticket_result.second.c_str() );
             std::cout << "gMSA ticket is at " << gmsa_ticket_result.second
