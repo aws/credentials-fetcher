@@ -1,9 +1,9 @@
 %global major_version 1
-%global minor_version 2
-%global patch_version 0
+%global minor_version 3
+%global patch_version 2
  
 # For handling bump release by rpmdev-bumpspec and mass rebuild
-%global baserelease 3
+%global baserelease 0
  
 Name:           credentials-fetcher-no-grpc
 Version:        %{major_version}.%{minor_version}.%{patch_version}
@@ -77,6 +77,9 @@ CF_CRED_SPEC_FILE=%{buildroot}/%{_sbindir}/credentials_fetcher_sample_credspec.j
 %attr(0700, -, -) %{_sbindir}/credentials_fetcher_utf16_private.runtimeconfig.json
  
 %changelog
+* Mon Dec 11 2023 Sai Kiran Akula <saakla@amazon.com> - 1.3.2-0
+- Minor release to support credentials fetcher on AL2 no-gRPC mode
+
 * Thu Aug 31 2023 Tom Callaway <spot@fedoraproject.org> - 1.2.0-3
 - rebuild for abseil
  
