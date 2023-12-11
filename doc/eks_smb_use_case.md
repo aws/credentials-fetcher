@@ -70,6 +70,7 @@ default_ccache_name = FILE:/var/credentials-fetcher/krbdir/credspec/gmsaeks/krb5
 
 echo "empty" > /tmp/emptycache
 export EMPTYCACHEFILE=/tmp/emptycache
+export CF_CRED_SPEC_FILE=/home/ec2-user/credentials-fetcher/sample_credspec/sample_credspec.json
 EMPTYCACHE=$(base64 -w 0 $EMPTYCACHEFILE)
 
 kubectl create secret generic smbcreds --from-literal krb5cc_0=$EMPTYCACHE
