@@ -251,13 +251,9 @@ class CredentialsFetcherClient
             std::list<std::string> credspec_contents, std::string accessId, std::string secretKey, std::string sessionToken, std::string region )
     {
         // Prepare request
-        credentialsfetcher::KerberosArnLeaseRequest request;
+        credentialsfetcher::RenewKerberosArnLeaseRequest request;
         std::pair<std::string, std::string> result;
-        for ( std::list<std::string>::const_iterator i = credspec_contents.begin();
-              i != credspec_contents.end(); ++i )
-        {
-            request.add_credspec_arns( i->c_str() );
-        }
+
         request.set_access_key_id(accessId);
         request.set_secret_access_key(secretKey);
         request.set_session_token(sessionToken);
@@ -399,7 +395,7 @@ static void show_usage( std::string name )
                " credspecArn, accessId, secretkey, sessionToken, region"
             << "\t --renew_kerberos_tickets_arn \t\t create tickets by getting credspecs from s3 "
                " gMSA \tprovide"
-               "credspecArn, accessId, secretkey, sessionToken, region"
+               "accessId, secretkey, sessionToken, region"
               << "\t --invalidargs \t\ttest with invalid args, failure scenario\n"
               << "\t --run_stress_test \t\tstress test with multiple accounts and leases\n"
               << std::endl;
@@ -733,11 +729,10 @@ int main( int argc, char** argv )
         else if(arg == "--renew_kerberos_tickets_arn"){
             if ( i + 3 < argc )
             {
-                credspecArn = argv[ i + 1];
-                accessId = argv[i + 2];
-                secretkey = argv[i + 3];
-                sessionToken = argv[i + 4];
-                region = argv[i + 5];
+                accessId = argv[i + 1];
+                secretkey = argv[i + 2];
+                sessionToken = argv[i + 3];
+                region = argv[i + 4];
             }
             else
             {
@@ -747,7 +742,7 @@ int main( int argc, char** argv )
                 return 0;
             }
             std::cout << "krb tickets will get created" << std::endl;
-            std::list<std::string>  domainless_arn_array = {credspecArn};
+            std::list<std::string>  domainless_arn_array = {};
             renew_krb_ticket_arns( client, credspec_contents_arns_domainless, accessId, secretkey,
                                     sessionToken, region );
             i++;

@@ -62,6 +62,7 @@ namespace creds_fetcher
         std::string service_account_name;
         std::string domain_name;
         std::string domainless_user;
+        std::string credspec_info;
     };
 
     /*
@@ -138,6 +139,11 @@ namespace creds_fetcher
 /**
  * Methods in auth module
  */
+std::vector<std::string>  get_meta_data_file_paths(std::string krbdir);
+std::string renew_gmsa_ticket( creds_fetcher::krb_ticket_info* krb_ticket, std::string
+                                                                               domain_name,
+                               std::string username, std::string password,
+                               creds_fetcher::CF_logger& cf_logger  );
 void truncate_log_files();
 std::string getCurrentTime();
 int generate_host_machine_krb_ticket( const char* krb_ccname = "" );
