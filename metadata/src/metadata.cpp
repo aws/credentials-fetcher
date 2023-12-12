@@ -78,6 +78,11 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
                     krb_ticket_info->domain_name = krb_info["domain_name"].asString();
                     krb_ticket_info->domainless_user = krb_info["domainless_user"].asString();
 
+                    if(krb_info.isMember("credspec_info"))
+                    {
+                        krb_ticket_info->credspec_info = krb_info["credspec_info"].asString();
+                    }
+
                     krb_ticket_info_list.push_back( krb_ticket_info );
                 }
             }
@@ -153,6 +158,7 @@ int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_
             ticket_info["service_account_name"] = krb_ticket_info->service_account_name;
             ticket_info["domain_name"] = krb_ticket_info->domain_name;
             ticket_info["domainless_user"] = krb_ticket_info->domainless_user;
+            ticket_info["credspec_info"] = krb_ticket_info->credspec_info;
 
             krb_ticket_info_parent.append( ticket_info );
         }

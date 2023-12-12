@@ -644,65 +644,85 @@ class CredentialsFetcherImpl final
                 std::string domain = "";
 
                 std::string err_msg;
-                if ( !accessId.empty() && !secretKey.empty() && !sessionToken.empty() && !region.empty() ) {
-                    for (int i = 0;
-                          i < renew_krb_arn_request_.credspec_arns_size(); i++) {
-                        creds_fetcher::krb_ticket_info *krb_ticket_info =
-                            new creds_fetcher::krb_ticket_info;
-                        creds_fetcher::krb_ticket_arn_mapping *krb_ticket_arns =
-                            new creds_fetcher::krb_ticket_arn_mapping;
-
-                        // get credentialspec contents:
-                        Aws::Auth::AWSCredentials creds = get_credentials(accessId, secretKey, sessionToken);
-                        std::string response = retrieve_credspec_from_s3(renew_krb_arn_request_.credspec_arns(i),
-                                                                          region, creds, false);
-                        
-                        if(response.empty())
+                if ( !accessId.empty() && !secretKey.empty() && !sessionToken.empty() && !region.empty() )
+                {
+                        std::vector<std::string> metadatafiles =
+                            get_meta_data_file_paths( krb_files_dir );
+                        for ( auto file_path : metadatafiles )
                         {
-                            err_msg = "ERROR: credentialspec cannot be retrieved from s3";
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
-                            break;
-                        }
-
-                        krb_ticket_arns->credential_spec_arn = renew_krb_arn_request_.credspec_arns(i);
-                        int parse_result = parse_cred_spec_domainless(
-                            response,
-                            krb_ticket_info, krb_ticket_arns);
-
-                        // only add the ticket info if the parsing is successful
-                        if (parse_result == 0) {
-                            //retrieve domainless user credentials
-                            std::tuple<std::string, std::string> userCreds = retrieve_credspec_from_secrets_manager(
-                                krb_ticket_arns->credential_domainless_user_arn, region, creds);
-
-                            username = std::get<0>(userCreds);
-                            password = std::get<1>(userCreds);
-                            domain = krb_ticket_info->domain_name;
-
-                            if(!contains_invalid_characters_in_credentials(domain))
+                            creds_fetcher::krb_ticket_info* krb_ticket_info =
+                                new creds_fetcher::krb_ticket_info;
+                            creds_fetcher::krb_ticket_arn_mapping* krb_ticket_arns =
+                                new creds_fetcher::krb_ticket_arn_mapping;
+                            std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list =
+                                read_meta_data_json( file_path );
+                            // refresh the kerberos tickets for the service accounts, if tickets ready for renewal
+                            for ( auto krb_ticket : krb_ticket_info_list )
                             {
-                                if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
-                                                                                                                                                      INPUT_CREDENTIALS_LENGTH )
+                                std::string credspec_info = krb_ticket->credspec_info;
+                                if ( !credspec_info.empty() )
                                 {
-                                    std::list<std::string> renewed_krb_file_paths =
-                                        renew_kerberos_tickets_domainless( krb_files_dir, domain, username,
-                                                                           password, cf_logger );
+                                    // get credentialspec contents:
+                                    Aws::Auth::AWSCredentials creds =
+                                        get_credentials( accessId, secretKey, sessionToken );
+                                    std::string response = retrieve_credspec_from_s3(
+                                        credspec_info, region, creds, false );
+
+                                    if ( response.empty() )
+                                    {
+                                        err_msg =
+                                            "ERROR: credentialspec cannot be retrieved from s3";
+                                        std::cout << getCurrentTime() << '\t' << err_msg
+                                                  << std::endl;
+                                        break;
+                                    }
+
+                                    int parse_result = parse_cred_spec_domainless(
+                                        response, krb_ticket_info, krb_ticket_arns );
+
+                                    // only add the ticket info if the parsing is successful
+                                    if ( parse_result == 0 )
+                                    {
+                                        // retrieve domainless user credentials
+                                        std::tuple<std::string, std::string> userCreds =
+                                            retrieve_credspec_from_secrets_manager(
+                                                krb_ticket_arns->credential_domainless_user_arn,
+                                                region, creds );
+
+                                        username = std::get<0>( userCreds );
+                                        password = std::get<1>( userCreds );
+                                        domain = krb_ticket_info->domain_name;
+
+                                        if ( !contains_invalid_characters_in_credentials( domain ) )
+                                        {
+                                            if ( !username.empty() && !password.empty() &&
+                                                 !domain.empty() &&
+                                                 username.length() < INPUT_CREDENTIALS_LENGTH &&
+                                                 password.length() < INPUT_CREDENTIALS_LENGTH )
+                                            {
+                                                std::string renewal_path =
+                                                    renew_gmsa_ticket( krb_ticket, domain, username,
+                                                                       password, cf_logger );
+                                            }
+                                            else
+                                            {
+                                                err_msg = "ERROR: domainless AD user credentials is not valid/ "
+                                                          "credentials should not be more than 256 charaters";
+                                                std::cout << getCurrentTime() << '\t' << err_msg
+                                                          << std::endl;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            err_msg = "ERROR: invalid domainName";
+                                            std::cout << getCurrentTime() << '\t' << err_msg
+                                                      << std::endl;
+                                        }
+                                    }
                                 }
-                                else
-                                {
-                                    err_msg = "ERROR: domainless AD user credentials is not valid/ "
-                                              "credentials should not be more than 256 charaters";
-                                    std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
-                                }
-                            }
-                            else
-                            {
-                                err_msg = "ERROR: invalid domainName";
-                                std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
                             }
                         }
                     }
-                }
 
 
                 username = "xxxx";
@@ -802,7 +822,7 @@ class CredentialsFetcherImpl final
         grpc::ServerContext add_krb_ctx_;
 
         // What we get from the client.
-        credentialsfetcher::KerberosArnLeaseRequest
+        credentialsfetcher::RenewKerberosArnLeaseRequest
             renew_krb_arn_request_;
         // What we send back to the client.
         credentialsfetcher::RenewKerberosArnLeaseResponse renew_krb_arn_reply_;
@@ -1970,6 +1990,7 @@ int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ti
 
         krb_ticket_info->domain_name = domain_name;
         krb_ticket_info->service_account_name = service_account_name;
+        krb_ticket_info->credspec_info = krb_ticket_mapping->credential_spec_arn;
 
         // get credentialspec arn
         std::string domainless_user_arn = root["ActiveDirectoryConfig"]["HostAccountConfig"]["PluginInput"]["CredentialArn"].asString();
@@ -2040,6 +2061,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
                                         krb_ticket_info->service_account_name;
         krb_ticket_info->krb_file_path = krb_files_path;
         krb_ticket_info->domainless_user = "";
+        krb_ticket_info->credspec_info = "";
     }
     else
     {
@@ -2124,6 +2146,8 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
 
     return EXIT_SUCCESS;
 }
+
+
 
 #if AMAZON_LINUX_DISTRO
 // initialize credentials
