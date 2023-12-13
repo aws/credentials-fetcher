@@ -305,7 +305,7 @@ class CredentialsFetcherImpl final
                 // part of its FINISH state.
                 new CallDataCreateKerberosArnLease(service_, cq_);
                 // The actual processing.
-                std::string lease_id = generate_lease_id();
+                std::string lease_id = "";
                 std::list<creds_fetcher::krb_ticket_info *> krb_ticket_info_list;
                 std::list<creds_fetcher::krb_ticket_arn_mapping *> krb_ticket_arn_mapping_list;
                 std::unordered_set<std::string> krb_ticket_dirs;
@@ -320,7 +320,6 @@ class CredentialsFetcherImpl final
 
                 std::string err_msg;
                 if ( !accessId.empty() && !secretKey.empty() && !sessionToken.empty() && !region.empty() ) {
-                    create_arn_krb_reply_.set_lease_id(lease_id);
                     for (int i = 0;
                          i < create_arn_krb_request_.credspec_arns_size(); i++) {
                         creds_fetcher::krb_ticket_info *krb_ticket_info =
@@ -328,9 +327,12 @@ class CredentialsFetcherImpl final
                         creds_fetcher::krb_ticket_arn_mapping *krb_ticket_arns =
                                 new creds_fetcher::krb_ticket_arn_mapping;
 
+                        std::vector<std::string> results = split_string(create_arn_krb_request_
+                                                                             .credspec_arns(i),'#');
+
                         // get credentialspec contents:
                         Aws::Auth::AWSCredentials creds = get_credentials(accessId, secretKey, sessionToken);
-                        std::string response = retrieve_credspec_from_s3(create_arn_krb_request_.credspec_arns(i), region, creds, false);
+                        std::string response = retrieve_credspec_from_s3(results[0], region, creds,false);
 
                         if(response.empty())
                         {
@@ -339,44 +341,80 @@ class CredentialsFetcherImpl final
                             std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
                         }
-                        krb_ticket_arns->credential_spec_arn = create_arn_krb_request_.credspec_arns(i);
+                        krb_ticket_arns->credential_spec_arn = results[0];
                         int parse_result = parse_cred_spec_domainless(
                                 response,
                                 krb_ticket_info, krb_ticket_arns);
 
                         // only add the ticket info if the parsing is successful
-                        if (parse_result == 0) {
-                            //retrieve domainless user credentials
-                            std::tuple<std::string, std::string>  userCreds = retrieve_credspec_from_secrets_manager(krb_ticket_arns->credential_domainless_user_arn, region, creds);
+                        if (parse_result == 0)
+                        {
+                            // retrieve domainless user credentials
+                            std::tuple<std::string, std::string> userCreds =
+                                retrieve_credspec_from_secrets_manager(
+                                    krb_ticket_arns->credential_domainless_user_arn, region,
+                                    creds );
 
-                            username = std::get<0>(userCreds);
-                            password = std::get<1>(userCreds);
+                            username = std::get<0>( userCreds );
+                            password = std::get<1>( userCreds );
                             domain = krb_ticket_info->domain_name;
 
-                            std::string krb_files_path = krb_files_dir + "/" + lease_id + "/" +
-                                                         krb_ticket_info->service_account_name;
-                            krb_ticket_info->krb_file_path = krb_files_path;
-                            krb_ticket_info->domainless_user = username;
-                            krb_ticket_arns->krb_file_path = krb_files_path;
+                            if ( !contains_invalid_characters_in_credentials( domain ) )
+                            {
+                                if ( !username.empty() && !password.empty() && !domain.empty() &&
+                                     username.length() < INPUT_CREDENTIALS_LENGTH &&
+                                     password.length() < INPUT_CREDENTIALS_LENGTH )
+                                {
 
-                            // handle duplicate service accounts
-                            if (!krb_ticket_dirs.count(krb_files_path)) {
-                                krb_ticket_dirs.insert(krb_files_path);
-                                krb_ticket_info_list.push_back(krb_ticket_info);
-                                krb_ticket_arn_mapping_list.push_back(krb_ticket_arns);
+                                    std::string krb_files_path = krb_files_dir + "/" + results[1];
+                                    std::vector<std::string> mountpath =
+                                        split_string( results[1], '/' );
+
+                                    // get taskid information
+                                    lease_id = mountpath[0];
+
+                                    krb_ticket_info->krb_file_path = krb_files_path;
+                                    krb_ticket_info->domainless_user = username;
+                                    krb_ticket_arns->krb_file_path = krb_files_path;
+
+                                    // handle duplicate service accounts
+                                    if ( !krb_ticket_dirs.count( krb_files_path ) )
+                                    {
+                                        krb_ticket_dirs.insert( krb_files_path );
+                                        krb_ticket_info_list.push_back( krb_ticket_info );
+                                        krb_ticket_arn_mapping_list.push_back( krb_ticket_arns );
+                                    }
+                                    else
+                                    {
+                                        err_msg = "ERROR: found duplicate mount paths";
+                                        std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                                        break;
+                                    }
+                                }
+                                else
+                                {
+                                    err_msg = "ERROR: domainless AD user credentials is not valid/ "
+                                              "credentials should not be more than 256 charaters";
+                                    std::cout << getCurrentTime() << '\t' << err_msg
+                                              << std::endl;
+                                    break;
+                                }
                             }
-                        } else {
-                            err_msg = "ERROR: credential spec provided is not properly "
-                                      "formatted";
-
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
-                            break;
+                            else
+                            {
+                                err_msg = "ERROR: invalid domainName";
+                                std::cout << getCurrentTime() << '\t' << err_msg
+                                          << std::endl;
+                                break;
+                            }
                         }
                     }
                 } else{
                     err_msg = "Error: access credentials should not be empty";
                     std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
                 }
+
+                create_arn_krb_reply_.set_lease_id(lease_id);
 
                 if ( err_msg.empty() )
                 {
