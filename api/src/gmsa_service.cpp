@@ -444,14 +444,6 @@ class CredentialsFetcherImpl final
                         }
 
                         std::string krb_file_path = krb_ticket->krb_file_path;
-                        if ( std::filesystem::exists( krb_file_path ) )
-                        {
-                            cf_logger.logger( LOG_INFO,
-                                              "Directory already exists: "
-                                              "%s",
-                                              krb_file_path.c_str() );
-                            break;
-                        }
                         std::filesystem::create_directories( krb_file_path );
 
                         std::string krb_ccname_str = krb_ticket->krb_file_path + "/krb5cc";
@@ -2261,7 +2253,7 @@ std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aw
         return std::string("");
     }
     std::cout << getCurrentTime() << '\t' << "INFO: credentialspec info is successfully retrieved" << std::endl;
-    Aws::ShutdownAPI(options);
+    //Aws::ShutdownAPI(options);
     return response;
 }
 

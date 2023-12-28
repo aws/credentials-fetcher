@@ -1,6 +1,6 @@
 %global major_version 1
 %global minor_version 3
-%global patch_version 1
+%global patch_version 4
  
 # For handling bump release by rpmdev-bumpspec and mass rebuild
 %global baserelease 0
@@ -12,7 +12,7 @@ Summary:        credentials-fetcher is a daemon that refreshes tickets or tokens
  
 License:        Apache-2.0
 URL:            https://github.com/aws/credentials-fetcher
-Source0:        credentials-fetcher-v.1.3.1.tar.gz
+Source0:        credentials-fetcher-v.1.3.4.tar.gz
 
 BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-devel jsoncpp-devel
 BuildRequires:  openssl-devel zlib-devel protobuf-devel re2-devel krb5-devel systemd-devel
@@ -22,7 +22,7 @@ BuildRequires:  systemd-rpm-macros dotnet-sdk-6.0 grpc-plugins
 BuildRequires:  aws-sdk-cpp-devel aws-sdk-cpp aws-sdk-cpp-static
 %endif
  
-Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0 jsoncpp-devel jsoncpp
+Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0 jsoncpp
 # No one likes you i686
 ExclusiveArch: x86_64 aarch64 s390x
  
@@ -67,6 +67,14 @@ ctest3
 %attr(0755, -, -) %{_sbindir}/krb5.conf
 
 %changelog
+* Mon Dec 25 2023 Sai Kiran Akula <saakla@amazon.com> - 1.3.4
+- Create 1.3.4 release, fix to skip directory check
+- create custom mount points
+
+* Tue Dec 12 2023 Sai Kiran Akula <saakla@amazon.com> - 1.3.3
+- Fixes to add validation
+- Add option to take custom paths
+
 * Mon Dec 4 2023 Sai Kiran Akula <saakla@amazon.com> - 1.3.1
 - Create 1.3.1 release, add file based loggin support
 - Bug fixes for renewal logic
