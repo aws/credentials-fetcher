@@ -1939,12 +1939,12 @@ int HealthCheck(std::string serviceName)
         }
         else
         {
-            return -1;
+            return 1;
         }
     }
     catch ( ... )
     {
-        return -1;
+        return 1;
     }
 
     return 0;
