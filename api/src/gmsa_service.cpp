@@ -1907,6 +1907,49 @@ int RunGrpcServer( std::string unix_socket_dir, std::string krb_files_dir,
     return 0;
 }
 
+
+/**
+ * Check health of credentials-fetcher daemon
+ * @return - int
+ */
+int HealthCheck(std::string serviceName)
+{
+    std::string server_address{ "unix:/var/credentials-fetcher/socket/credentials_fetcher.sock" };
+    std::shared_ptr<grpc::Channel> channel = grpc::CreateChannel( server_address,
+                                                                grpc::InsecureChannelCredentials());
+    std::unique_ptr<credentialsfetcher::CredentialsFetcherService::Stub> stub =  credentialsfetcher::CredentialsFetcherService::NewStub( channel );
+    std::string result;
+    // Prepare request
+    credentialsfetcher::HealthCheckRequest request;
+    request.set_service( serviceName );
+
+    credentialsfetcher::HealthCheckResponse response;
+    grpc::ClientContext context;
+    grpc::Status status;
+
+    try
+    {
+        // Send request
+        status = stub->HealthCheck( &context, request, &response );
+
+        // Handle response
+        if ( status.ok() )
+        {
+            return 0;
+        }
+        else
+        {
+            return -1;
+        }
+    }
+    catch ( ... )
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
 /**
  * Generate a random lease_id of defined length
  * @return - string

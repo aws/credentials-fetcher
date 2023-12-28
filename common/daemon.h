@@ -190,6 +190,7 @@ int renewal_failure_krb_dir_not_found_test();
  * Methods in config module
  */
 int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemon );
+int HealthCheck(std::string serviceName);
 
 int parse_config_file( creds_fetcher::Daemon& cf_daemon );
 std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name);
