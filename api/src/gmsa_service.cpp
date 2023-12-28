@@ -1914,7 +1914,9 @@ int RunGrpcServer( std::string unix_socket_dir, std::string krb_files_dir,
  */
 int HealthCheck(std::string serviceName)
 {
-    std::string server_address{ "unix:/var/credentials-fetcher/socket/credentials_fetcher.sock" };
+    try
+    {
+     std::string server_address{ "unix:/var/credentials-fetcher/socket/credentials_fetcher.sock" };
     std::shared_ptr<grpc::Channel> channel = grpc::CreateChannel( server_address,
                                                                 grpc::InsecureChannelCredentials());
     std::unique_ptr<credentialsfetcher::CredentialsFetcherService::Stub> stub =  credentialsfetcher::CredentialsFetcherService::NewStub( channel );
@@ -1926,9 +1928,6 @@ int HealthCheck(std::string serviceName)
     credentialsfetcher::HealthCheckResponse response;
     grpc::ClientContext context;
     grpc::Status status;
-
-    try
-    {
         // Send request
         status = stub->HealthCheck( &context, request, &response );
 
