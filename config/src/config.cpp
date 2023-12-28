@@ -106,7 +106,15 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
             case 'c':
                 healthCheckResponse = HealthCheck("test");
                 std::cout << healthCheckResponse << std::endl;
-                return EXIT_FAILURE;
+                if(healthCheckResponse != 0)
+                {
+                    exit(EXIT_FAILURE);
+                }
+                else
+                {
+                    exit(EXIT_SUCCESS);
+                }
+
             default:
                 std::cout << "Run with --help to see options" << std::endl;
                 return EXIT_FAILURE;
