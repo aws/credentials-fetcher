@@ -15,6 +15,6 @@ jobs:
           fetch-depth: 0
        - name: cppcheck
          run: |
-          apt-get install -y cppcheck
+          sudo apt-get install -y cppcheck
           cppcheck --enable=all --suppressions-list=suppressions.txt .
           echo "cppcheck completed"
