@@ -16,7 +16,7 @@ jobs:
         uses: deep5050/cppcheck-action@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN}}
-          exclude_check: 'suppressions.txt'
+          exclude_check: ./suppressions.txt
 
       - name: publish report
         uses: mikeal/publish-to-github-action@master
