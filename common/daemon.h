@@ -179,7 +179,7 @@ void ltrim( std::string& s );
 void rtrim( std::string& s );
 
 // unit tests
-int test_utf16_decode();
+//int test_utf16_decode();
 int config_parse_test();
 int read_meta_data_json_test();
 int read_meta_data_invalid_json_test();

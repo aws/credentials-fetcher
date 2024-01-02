@@ -74,8 +74,8 @@ class CredentialsFetcherImpl final
      * @param unix_socket_dir: path to unix domain socket
      * @param cf_logger : log to systemd
      */
-    void RunServer( std::string unix_socket_dir, std::string krb_files_dir,
-                    creds_fetcher::CF_logger& cf_logger, std::string aws_sm_secret_name )
+    void RunServer( std::string& unix_socket_dir, std::string& krb_files_dir,
+                     creds_fetcher::CF_logger& cf_logger, std::string& aws_sm_secret_name )
     {
         std::string unix_socket_address =
             std::string( "unix:" ) + unix_socket_dir + "/" + std::string( UNIX_SOCKET_NAME );
@@ -1506,7 +1506,6 @@ class CredentialsFetcherImpl final
                 // part of its FINISH state.
                 new CallDataRenewNonDomainJoinedKerberosLease( service_, cq_ );
                 // The actual processing.
-                std::string lease_id = generate_lease_id();
                 std::string username = renew_domainless_krb_request_.username();
                 std::string password = renew_domainless_krb_request_.password();
                 std::string domain = renew_domainless_krb_request_.domain();
@@ -1920,7 +1919,6 @@ int HealthCheck(std::string serviceName)
     std::shared_ptr<grpc::Channel> channel = grpc::CreateChannel( server_address,
                                                                 grpc::InsecureChannelCredentials());
     std::unique_ptr<credentialsfetcher::CredentialsFetcherService::Stub> stub =  credentialsfetcher::CredentialsFetcherService::NewStub( channel );
-    std::string result;
     // Prepare request
     credentialsfetcher::HealthCheckRequest request;
     request.set_service( serviceName );
@@ -2091,10 +2089,8 @@ int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ti
  * @return - return 0 on success
  */
 int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id) {
-    std::unordered_set<std::string> krb_ticket_dirs;
     std::string err_msg;
     std::string credspec_contents;
-    int status;
     
     cf_logger.logger( LOG_INFO, "Generating lease id %s", cred_file_lease_id.c_str());
 
@@ -2143,6 +2139,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     
     if ( err_msg.empty() )
     {
+        int status;
         // invoke to get machine ticket
         status = get_machine_krb_ticket( krb_ticket_info->domain_name, cf_logger );
         if ( status < 0 )

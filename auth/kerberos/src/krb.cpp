@@ -397,7 +397,7 @@ static std::pair<size_t, void*> find_password( std::string ldap_search_result )
  * UTF-16 diagnostic: Test utf16 capability
  * @return - true (pass) or false (fail)
  */
-int test_utf16_decode()
+/*int test_utf16_decode()
 {
     const char* test_msds_managed_password =
         "msDS-ManagedPassword:: "
@@ -504,7 +504,7 @@ int test_utf16_decode()
     OPENSSL_free( base64_decoded_password_blob.second );
     unlink( decoded_password_file.c_str() );
     return EXIT_FAILURE;
-}
+}*/
 
 /**
  * Get list of domain-ips representing a domain
