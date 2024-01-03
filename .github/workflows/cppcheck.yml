@@ -17,8 +17,7 @@ jobs:
          run: |
           sudo apt-get install -y cppcheck
           cppcheck --enable=all --suppressions-list=suppressions.txt . 2> cppcheckout.txt
-          filesize=$(stat -c%s cppcheckout.txt)
-          if  [( filesize > 0 )] ; then
+          if  [( $(stat -c%s cppcheckout.txt) > 0 )] ; then
             echo "cppcheck scan failed"
             exit -1
           if
