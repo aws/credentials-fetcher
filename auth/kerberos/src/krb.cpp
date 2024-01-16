@@ -156,6 +156,7 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
     rtrim( cmd.second );
     if ( !check_file_permissions( cmd.second ) )
     {
+        std::cout << getCurrentTime() << '\t' << "ERROR: realm not found" << std::endl;
         return -1;
     }
 
@@ -163,6 +164,7 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
     rtrim( cmd.second );
     if ( !check_file_permissions( cmd.second ) )
     {
+        std::cout << getCurrentTime() << '\t' << "ERROR: kinit not found" << std::endl;
         return -1;
     }
 
@@ -170,6 +172,7 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
     rtrim( cmd.second );
     if ( !check_file_permissions( cmd.second ) )
     {
+        std::cout << getCurrentTime() << '\t' << "ERROR: ldapsearch not found" << std::endl;
         return -1;
     }
 
@@ -212,6 +215,7 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
     rtrim( cmd.second );
     if ( !check_file_permissions( cmd.second ) )
     {
+        std::cout << getCurrentTime() << '\t' << "ERROR: kinit not found" << std::endl;
         return -1;
     }
 
@@ -219,6 +223,7 @@ int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name
     rtrim( cmd.second );
     if ( !check_file_permissions( cmd.second ) )
     {
+        std::cout << getCurrentTime() << '\t' << "ERROR: ldapsearch not found" << std::endl;
         return -1;
     }
 
@@ -291,6 +296,7 @@ int get_domainless_user_krb_ticket( std::string domain_name, std::string usernam
     rtrim( cmd.second );
     if ( !check_file_permissions( cmd.second ) )
     {
+        std::cout << getCurrentTime() << '\t' << "ERROR: kinit not found" << std::endl;
         return -1;
     }
 
@@ -298,6 +304,7 @@ int get_domainless_user_krb_ticket( std::string domain_name, std::string usernam
     rtrim( cmd.second );
     if ( !check_file_permissions( cmd.second ) )
     {
+        std::cout << getCurrentTime() << '\t' << "ERROR: ldapsearch not found" << std::endl;
         return -1;
     }
 
