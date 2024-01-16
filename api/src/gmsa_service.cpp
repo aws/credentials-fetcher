@@ -23,7 +23,7 @@
 
 #define LEASE_ID_LENGTH 10
 #define UNIX_SOCKET_NAME "credentials_fetcher.sock"
-#define INPUT_CREDENTIALS_LENGTH 256
+#define INPUT_CREDENTIALS_LENGTH 104
 
 static const std::vector<char> invalid_characters = {
     '&', '|', ';', '$', '*', '?', '<', '>', '!',' '};
@@ -359,7 +359,7 @@ class CredentialsFetcherImpl final
                             password = std::get<1>( userCreds );
                             domain = krb_ticket_info->domain_name;
 
-                            if ( !contains_invalid_characters_in_credentials( domain ) )
+                            if ( !contains_invalid_characters_in_credentials( domain ) && !contains_invalid_characters_in_credentials( username ))
                             {
                                 if ( !username.empty() && !password.empty() && !domain.empty() &&
                                      username.length() < INPUT_CREDENTIALS_LENGTH &&
@@ -402,7 +402,7 @@ class CredentialsFetcherImpl final
                             }
                             else
                             {
-                                err_msg = "ERROR: invalid domainName";
+                                err_msg = "ERROR: invalid domainName/username";
                                 std::cout << getCurrentTime() << '\t' << err_msg
                                           << std::endl;
                                 break;
@@ -723,7 +723,8 @@ class CredentialsFetcherImpl final
                                         password = std::get<1>( userCreds );
                                         domain = krb_ticket_info->domain_name;
 
-                                        if ( !contains_invalid_characters_in_credentials( domain ) )
+                                        if ( !contains_invalid_characters_in_credentials( domain
+                                                                                          ) && !contains_invalid_characters_in_credentials( username ) )
                                         {
                                             if ( !username.empty() && !password.empty() &&
                                                  !domain.empty() &&
@@ -744,7 +745,7 @@ class CredentialsFetcherImpl final
                                         }
                                         else
                                         {
-                                            err_msg = "ERROR: invalid domainName";
+                                            err_msg = "ERROR: invalid domainName/username";
                                             std::cout << getCurrentTime() << '\t' << err_msg
                                                       << std::endl;
                                         }
@@ -1209,7 +1210,8 @@ class CredentialsFetcherImpl final
                 std::string domain = create_domainless_krb_request_.domain();
 
                 std::string err_msg;
-                if(!contains_invalid_characters_in_credentials(domain))
+                if(!contains_invalid_characters_in_credentials(domain) &&
+                     !contains_invalid_characters_in_credentials(username))
                 {
                     if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
                                                                                                                                           INPUT_CREDENTIALS_LENGTH )
@@ -1511,7 +1513,8 @@ class CredentialsFetcherImpl final
                 std::string domain = renew_domainless_krb_request_.domain();
 
                 std::string err_msg;
-                if(!contains_invalid_characters_in_credentials(domain))
+                if(!contains_invalid_characters_in_credentials(domain) &&
+                     !contains_invalid_characters_in_credentials(username))
                 {
                     if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
                                                                                                                                           INPUT_CREDENTIALS_LENGTH )
@@ -2007,6 +2010,15 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
         if (service_account_name.empty() || domain_name.empty())
             return -1;
 
+        if(contains_invalid_characters_in_credentials(domain_name) ||
+             contains_invalid_characters_in_credentials(service_account_name))
+        {
+            std::cout << getCurrentTime() << '\t' << "ERROR: credentialspec file is not formatted"
+                                                     " properly" <<
+                std::endl;
+            return -1;
+        }
+
         krb_ticket_info->domain_name = domain_name;
         krb_ticket_info->service_account_name = service_account_name;
     }
@@ -2057,6 +2069,15 @@ int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ti
         }
         if (service_account_name.empty() || domain_name.empty())
             return -1;
+
+        if(contains_invalid_characters_in_credentials(domain_name) ||
+             contains_invalid_characters_in_credentials(service_account_name))
+        {
+            std::cout << getCurrentTime() << '\t' << "ERROR: credentialspec file is not formatted"
+                                                     " properly" <<
+                std::endl;
+            return -1;
+        }
 
         krb_ticket_info->domain_name = domain_name;
         krb_ticket_info->service_account_name = service_account_name;
