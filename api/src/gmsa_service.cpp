@@ -80,7 +80,7 @@ bool contains_invalid_characters_in_service_name( const std::string& value )
 
 bool IsTestInvocationForUnitTests(std::string arn)
 {
-    std::string substr = "testcfspec";
+    std::string substr = "functionaltestcfspec";
     if (arn.find(substr) != std::string::npos) {
         return  true;
     }
