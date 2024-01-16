@@ -355,7 +355,10 @@ class CredentialsFetcherImpl final
                 bool isTest = false;
 
                 std::string err_msg;
-                if ( !accessId.empty() && !secretKey.empty() && !sessionToken.empty() && !region.empty() )
+                int credspecSize = create_arn_krb_request_.credspec_arns_size();
+
+                if ( !accessId.empty() && !secretKey.empty() && !sessionToken.empty() && !region
+                                                                                              .empty() && credspecSize > 0)
                 {
                     for ( int i = 0; i < create_arn_krb_request_.credspec_arns_size(); i++ )
                     {
@@ -363,6 +366,16 @@ class CredentialsFetcherImpl final
                             new creds_fetcher::krb_ticket_info;
                         creds_fetcher::krb_ticket_arn_mapping* krb_ticket_arns =
                             new creds_fetcher::krb_ticket_arn_mapping;
+
+                        std::string credspecarn = create_arn_krb_request_.credspec_arns( i );
+                        if ( credspecarn.empty())
+                        {
+                            err_msg = "ERROR: credentialspec arn should not be empty";
+
+                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            break;
+                        }
+
 
                         std::vector<std::string> results =
                             split_string( create_arn_krb_request_.credspec_arns( i ), '#' );
