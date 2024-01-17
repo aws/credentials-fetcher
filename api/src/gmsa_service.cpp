@@ -20,7 +20,6 @@
 #include <aws/secretsmanager/model/GetSecretValueRequest.h>
 #endif
 
-
 #define LEASE_ID_LENGTH 10
 #define UNIX_SOCKET_NAME "credentials_fetcher.sock"
 #define INPUT_CREDENTIALS_LENGTH 104
@@ -2318,7 +2317,6 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
 }
 
 
-
 #if AMAZON_LINUX_DISTRO
 // initialize credentials
 Aws::Auth::AWSCredentials get_credentials(std::string accessKeyId, std::string secretKey, std::string sessionToken)
@@ -2366,7 +2364,8 @@ std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aw
                 return dummy_credspec;
             }
 
-            Aws::S3::S3Client s3Client(clientConfig);
+            Aws::S3::S3Client s3Client (credentials,Aws::MakeShared<Aws::S3::S3EndpointProvider>
+                (Aws::S3::S3Client::ALLOCATION_TAG), clientConfig);
             Aws::S3::Model::GetObjectRequest request;
             request.SetBucket(s3Bucket);
             request.SetKey(objectName);
@@ -2377,7 +2376,6 @@ std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aw
                 const Aws::S3::S3Error &err = outcome.GetError();
                 std::cout << getCurrentTime() << '\t' << "ERROR: GetObject: " <<
                           err.GetExceptionName() << ": " << err.GetMessage() << std::endl;
-                Aws::ShutdownAPI(options);
                 return std::string("");
             }
             std::stringstream ss;
@@ -2389,11 +2387,9 @@ std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aw
     {
         std::cout << getCurrentTime() << '\t' << "ERROR: retrieving credentialspec from s3 "
                                                  "failed" << std::endl;
-        Aws::ShutdownAPI(options);
         return std::string("");
     }
     std::cout << getCurrentTime() << '\t' << "INFO: credentialspec info is successfully retrieved" << std::endl;
-    //Aws::ShutdownAPI(options);
     return response;
 }
 
@@ -2419,7 +2415,8 @@ std::tuple<std::string, std::string> retrieve_credspec_from_secrets_manager(std:
                 Aws::ShutdownAPI(options);
                 return {"",""};
             }
-            Aws::SecretsManager::SecretsManagerClient sm_client(clientConfig);
+            Aws::SecretsManager::SecretsManagerClient sm_client(credentials,
+                                                                 Aws::MakeShared<Aws::SecretsManager::SecretsManagerEndpointProvider>( Aws::SecretsManager::SecretsManagerClient::ALLOCATION_TAG),clientConfig);
             Aws::SecretsManager::Model::GetSecretValueRequest requestsec;
             requestsec.SetSecretId(sm_arn);
 
@@ -2429,7 +2426,6 @@ std::tuple<std::string, std::string> retrieve_credspec_from_secrets_manager(std:
             } else {
                 std::cout << getCurrentTime() << '\t' << "ERROR: " << getSecretValueOutcome
                                                                        .GetError() << std::endl;
-                Aws::ShutdownAPI(options);
                 return {"",""};
             }
         }
@@ -2449,10 +2445,8 @@ std::tuple<std::string, std::string> retrieve_credspec_from_secrets_manager(std:
                                                  "failed"
                   <<
             std::endl;
-        Aws::ShutdownAPI(options);
         return {"",""};
     }
-    Aws::ShutdownAPI(options);
     return {"",""};
 }
 #endif
