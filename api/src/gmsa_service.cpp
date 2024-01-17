@@ -30,6 +30,7 @@ static const std::vector<char> invalid_characters = {
 static const std::vector<char> invalid_characters_service_name = {
     '&', '|', ';', '$', '*', '?', '<', '>', '!',' ', '/'};
 
+
 std::string dummy_credspec =
         "{\"CmsPlugins\":[\"ActiveDirectory\"],\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4066351383-705263209-1606769140\",\"MachineAccountName\":\"webapp01\",\"Guid\":\"ac822f13-583e-49f7-aa7b-284f9a8c97b6\",\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"webapp01\",\"Scope\":\"contoso.com\"},{\"Name\":\"webapp01\",\"Scope\":\"contoso\"}],\"HostAccountConfig\":{\"PortableCcgVersion\":\"1\",\"PluginGUID\":\"{859E1386-BDB4-49E8-85C7-3070B13920E1}\",\"PluginInput\":{\"CredentialArn\":\"arn:aws:secretsmanager:us-west-2:123456789:secret:gMSAUserSecret-PwmPaO\"}}}}";
 
@@ -367,9 +368,11 @@ class CredentialsFetcherImpl final
                             new creds_fetcher::krb_ticket_arn_mapping;
 
                         std::string credspecarn = create_arn_krb_request_.credspec_arns( i );
-                        if ( credspecarn.empty())
+                        if ( credspecarn.empty() || contains_invalid_characters_in_credentials
+                                                   (credspecarn) )
                         {
-                            err_msg = "ERROR: credentialspec arn should not be empty";
+                            err_msg = "ERROR: credentialspec arn should not be empty/not properly"
+                                      " formatted";
 
                             std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
