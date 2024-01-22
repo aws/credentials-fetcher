@@ -521,6 +521,7 @@ static std::pair<size_t, void*> find_password( std::string ldap_search_result )
 std::pair<int, std::vector<std::string>> get_domain_ips( std::string domain_name )
 {
     std::vector<std::string> list_of_ips = { "" };
+    std::vector<std::string> dummy_ips = { "" };
 
     /**
      * TBD:: change shell commands to using api
@@ -534,6 +535,18 @@ std::pair<int, std::vector<std::string>> get_domain_ips( std::string domain_name
     }
 
     list_of_ips = split_string(ips.second, '\n');
+
+    // regex for ip
+    std::regex ipregex("(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.){3}"
+             "([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])");
+
+    for (const auto &str : list_of_ips)
+    {
+        if ( !std::regex_match( str, ipregex ) )
+        {
+            return std::make_pair( -1, dummy_ips );
+        }
+    }
 
     return std::make_pair( EXIT_SUCCESS, list_of_ips );
 }
