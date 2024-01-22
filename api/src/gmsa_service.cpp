@@ -24,16 +24,47 @@
 #define UNIX_SOCKET_NAME "credentials_fetcher.sock"
 #define INPUT_CREDENTIALS_LENGTH 104
 
+// invalid character in username/account name
+//https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/bb726984
+//          (v=technet.10)
 static const std::vector<char> invalid_characters = {
-    '&', '|', ';', '$', '*', '?', '<', '>', '!',' '};
+    '&', '|', ';', ':', '$', '*', '?', '<', '>', '!',' ', '\\', '.',']', '[', '+', '\'', '`', '~'};
 
-static const std::vector<char> invalid_characters_service_name = {
-    '&', '|', ';', '$', '*', '?', '<', '>', '!',' ', '/'};
+static const std::vector<char> invalid_characters_ad_name = {
+    '&', ':', ']', '[', '+', '|', ';', '$', '*', '?', '<', '>', '!',' ', '/', '\\', '\'', '`', '~'};
+
 
 
 std::string dummy_credspec =
         "{\"CmsPlugins\":[\"ActiveDirectory\"],\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4066351383-705263209-1606769140\",\"MachineAccountName\":\"webapp01\",\"Guid\":\"ac822f13-583e-49f7-aa7b-284f9a8c97b6\",\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"webapp01\",\"Scope\":\"contoso.com\"},{\"Name\":\"webapp01\",\"Scope\":\"contoso\"}],\"HostAccountConfig\":{\"PortableCcgVersion\":\"1\",\"PluginGUID\":\"{859E1386-BDB4-49E8-85C7-3070B13920E1}\",\"PluginInput\":{\"CredentialArn\":\"arn:aws:secretsmanager:us-west-2:123456789:secret:gMSAUserSecret-PwmPaO\"}}}}";
 
+
+/**
+ *
+ * @param value - string input for the domain
+ * @return true or false if string contains or not contains invalid characters
+ */
+bool isValidDomain(const std::string& value)
+{
+
+    // Regex to check valid domain name.
+    std::regex pattern("^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\\.[a-zA-Z]{2,})+$");
+
+    // If the domain name
+    // is empty return false
+    if (value.empty())
+    {
+        return false;
+    }
+
+    // Return true if the domain name
+    // matched the ReGex
+    if(std::regex_match(value, pattern))
+    {
+        return true;
+    }
+    return false;
+}
 
 /**
  *
@@ -61,11 +92,11 @@ bool contains_invalid_characters_in_credentials( const std::string& value )
  * @param value - string input that has to be validated
  * @return true or false if string contains or not contains invalid characters
  */
-bool contains_invalid_characters_in_service_name( const std::string& value )
+bool contains_invalid_characters_in_ad_account_name( const std::string& value )
 {
     bool result = false;
     // Iterate over all characters in invalid_path_characters vector
-    for ( const char& ch : invalid_characters_service_name )
+    for ( const char& ch : invalid_characters_ad_name )
     {
         // Check if character exist in string
         if ( value.find( ch ) != std::string::npos )
@@ -382,6 +413,26 @@ class CredentialsFetcherImpl final
                         std::vector<std::string> results =
                             split_string( create_arn_krb_request_.credspec_arns( i ), '#' );
 
+                        if(results.size() != 2)
+                        {
+                            err_msg = "ERROR: credentialspec arn is not valid";
+
+                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            break;
+                        }
+
+                        std::vector<std::string> pathResults =
+                            split_string( results[1], '/' );
+
+                        if(pathResults.size() != 2 || contains_invalid_characters_in_credentials
+                             (results[1]))
+                        {
+                            err_msg = "ERROR: mount path is invalid";
+
+                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            break;
+                        }
+
                         isTest = IsTestInvocationForUnitTests( results[0] );
 
                         if ( !isTest )
@@ -417,8 +468,8 @@ class CredentialsFetcherImpl final
                                 password = std::get<1>( userCreds );
                                 domain = krb_ticket_info->domain_name;
 
-                                if ( !contains_invalid_characters_in_credentials( domain ) &&
-                                     !contains_invalid_characters_in_credentials( username ) )
+                                if ( isValidDomain( domain ) &&
+                                     !contains_invalid_characters_in_ad_account_name( username ) )
                                 {
                                     if ( !username.empty() && !password.empty() &&
                                          !domain.empty() &&
@@ -807,8 +858,8 @@ class CredentialsFetcherImpl final
                                         password = std::get<1>( userCreds );
                                         domain = krb_ticket_info->domain_name;
 
-                                        if ( !contains_invalid_characters_in_credentials( domain
-                                                                                          ) && !contains_invalid_characters_in_credentials( username ) )
+                                        if ( isValidDomain(domain) &&
+                                             !contains_invalid_characters_in_ad_account_name( username ) )
                                         {
                                             if ( !username.empty() && !password.empty() &&
                                                  !domain.empty() &&
@@ -1294,8 +1345,8 @@ class CredentialsFetcherImpl final
                 std::string domain = create_domainless_krb_request_.domain();
 
                 std::string err_msg;
-                if(!contains_invalid_characters_in_credentials(domain) &&
-                     !contains_invalid_characters_in_credentials(username))
+                if(isValidDomain(domain) &&
+                     !contains_invalid_characters_in_ad_account_name(username))
                 {
                     if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
                                                                                                                                           INPUT_CREDENTIALS_LENGTH )
@@ -1343,7 +1394,7 @@ class CredentialsFetcherImpl final
                 }
                 else
                 {
-                   err_msg = "Error: invalid domainName";
+                   err_msg = "Error: invalid domainName/username";
                    std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
                 }
                 if ( err_msg.empty() )
@@ -1597,8 +1648,8 @@ class CredentialsFetcherImpl final
                 std::string domain = renew_domainless_krb_request_.domain();
 
                 std::string err_msg;
-                if(!contains_invalid_characters_in_credentials(domain) &&
-                     !contains_invalid_characters_in_credentials(username))
+                if(isValidDomain(domain) &&
+                     !contains_invalid_characters_in_ad_account_name(username))
                 {
                     if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
                                                                                                                                           INPUT_CREDENTIALS_LENGTH )
@@ -1622,7 +1673,7 @@ class CredentialsFetcherImpl final
                 }
                 else
                 {
-                    err_msg = "Error: invalid domainName";
+                    err_msg = "Error: invalid domainName/username";
                     std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
                 }
 
@@ -2094,8 +2145,8 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
         if (service_account_name.empty() || domain_name.empty())
             return -1;
 
-        if(contains_invalid_characters_in_credentials(domain_name) ||
-             contains_invalid_characters_in_service_name(service_account_name))
+        if(!isValidDomain(domain_name) ||
+             contains_invalid_characters_in_ad_account_name(service_account_name))
         {
             std::cout << getCurrentTime() << '\t' << "ERROR: credentialspec file is not formatted"
                                                      " properly" <<
@@ -2154,11 +2205,20 @@ int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ti
         if (service_account_name.empty() || domain_name.empty())
             return -1;
 
-        if(contains_invalid_characters_in_credentials(domain_name) ||
-             contains_invalid_characters_in_service_name(service_account_name))
+        if(!isValidDomain(domain_name) ||
+             contains_invalid_characters_in_ad_account_name(service_account_name))
         {
             std::cout << getCurrentTime() << '\t' << "ERROR: credentialspec file is not formatted"
                                                      " properly" <<
+                std::endl;
+            return -1;
+        }
+
+        // get credentialspec arn
+        std::string domainless_user_arn = root["ActiveDirectoryConfig"]["HostAccountConfig"]["PluginInput"]["CredentialArn"].asString();
+        if (domainless_user_arn.empty())
+        {
+            std::cout << getCurrentTime() << '\t' << "ERROR: secrets manager arn is not valid" <<
                 std::endl;
             return -1;
         }
@@ -2167,8 +2227,6 @@ int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ti
         krb_ticket_info->service_account_name = service_account_name;
         krb_ticket_info->credspec_info = krb_ticket_mapping->credential_spec_arn;
 
-        // get credentialspec arn
-        std::string domainless_user_arn = root["ActiveDirectoryConfig"]["HostAccountConfig"]["PluginInput"]["CredentialArn"].asString();
         krb_ticket_mapping->credential_domainless_user_arn = domainless_user_arn;
         krb_ticket_mapping->krb_file_path =  krb_ticket_info->krb_file_path;
     }
