@@ -14,11 +14,13 @@
 #include <aws/core/Aws.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/GetObjectRequest.h>
+#include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/core/utils/logging/LogLevel.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/secretsmanager/SecretsManagerClient.h>
 #include <aws/secretsmanager/model/GetSecretValueRequest.h>
 #endif
+
 
 #define LEASE_ID_LENGTH 10
 #define UNIX_SOCKET_NAME "credentials_fetcher.sock"
@@ -441,6 +443,16 @@ class CredentialsFetcherImpl final
                             // get credentialspec contents:
                             Aws::Auth::AWSCredentials creds =
                                 get_credentials( accessId, secretKey, sessionToken );
+
+                            bool isObjectValid = check_file_size_s3(results[0], region, creds,
+                                                                     false );
+                            if(!isObjectValid)
+                            {
+                                err_msg = "ERROR: invalid object for credentialspec in s3";
+
+                                std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                                break;
+                            }
                             std::string response =
                                 retrieve_credspec_from_s3( results[0], region, creds, false );
 
@@ -2377,7 +2389,6 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     return EXIT_SUCCESS;
 }
 
-
 #if AMAZON_LINUX_DISTRO
 // initialize credentials
 Aws::Auth::AWSCredentials get_credentials(std::string accessKeyId, std::string secretKey, std::string sessionToken)
@@ -2387,6 +2398,76 @@ Aws::Auth::AWSCredentials get_credentials(std::string accessKeyId, std::string s
     credentials.SetAWSSecretKey(Aws::String(secretKey));
     credentials.SetSessionToken(Aws::String(sessionToken));
     return credentials;
+}
+
+// check file size s3
+// example : arn:aws:s3:::gmsacredspec/gmsa-cred-spec.json
+bool check_file_size_s3(std::string s3_arn, std::string region,
+                                    Aws::Auth::AWSCredentials credentials, bool test = false)
+{
+    std::string response = "";
+    Aws::SDKOptions options;
+    try {
+        Aws::InitAPI(options);
+        {
+            Aws::Client::ClientConfiguration clientConfig;
+            clientConfig.region = region;
+            auto provider = Aws::MakeShared<Aws::Auth::SimpleAWSCredentialsProvider>("alloc-tag", credentials);
+            auto creds = provider->GetAWSCredentials();
+            if (creds.IsEmpty()) {
+                std::cout << getCurrentTime() << '\t' << "ERROR: Failed authentication invalid creds" << std::endl;
+                Aws::ShutdownAPI(options);
+                return false;
+            }
+            std::smatch arn_match;
+            std::regex pattern("arn:([^:]+):s3:::([^/]+)/(.+)");
+            if (!std::regex_search(s3_arn, arn_match, pattern)) {
+                std::cout << getCurrentTime() << '\t' << "ERROR: s3 arn provided is not valid " <<
+                    s3_arn << std::endl;
+                Aws::ShutdownAPI(options);
+                return false;
+            }
+            std::string s3Bucket = std::string(arn_match[2]);
+            std::string objectName = std::string(arn_match[3]);
+
+            if(test)
+            {
+                std::cout << s3Bucket;
+                std::cout << objectName;
+                return true;
+            }
+
+            Aws::S3::S3Client s3Client (credentials,Aws::MakeShared<Aws::S3::S3EndpointProvider>
+                                        (Aws::S3::S3Client::ALLOCATION_TAG), clientConfig);
+            Aws::S3::Model::HeadObjectRequest request;
+            request.SetBucket(s3Bucket);
+            request.SetKey(objectName);
+            Aws::S3::Model::HeadObjectOutcome outcome =
+                s3Client.HeadObject(request);
+
+            if (!outcome.IsSuccess()) {
+                const Aws::S3::S3Error &err = outcome.GetError();
+                std::cout << getCurrentTime() << '\t' << "ERROR: HeadObject: " <<
+                    err.GetExceptionName() << ": " << err.GetMessage() << std::endl;
+                return false;
+            }
+            long objLen =  outcome.GetResult().GetContentLength();
+            //value should be less than 2000 bytes
+            if(objLen > 2000)
+            {
+                return false;
+            }
+        }
+    }
+    catch ( ... )
+    {
+        std::cout << getCurrentTime() << '\t' << "ERROR: retrieving credentialspec from s3 "
+                                                 "failed" << std::endl;
+        return false;
+    }
+    std::cout << getCurrentTime() << '\t' << "INFO: credentialspec object size retrieved" <<
+        std::endl;
+    return true;
 }
 
 // retrieve credspec from s3

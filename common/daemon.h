@@ -216,6 +216,8 @@ std::string generate_lease_id();
 
 #if AMAZON_LINUX_DISTRO
 std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aws::Auth::AWSCredentials credentials,  bool test);
+bool check_file_size_s3(std::string s3_arn, std::string region,
+                         Aws::Auth::AWSCredentials credentials, bool test);
 std::tuple<std::string, std::string> retrieve_credspec_from_secrets_manager(std::string sm_arn, std::string region, Aws::Auth::AWSCredentials credentials);
 
 Aws::Auth::AWSCredentials get_credentials(std::string accessKeyId, std::string secretKey, std::string sessionToken);
