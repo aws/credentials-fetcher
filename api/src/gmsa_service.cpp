@@ -31,7 +31,8 @@
 //https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/bb726984
 //          (v=technet.10)
 static const std::vector<char> invalid_characters = {
-    '&', '|', ';', ':', '$', '*', '?', '<', '>', '!',' ', '\\', '.',']', '[', '+', '\'', '`', '~'};
+    '&', '|', ';', ':', '$', '*', '?', '<', '>', '!',' ', '\\', '.',']', '[', '+', '\'', '`',
+    '~', '}', '{', '"', ')', '('};
 
 static const std::vector<char> invalid_characters_ad_name = {
     '&', ':', ']', '[', '+', '|', ';', '$', '*', '?', '<', '>', '!',' ', '/', '\\', '\'', '`', '~'};
