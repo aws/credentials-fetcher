@@ -26,6 +26,8 @@
 #define LEASE_ID_LENGTH 10
 #define UNIX_SOCKET_NAME "credentials_fetcher.sock"
 #define INPUT_CREDENTIALS_LENGTH 104
+//https://devblogs.microsoft.com/oldnewthing/20120412-00/?p=7873
+#define DOMAIN_LENGTH 253
 
 // invalid character in username/account name
 //https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/bb726984
@@ -59,9 +61,9 @@ void secureClearString(std::string& str) {
  */
 bool isValidDomain(const std::string& value)
 {
-
     // Regex to check valid domain name.
-    std::regex pattern("^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\\.[a-zA-Z]{2,})+$");
+    // referenced from https://www.rfc-editor.org/rfc/rfc1123
+    std::regex pattern("^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])(\\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9]))*$");
 
     // If the domain name
     // is empty return false
@@ -479,6 +481,15 @@ class CredentialsFetcherImpl final
                             // only add the ticket info if the parsing is successful
                             if ( parse_result == 0 )
                             {
+                                std::string secretsArn =
+                                    krb_ticket_arns->credential_domainless_user_arn;
+                                if(secretsArn.empty())
+                                {
+                                    err_msg = "ERROR: invalid secrets manager arn";
+                                    std::cout << getCurrentTime() << '\t' << err_msg
+                                              << std::endl;
+                                    break;
+                                }
                                 // retrieve domainless user credentials
                                 std::tuple<std::string, std::string, std::string> userCreds =
                                     retrieve_credspec_from_secrets_manager(
@@ -495,7 +506,7 @@ class CredentialsFetcherImpl final
                                     if ( !username.empty() && !password.empty() &&
                                          !domain.empty() &&
                                          username.length() < INPUT_CREDENTIALS_LENGTH &&
-                                         password.length() < INPUT_CREDENTIALS_LENGTH )
+                                         password.length() < INPUT_CREDENTIALS_LENGTH && domain.length() < DOMAIN_LENGTH)
                                     {
 
                                         std::string krb_files_path =
@@ -869,6 +880,16 @@ class CredentialsFetcherImpl final
                                 // only add the ticket info if the parsing is successful
                                 if ( parse_result == 0 )
                                 {
+                                    std::string secretsArn =
+                                        krb_ticket_arns->credential_domainless_user_arn;
+                                    if(secretsArn.empty())
+                                    {
+                                        err_msg = "ERROR: invalid secrets manager arn";
+                                        std::cout << getCurrentTime() << '\t' << err_msg
+                                                  << std::endl;
+                                        break;
+                                    }
+
                                     // retrieve domainless user credentials
                                     std::tuple<std::string, std::string, std::string> userCreds =
                                         retrieve_credspec_from_secrets_manager(
@@ -886,7 +907,7 @@ class CredentialsFetcherImpl final
                                         if ( !username.empty() && !password.empty() &&
                                              !domain.empty() &&
                                              username.length() < INPUT_CREDENTIALS_LENGTH &&
-                                             password.length() < INPUT_CREDENTIALS_LENGTH )
+                                             password.length() < INPUT_CREDENTIALS_LENGTH && domain.length() < DOMAIN_LENGTH)
                                         {
                                             std::string renewal_path = renew_gmsa_ticket(
                                                 krb_ticket, domain, username, password, cf_logger );
@@ -898,6 +919,7 @@ class CredentialsFetcherImpl final
                                                 "credentials should not be more than 256 charaters";
                                             std::cout << getCurrentTime() << '\t' << err_msg
                                                       << std::endl;
+                                            break;
                                         }
                                     }
                                     else
@@ -905,6 +927,7 @@ class CredentialsFetcherImpl final
                                         err_msg = "ERROR: invalid domainName/username";
                                         std::cout << getCurrentTime() << '\t' << err_msg
                                                   << std::endl;
+                                        break;
                                     }
                                 }
                             }
@@ -1375,14 +1398,26 @@ class CredentialsFetcherImpl final
                      !contains_invalid_characters_in_ad_account_name(username))
                 {
                     if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
-                                                                                                                                          INPUT_CREDENTIALS_LENGTH )
+                                                                                                                                          INPUT_CREDENTIALS_LENGTH
+                         && domain.length() < DOMAIN_LENGTH && create_domainless_krb_request_
+                                                 .credspec_contents_size() > 0)
                     {
                         create_domainless_krb_reply_.set_lease_id( lease_id );
                         for ( int i = 0;
                               i < create_domainless_krb_request_.credspec_contents_size(); i++ )
                         {
+                            std::string credspecContent = create_domainless_krb_request_
+                                                              .credspec_contents( i );
+                            if(credspecContent.empty())
+                            {
+                                err_msg = "Error: credentialspec content shouldn't be empty "
+                                          "formatted";
+                                std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                                break;
+                            }
                             creds_fetcher::krb_ticket_info* krb_ticket_info =
                                 new creds_fetcher::krb_ticket_info;
+
                             int parse_result = parse_cred_spec(
                                 create_domainless_krb_request_.credspec_contents( i ),
                                 krb_ticket_info );
@@ -1678,7 +1713,8 @@ class CredentialsFetcherImpl final
                      !contains_invalid_characters_in_ad_account_name(username))
                 {
                     if ( !username.empty() && !password.empty() && !domain.empty() && username.length() < INPUT_CREDENTIALS_LENGTH && password.length() <
-                                                                                                                                          INPUT_CREDENTIALS_LENGTH )
+                                                                                                                                          INPUT_CREDENTIALS_LENGTH
+                         && domain.length() < DOMAIN_LENGTH)
                     {
                         std::list<std::string> renewed_krb_file_paths =
                             renew_kerberos_tickets_domainless( krb_files_dir, domain, username,

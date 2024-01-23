@@ -85,9 +85,16 @@ namespace creds_fetcher
         {
             if ( level >= log_level )
             {
-                sd_journal_print( level, fmt, logs... );
+                std::string logFmt = fmt;
+                for (int i = 0; logFmt[i] != '\0'; ++i) {
+                    if (logFmt[i] == '\n') {
+                        logFmt[i] = ' '; // Replace '\n' with space
+                    }
+                }
+                sd_journal_print( level, logFmt.c_str(), logs... );
             }
         }
+
 
         void init_file_logger ()
         {
@@ -190,6 +197,7 @@ int renewal_failure_krb_dir_not_found_test();
  * Methods in config module
  */
 int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemon );
+bool isValidDomain(const std::string& value);
 int HealthCheck(std::string serviceName);
 
 int parse_config_file( creds_fetcher::Daemon& cf_daemon );
@@ -203,6 +211,7 @@ bool contains_invalid_characters_in_credentials( const std::string& value );
 int RunGrpcServer( std::string unix_socket_dir, std::string krb_file_path,
                    creds_fetcher::CF_logger& cf_logger, volatile sig_atomic_t* shutdown_signal,
                    std::string aws_sm_secret_name );
+bool contains_invalid_characters_in_ad_account_name( const std::string& value );
 
 int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info );
 
