@@ -477,6 +477,13 @@ class CredentialsFetcherImpl final
                             krb_ticket_arns->credential_spec_arn = results[0];
                             int parse_result = parse_cred_spec_domainless(
                                 response, krb_ticket_info, krb_ticket_arns );
+                            if(parse_result != 0)
+                            {
+                                err_msg = "ERROR: invalid credentialspec fields";
+                                          std::cout << getCurrentTime() << '\t' << err_msg
+                                          << std::endl;
+                                break;
+                            }
 
                             // only add the ticket info if the parsing is successful
                             if ( parse_result == 0 )
@@ -877,6 +884,14 @@ class CredentialsFetcherImpl final
                                 int parse_result = parse_cred_spec_domainless(
                                     response, krb_ticket_info, krb_ticket_arns );
 
+                                if(parse_result != 0)
+                                {
+                                    err_msg = "ERROR: invalid credentialspec fields";
+                                    std::cout << getCurrentTime() << '\t' << err_msg
+                                              << std::endl;
+                                    break;
+                                }
+
                                 // only add the ticket info if the parsing is successful
                                 if ( parse_result == 0 )
                                 {
@@ -1125,6 +1140,14 @@ class CredentialsFetcherImpl final
                         new creds_fetcher::krb_ticket_info;
                     int parse_result = parse_cred_spec( create_krb_request_.credspec_contents( i ),
                                                         krb_ticket_info );
+
+                    if(parse_result != 0)
+                    {
+                        err_msg = "ERROR: invalid credentialspec fields";
+                                  std::cout << getCurrentTime() << '\t' << err_msg
+                                  << std::endl;
+                        break;
+                    }
 
                     // only add the ticket info if the parsing is successful
                     if ( parse_result == 0 )
@@ -1421,6 +1444,14 @@ class CredentialsFetcherImpl final
                             int parse_result = parse_cred_spec(
                                 create_domainless_krb_request_.credspec_contents( i ),
                                 krb_ticket_info );
+
+                            if(parse_result != 0)
+                            {
+                                err_msg = "ERROR: invalid credentialspec fields";
+                                          std::cout << getCurrentTime() << '\t' << err_msg
+                                          << std::endl;
+                                break;
+                            }
 
                             // only add the ticket info if the parsing is successful
                             if ( parse_result == 0 )
