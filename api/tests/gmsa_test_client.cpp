@@ -572,7 +572,7 @@ int run_stress_test( CredentialsFetcherClient& client, int num_of_leases,
 }
 
 // unit tests
-int parse_credspec_domainless_test(std::string credspec)
+bool parse_credspec_domainless_test(std::string credspec)
 {
     creds_fetcher::krb_ticket_info* krb_ticket_info =
                 new creds_fetcher::krb_ticket_info;
@@ -581,7 +581,19 @@ int parse_credspec_domainless_test(std::string credspec)
     int response = parse_cred_spec_domainless(credspec, krb_ticket_info, krb_ticket_arn_mapping );
     std::cout << krb_ticket_arn_mapping->credential_spec_arn;
     std::cout << krb_ticket_arn_mapping->krb_file_path;
-    return response;
+    if(response == 0)
+    {
+       return true;
+    }
+    return  false;
+}
+
+int validate_domain()
+{
+    return (isValidDomain("a.com") && isValidDomain("ab.toto-abc.com") &&
+             !isValidDomain("p/") && isValidDomain("test4.gmsa-pentest.com") &&
+             !isValidDomain ("-testdomain.org") &&  isValidDomain("contoso.com") &&
+             !isValidDomain(".org"));
 }
 
 #if AMAZON_LINUX_DISTRO
@@ -678,9 +690,16 @@ int main( int argc, char** argv )
         }
         else if (arg == "--unit_test")
         {
-            parse_credspec_domainless_test(credspec_contents_domainless_str);
-            //retrieve_credspec_from_s3_test();
-            return 0;
+
+            bool testStatus = (parse_credspec_domainless_test(credspec_contents_domainless_str) && validate_domain());
+            if(!testStatus){
+                std::cout << "client tests failed" << std::endl;
+                return  EXIT_FAILURE;
+            }
+            else{
+                std::cout << "client tests successful" << std::endl;
+                return  EXIT_SUCCESS;
+            }
         }
         else if ( arg == "--check" )
         {

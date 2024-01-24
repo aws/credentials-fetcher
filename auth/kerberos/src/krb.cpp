@@ -1126,13 +1126,20 @@ std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
 
     while ( std::getline( config_file, line ) )
     {
-        // TBD: Error handling for incorrectly formatted /etc/ecs/ecs.config
         results = split_string(line, '=');
         std::string key = results[0];
         std::string value = results[1];
         if ( ecs_variable_name.compare( key ) == 0 )
         {
             value.erase( std::remove( value.begin(), value.end(), '"' ), value.end() );
+
+            if( contains_invalid_characters_in_ad_account_name(value))
+            {
+                std::cout << getCurrentTime() << '\t' << "invalid domain controller name" <<
+                    std::endl;
+                return "";
+            }
+
             return value;
         }
     }
