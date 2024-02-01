@@ -77,7 +77,7 @@ file(WRITE scripts/systemd/credentials-fetcher.service
     "Environment=\"CF_DIR_GID=1000\"\n"
     "Environment=\"CF_DIR_MODE=755\"\n"
     "Environment=\"CF_KRB5CC_GID=1000\"\n"
-    "Environment=\"CF_KRB5CC_MODE=644\"\n"
+    "Environment=\"CF_KRB5CC_MODE=660\"\n"
     "Environment=\"CF_SOCKET_GID=1000\"\n"
     "Environment=\"CF_SOCKET_MODE=755\"\n"
     "Type=notify\n"
