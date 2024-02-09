@@ -69,6 +69,7 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
                                          { "verbosity", required_argument, nullptr, 'v' },
                                          { "aws_sm_secret_name", required_argument, nullptr, 's' },
                                          { "version", no_argument, nullptr, 'n' },
+                                         { "healthcheck", no_argument, nullptr, 'c' },
                                          { nullptr, 0, nullptr, 0 } };
         std::map<std::string, std::string> options_descriptions{
             { "help", "produce help message" },
@@ -76,8 +77,10 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
             { "verbosity", "set verbosity level" },
             { "aws_sm_secret_name", "Name of secret containing username/password in AWS Secrets "
                                     "Manager (in same region)" },
+            { "healthcheck", "health of credentials-fetcher" },
             { "version", "Version of credentials-fetcher" } };
         int option;
+        int healthCheckResponse;
         while ( ( option = getopt_long( argc, (char* const*)argv, "htv:s:n", long_options, nullptr ) ) != -1 )
         {
             switch ( option )
@@ -100,6 +103,18 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
             case 'n':
                 std::cout << CMAKE_PROJECT_VERSION << std::endl;
                 return EXIT_FAILURE;
+            case 'c':
+                healthCheckResponse = HealthCheck("test");
+                std::cout << healthCheckResponse << std::endl;
+                if(healthCheckResponse != 0)
+                {
+                    exit(EXIT_FAILURE);
+                }
+                else
+                {
+                    exit(EXIT_SUCCESS);
+                }
+
             default:
                 std::cout << "Run with --help to see options" << std::endl;
                 return EXIT_FAILURE;

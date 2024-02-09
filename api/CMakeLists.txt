@@ -14,7 +14,11 @@ set(credentialsfetcher_proto_sources "${CMAKE_CURRENT_BINARY_DIR}/credentialsfet
 set(credentialsfetcher_proto_headers "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.pb.h")
 set(credentialsfetcher_grpc_sources "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.grpc.pb.cc")
 set(credentialsfetcher_grpc_headers "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.grpc.pb.h")
-find_package(AWSSDK REQUIRED COMPONENTS ${SERVICE_COMPONENTS})
+
+if(${DISTRO_ID} MATCHES "amzn")
+    find_package(AWSSDK REQUIRED COMPONENTS ${SERVICE_COMPONENTS})
+endif()
+
 add_custom_command(
         OUTPUT "${credentialsfetcher_proto_sources}" "${credentialsfetcher_proto_headers}" "${credentialsfetcher_grpc_sources}" "${credentialsfetcher_grpc_headers}"
         COMMAND ${_PROTOBUF_PROTOC}

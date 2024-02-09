@@ -251,13 +251,9 @@ class CredentialsFetcherClient
             std::list<std::string> credspec_contents, std::string accessId, std::string secretKey, std::string sessionToken, std::string region )
     {
         // Prepare request
-        credentialsfetcher::KerberosArnLeaseRequest request;
+        credentialsfetcher::RenewKerberosArnLeaseRequest request;
         std::pair<std::string, std::string> result;
-        for ( std::list<std::string>::const_iterator i = credspec_contents.begin();
-              i != credspec_contents.end(); ++i )
-        {
-            request.add_credspec_arns( i->c_str() );
-        }
+
         request.set_access_key_id(accessId);
         request.set_secret_access_key(secretKey);
         request.set_session_token(sessionToken);
@@ -399,7 +395,7 @@ static void show_usage( std::string name )
                " credspecArn, accessId, secretkey, sessionToken, region"
             << "\t --renew_kerberos_tickets_arn \t\t create tickets by getting credspecs from s3 "
                " gMSA \tprovide"
-               "credspecArn, accessId, secretkey, sessionToken, region"
+               "accessId, secretkey, sessionToken, region"
               << "\t --invalidargs \t\ttest with invalid args, failure scenario\n"
               << "\t --run_stress_test \t\tstress test with multiple accounts and leases\n"
               << std::endl;
@@ -576,7 +572,7 @@ int run_stress_test( CredentialsFetcherClient& client, int num_of_leases,
 }
 
 // unit tests
-int parse_credspec_domainless_test(std::string credspec)
+bool parse_credspec_domainless_test(std::string credspec)
 {
     creds_fetcher::krb_ticket_info* krb_ticket_info =
                 new creds_fetcher::krb_ticket_info;
@@ -585,7 +581,19 @@ int parse_credspec_domainless_test(std::string credspec)
     int response = parse_cred_spec_domainless(credspec, krb_ticket_info, krb_ticket_arn_mapping );
     std::cout << krb_ticket_arn_mapping->credential_spec_arn;
     std::cout << krb_ticket_arn_mapping->krb_file_path;
-    return response;
+    if(response == 0)
+    {
+       return true;
+    }
+    return  false;
+}
+
+int validate_domain()
+{
+    return (isValidDomain("a.com") && isValidDomain("ab.toto-abc.com") &&
+             !isValidDomain("p/") && isValidDomain("test4.gmsa-pentest.com") &&
+             !isValidDomain ("-testdomain.org") &&  isValidDomain("contoso.com") &&
+             !isValidDomain(".org"));
 }
 
 #if AMAZON_LINUX_DISTRO
@@ -682,9 +690,16 @@ int main( int argc, char** argv )
         }
         else if (arg == "--unit_test")
         {
-            parse_credspec_domainless_test(credspec_contents_domainless_str);
-            //retrieve_credspec_from_s3_test();
-            return 0;
+
+            bool testStatus = (parse_credspec_domainless_test(credspec_contents_domainless_str) && validate_domain());
+            if(!testStatus){
+                std::cout << "client tests failed" << std::endl;
+                return  EXIT_FAILURE;
+            }
+            else{
+                std::cout << "client tests successful" << std::endl;
+                return  EXIT_SUCCESS;
+            }
         }
         else if ( arg == "--check" )
         {
@@ -733,11 +748,10 @@ int main( int argc, char** argv )
         else if(arg == "--renew_kerberos_tickets_arn"){
             if ( i + 3 < argc )
             {
-                credspecArn = argv[ i + 1];
-                accessId = argv[i + 2];
-                secretkey = argv[i + 3];
-                sessionToken = argv[i + 4];
-                region = argv[i + 5];
+                accessId = argv[i + 1];
+                secretkey = argv[i + 2];
+                sessionToken = argv[i + 3];
+                region = argv[i + 4];
             }
             else
             {
@@ -747,7 +761,7 @@ int main( int argc, char** argv )
                 return 0;
             }
             std::cout << "krb tickets will get created" << std::endl;
-            std::list<std::string>  domainless_arn_array = {credspecArn};
+            std::list<std::string>  domainless_arn_array = {};
             renew_krb_ticket_arns( client, credspec_contents_arns_domainless, accessId, secretkey,
                                     sessionToken, region );
             i++;

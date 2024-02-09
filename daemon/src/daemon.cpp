@@ -3,6 +3,7 @@
 #include <libgen.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <chrono>
 
 creds_fetcher::Daemon cf_daemon;
 
@@ -72,6 +73,25 @@ void* refresh_krb_tickets_thread_start( void* arg )
 }
 
 /**
+ * truncate_log_files - used in pthread_create
+ * @param arg - thread info
+ * @return pthread name
+ */
+void* truncate_file_logs_thread_start( void* arg )
+{
+    struct thread_info* tinfo = (struct thread_info*)arg;
+
+    printf( "Thread %d: top of stack near %p; argv_string=%s\n", tinfo->thread_num, (void*)&tinfo,
+            tinfo->argv_string );
+
+    //trucate log files
+    truncate_log_files();
+
+    return tinfo->argv_string;
+}
+
+
+/**
  * Create one pthread
  * @param func - pthread function
  * @param pthread_arg - pthread function parameter
@@ -135,6 +155,58 @@ std::pair<int, void*> create_pthread( void* ( *func )(void*), const char* pthrea
     return std::make_pair( EXIT_SUCCESS, tinfo );
 }
 
+void truncate_log_files()
+{
+    int truncate_interval = 60;
+    while ( !cf_daemon.got_systemd_shutdown_signal )
+    {
+        try
+        {
+            auto x = std::chrono::steady_clock::now() + std::chrono::minutes ( truncate_interval );
+            std::this_thread::sleep_until( x );
+            int number_of_log_lines = 1000;
+            std::string log_path = "/var/credentials-fetcher/logging";
+            std::string cmd = "wc -l " + log_path + "/credentials-fetcher.log | awk '{print $1}'";
+            static std::pair<int, std::string> result = exec_shell_cmd( cmd );
+
+            int num = number_of_log_lines;
+            if(!result.second.empty())
+            {
+                num = stoi( result.second );
+            }
+
+            // check if log file have more than 1000 lines
+            if ( num >= number_of_log_lines )
+            {
+               cmd = "tail -500 "+ log_path + "/credentials-fetcher.log > "
+                      + log_path + "/tmp.log";
+
+                result = exec_shell_cmd( cmd );
+                if ( result.first != 0 )
+                {
+                    std::cout << getCurrentTime() << '\t' << "ERROR: truncating log file failed" << std::endl;
+                }
+                cmd = "cp -f " + log_path + "/tmp.log " +log_path + "/credentials-fetcher.log";
+
+                result = exec_shell_cmd( cmd );
+                if ( result.first != 0 )
+                {
+                    std::cout << getCurrentTime() << '\t' << "ERROR: copy file failed" <<
+                        std::endl;
+                }
+            }
+            std::cout << getCurrentTime() << '\t' << "INFO: log file truncate successful" <<
+                                                              std::endl;
+        }
+        catch ( const std::exception& ex  )
+        {
+            std::cout << getCurrentTime() << '\t' << "ERROR: failed truncate log file" << ex.what()
+                      << std::endl;
+        }
+    }
+    return;
+}
+
 int parse_cred_file_path(const std::string& cred_file_path, std::string& cred_file, std::string& cred_file_lease_id )
 {
     size_t colon_delim_pos;
@@ -167,6 +239,7 @@ int main( int argc, const char* argv[] )
     std::string cred_file_lease_id;
     void* grpc_pthread;
     void* krb_refresh_pthread;
+    void* truncate_file_logs_pthread;
 
     int status = parse_options( argc, argv, cf_daemon );
     if ( status != EXIT_SUCCESS )
@@ -177,6 +250,9 @@ int main( int argc, const char* argv[] )
     cf_daemon.krb_files_dir = CF_KRB_DIR;
     cf_daemon.logging_dir = CF_LOGGING_DIR;
     cf_daemon.unix_socket_dir = CF_UNIX_DOMAIN_SOCKET_DIR;
+
+    std::cout << "credentials-fetcher daemon has started and running"  << std::endl;
+    std::cout << "on request failures check logs located at " + cf_daemon.logging_dir << std::endl;;
 
     if ( getenv(ENV_CF_CRED_SPEC_FILE) != NULL)
     {
@@ -211,7 +287,8 @@ int main( int argc, const char* argv[] )
     cf_daemon.gmsa_account_name = CF_TEST_GMSA_ACCOUNT;
 
     std::cout << "krb_files_dir = " << cf_daemon.krb_files_dir << std::endl;
-    std::cout << "cred_file = " << cf_daemon.cred_file <<  " (lease id: " << cred_file_lease_id << ")" << std::endl;
+    //std::cout << "cred_file = " << cf_daemon.cred_file <<  " (lease id: " << cred_file_lease_id
+             //   << ")" << std::endl;
     std::cout << "logging_dir = " << cf_daemon.logging_dir << std::endl;
     std::cout << "unix_socket_dir = " << cf_daemon.unix_socket_dir << std::endl;
 
@@ -258,6 +335,9 @@ int main( int argc, const char* argv[] )
     }
     grpc_pthread = pthread_status.second;
     cf_daemon.cf_logger.logger( LOG_INFO, "grpc pthread is at %p", grpc_pthread );
+
+    // initialize file logging
+    cf_daemon.cf_logger.init_file_logger();
         
     /* Create pthread for refreshing krb tickets */
     pthread_status =
@@ -270,6 +350,20 @@ int main( int argc, const char* argv[] )
     }
     krb_refresh_pthread = pthread_status.second;
     cf_daemon.cf_logger.logger( LOG_INFO, "krb refresh pthread is at %p", krb_refresh_pthread );
+
+    /* Create pthread for truncate file logs */
+    pthread_status =
+        create_pthread( truncate_file_logs_thread_start, "truncate_file_logs", -1 );
+    if ( pthread_status.first < 0 )
+    {
+        cf_daemon.cf_logger.logger( LOG_ERR, "Error %d: Cannot create pthreads",
+                                    pthread_status.first );
+        exit( EXIT_FAILURE );
+    }
+    truncate_file_logs_pthread = pthread_status.second;
+    cf_daemon.cf_logger.logger( LOG_INFO, "truncate file logs is at %p",
+                                truncate_file_logs_pthread );
+
 
     cf_daemon.cf_logger.set_log_level( LOG_NOTICE );
 

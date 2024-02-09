@@ -1,0 +1,20 @@
+name: cppcheck-action
+on:
+  push:
+    branches:
+    - mainline
+  pull_request:
+    branches: [ mainline ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+       - uses: actions/checkout@v2
+         with:
+          fetch-depth: 0
+       - name: cppcheck
+         run: |
+          sudo apt-get install -y cppcheck
+          cppcheck --enable=all --suppressions-list=suppressions.txt .
+          echo "cppcheck completed"

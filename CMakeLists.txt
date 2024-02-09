@@ -5,7 +5,13 @@ include(GNUInstallDirs)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-set(CMAKE_CXX_FLAGS " -std=c++17 -g -Wall -Werror -pthread")
+set(CFLAGS "${CFLAGS} -std=c++17 -Wall -fstack-protector-all -pthread")
+set(CFLAGS "${CFLAGS} -Wl,--strip-all -Wformat -Wformat-security")
+set(CFLAGS "${CFLAGS} -fstack-clash-protection -fPIE -fPIC")
+set(CFLAGS "${CFLAGS} -O2 -D_FORTIFY_SOURCE=2")
+set(CMAKE_CXX_FLAGS ${CFLAGS})
+set(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS} -z noexecstack -z relro -z now")
+set(CMAKE_SHARED_LINKER_FLAGS "${LDFLAGS} -z noexecstack -z relro -z now")
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf REQUIRED)
