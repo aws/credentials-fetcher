@@ -10,30 +10,71 @@ message(${credentialsfetcher_proto})
 set(AWSSDK_INSTALL_LIBDIR /usr/lib64)
 
 set(SERVICE_COMPONENTS s3 secretsmanager)
-set(credentialsfetcher_proto_sources "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.pb.cc")
-set(credentialsfetcher_proto_headers "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.pb.h")
-set(credentialsfetcher_grpc_sources "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.grpc.pb.cc")
-set(credentialsfetcher_grpc_headers "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.grpc.pb.h")
 
 if(${DISTRO_ID} MATCHES "amzn")
     find_package(AWSSDK REQUIRED COMPONENTS ${SERVICE_COMPONENTS})
 endif()
 
-add_custom_command(
-        OUTPUT "${credentialsfetcher_proto_sources}" "${credentialsfetcher_proto_headers}" "${credentialsfetcher_grpc_sources}" "${credentialsfetcher_grpc_headers}"
-        COMMAND ${_PROTOBUF_PROTOC}
-        ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}" --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
-        -I "${credentialsfetcher_proto_path}"
-        --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
-        "${credentialsfetcher_proto}"
-        DEPENDS "${credentialsfetcher_proto}")
+if(${Protobuf_VERSION} VERSION_LESS "3.21.0.0")
+    set(credentialsfetcher_proto_sources "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.pb.cc")
+    set(credentialsfetcher_proto_headers "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.pb.h")
+    set(credentialsfetcher_grpc_sources "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.grpc.pb.cc")
+    set(credentialsfetcher_grpc_headers "${CMAKE_CURRENT_BINARY_DIR}/credentialsfetcher.grpc.pb.h")
+
+    add_custom_command(
+            OUTPUT "${credentialsfetcher_proto_sources}" "${credentialsfetcher_proto_headers}" "${credentialsfetcher_grpc_sources}" "${credentialsfetcher_grpc_headers}"
+            COMMAND ${_PROTOBUF_PROTOC}
+            ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}" --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
+            -I "${credentialsfetcher_proto_path}"
+            --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
+            "${credentialsfetcher_proto}"
+            DEPENDS "${credentialsfetcher_proto}")
+else()
+    add_library(proto-objects OBJECT ${credentialsfetcher_proto})
+    target_link_libraries(proto-objects PUBLIC protobuf::libprotobuf)
+    set(PROTO_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+    target_include_directories(proto-objects PUBLIC "$<BUILD_INTERFACE:${PROTO_BINARY_DIR}>")
+    cmake_policy(SET CMP0083 NEW)
+    include(CheckPIESupported)
+    check_pie_supported()
+    if(CMAKE_CXX_LINK_PIE_SUPPORTED)
+        set_property(TARGET proto-objects
+                     PROPERTY POSITION_INDEPENDENT_CODE TRUE)
+    else()
+        message(WARNING "PIE is not supported at link time: ${output}.\n"
+                        "PIE link options will not be passed to linker.")
+    endif()
+    protobuf_generate(
+        TARGET proto-objects
+        OUT_VAR PROTO_GENERATED_FILES
+        IMPORT_DIRS "${credentialsfetcher_proto_path}"
+        PROTOC_OUT_DIR "${PROTO_BINARY_DIR}"
+        DEPENDENCIES "${credentialsfetcher_proto}"
+    )
+    set_source_files_properties(${PROTO_GENERATED_FILES} PROPERTIES SKIP_UNITY_BUILD_INCLUSION on)
+    protobuf_generate(
+        TARGET proto-objects
+        OUT_VAR PROTO_GENERATED_FILES
+        LANGUAGE grpc
+        IMPORT_DIRS "${credentialsfetcher_proto_path}"
+        GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+        PLUGIN "protoc-gen-grpc=\$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
+        PROTOC_OUT_DIR "${PROTO_BINARY_DIR}"
+        DEPENDENCIES "${credentialsfetcher_proto}"
+    )
+    set_source_files_properties(${PROTO_GENERATED_FILES} PROPERTIES SKIP_UNITY_BUILD_INCLUSION on)
+endif()
 
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
-list(APPEND SRC_FILES ${credentialsfetcher_proto_sources})
-list(APPEND SRC_FILES ${credentialsfetcher_proto_headers})
-list(APPEND SRC_FILES ${credentialsfetcher_grpc_sources})
-list(APPEND SRC_FILES ${credentialsfetcher_grpc_headers})
+if(${Protobuf_VERSION} VERSION_LESS "3.21.0.0")
+    list(APPEND SRC_FILES ${credentialsfetcher_proto_sources})
+    list(APPEND SRC_FILES ${credentialsfetcher_proto_headers})
+    list(APPEND SRC_FILES ${credentialsfetcher_grpc_sources})
+    list(APPEND SRC_FILES ${credentialsfetcher_grpc_headers})
+else()
+    list(APPEND _PROTOBUF_LIBPROTOBUF proto-objects)
+endif()
 
 add_library(cf_gmsa_service_private OBJECT
     ${SRC_FILES}

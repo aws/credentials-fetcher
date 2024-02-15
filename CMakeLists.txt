@@ -14,11 +14,16 @@ set(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS} -z noexecstack -z relro -z now")
 set(CMAKE_SHARED_LINKER_FLAGS "${LDFLAGS} -z noexecstack -z relro -z now")
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
-find_package(Protobuf REQUIRED)
+find_package(Protobuf CONFIG)
+if(NOT Protobuf_FOUND)
+    find_package(Protobuf REQUIRED)
+endif()
 find_package(gRPC REQUIRED)
 set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
 set(_REFLECTION gRPC::grpc++_reflection)
-find_program(_PROTOBUF_PROTOC protoc)
+if(${Protobuf_VERSION} VERSION_LESS "3.21.0.0")
+    find_program(_PROTOBUF_PROTOC protoc)
+endif()
 find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
 
 cmake_host_system_information(RESULT PRETTY_NAME QUERY DISTRIB_PRETTY_NAME)
@@ -145,15 +150,19 @@ add_custom_command(
 
 target_include_directories(credentials-fetcherd PUBLIC common)
 
+if(${Protobuf_VERSION} VERSION_GREATER_EQUAL "3.21.0.0")
+    list(APPEND _PROTOBUF_LIBPROTOBUF proto-objects)
+endif()
+
 if(${DISTRO_ID} MATCHES "ubuntu")
 	message(STATUS "Linux distro detected as ubuntu")
 target_link_libraries(credentials-fetcherd
         PUBLIC systemd krb5 glib-2.0 cf_gmsa_service_private
-        crypto protobuf kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto com_err krb5support resolv utf8_validity)
+        crypto ${_PROTOBUF_LIBPROTOBUF} kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto com_err krb5support resolv utf8_validity)
 else()
 target_link_libraries(credentials-fetcherd
         PUBLIC systemd krb5 glib-2.0 cf_gmsa_service_private
-        crypto
+        crypto ${_PROTOBUF_LIBPROTOBUF}
         kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
         com_err krb5support resolv)
 endif()
