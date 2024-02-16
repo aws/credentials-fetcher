@@ -12,9 +12,13 @@ file(
         FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
 )
 
+if (${Protobuf_VERSION} VERSION_GREATER_EQUAL "3.21.0.0")
+    list(APPEND _PROTOBUF_LIBPROTOBUF proto-objects)
+endif()
+
 add_executable(gmsa_test_client "gmsa_test_client.cpp")
 target_link_libraries(gmsa_test_client
-            cf_gmsa_service_private)
+            cf_gmsa_service_private ${_PROTOBUF_LIBPROTOBUF})
 
 cmake_policy(SET CMP0083 NEW)
 include(CheckPIESupported)
