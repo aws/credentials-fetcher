@@ -1,0 +1,2 @@
+{"CmsPlugins":["ActiveDirectory"],"DomainJoinConfig":{"Sid":"S-1-5-21-588757487-522635677-1531879567","MachineAccountName":"gmsaeks","Guid":"8a13e3a1-9f2a-4431-baf7-9f72d9135554","DnsTreeName":"example.com","DnsName":"example.com","NetBiosName":"example"},"ActiveDirectoryConfig":{"GroupManagedServiceAccounts":[{"Name":"gmsaeks","Scope":"example.com"},{"Name":"gmsaeks","Scope":"example"}]}}
+

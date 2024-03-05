@@ -1,0 +1,21 @@
+Credentials Fetcher
+Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+SPDX-License-Identifier: Apache-2.0
+
+**********************
+THIRD PARTY COMPONENTS
+**********************
+This software includes third party software subject to the following copyrights:
+
+- gRPC - Apache License, Version 2.0 - Copyright 2014 gRPC authors.
+- Systemd - Copyright (C) 1991, 1999 Free Software Foundation, Inc.
+- krb5 -  Copyright (C) 1985-2022 by the Massachusetts Institute of Technology.
+- openldap - The OpenLDAP Public License - Copyright 1998-2013 The OpenLDAP Foundation
+- boost - Boost Software License - Version 1.0 - August 17th, 2003
+- glib2.0 - GNU LIBRARY GENERAL PUBLIC LICENSE - Copyright (C) 1991 Free Software Foundation, Inc.
+- openssl - Copyright (c) 1998-2018 The OpenSSL Project
+- mono - In general, the runtime and its class libraries are licensed under the
+         terms of the MIT license, and some third party code is licensed under
+         the 3-clause BSD license.
+
+
