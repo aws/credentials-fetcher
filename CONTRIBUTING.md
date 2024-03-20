@@ -9,10 +9,48 @@ GitHub [issues](https://github.com/aws/credentials-fetcher/issues).
 If you would like to make a significant change, it's a good idea to first open
 an issue to discuss it.
 
-### Making the request
+### Submit Pull Requests
 
-Development takes place against the `dev` branch of this repository and pull
-requests should be opened against that branch.
+We are always happy to receive code and documentation contributions to the credentials-fetcher Please be aware of the following notes prior to opening a pull request:
+
+Contributions via pull requests are much appreciated. Before sending us a pull request, please ensure that:
+
+1. You are working against the latest source on the *main* branch.
+2. You check existing open, and recently merged, pull requests to make sure someone else hasn't addressed the problem already.
+3. You open an issue to discuss any significant work - we would hate for your time to be wasted.
+4. You have tested your change and added tests where appropriate. Wherever possible, pull requests should contain tests as appropriate. Bugfixes should contain tests that exercise the corrected behavior (i.e., the test should fail without the bugfix and pass with it), and new features should be accompanied by tests exercising the feature.
+
+GitHub provides additional documentation on [Creating a Pull Request](https://help.github.com/articles/creating-a-pull-request/).
+
+Please remember to:
+* Use commit messages (and PR titles) that follow the guidelines under [Commit Your Change](#commit-your-change).
+* Send us a pull request, answering any default questions in the pull request interface.
+* Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
+
+### Commit Your Change
+
+We use commit messages to update the project version number and generate changelog entries, so it's important for them to follow the right format. Valid commit messages adhere to the [conventional commit][conventional-commit] standard and include a prefix, separated from the rest of the message by a colon and a space. Here are a few examples:
+
+```
+feature: add new field for recommendation source
+fix: fix the input validation for the gRPC contract
+documentation: update contributing documentation
+```
+
+Example supported prefixes are listed in the table below.
+
+| Prefix          | Use for...                                                                                     |
+|----------------:|:-----------------------------------------------------------------------------------------------|
+| `feature`       | Adding a new feature.                                                                          |
+| `fix`           | Bug fixes.                                                                                     |
+| `refactor`      | A code refactor.                                                                                   |
+| `change`        | Any other code change.                                                                         |
+| `documentation` | Documentation changes.                                                                         |
+| `test`          | Test changes.                                                                         |
+
+Some of the prefixes allow abbreviation ; e.g. `feat` and `docs` are both valid. If you omit a prefix, the commit will be treated as a `change`.
+
+For the rest of the message, use imperative style and keep things concise but informative. See [How to Write a Git Commit Message](https://chris.beams.io/posts/git-commit/) for guidance.
 
 ## Licensing
 
