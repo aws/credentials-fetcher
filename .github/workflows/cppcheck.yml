@@ -16,5 +16,11 @@ jobs:
        - name: cppcheck
          run: |
           sudo apt-get install -y cppcheck
-          cppcheck --enable=all --suppressions-list=suppressions.txt .
-          echo "cppcheck completed"
+          cppcheck --enable=all --suppressions-list=suppressions.txt . 2> cppcheckout.txt
+          if  [ ${{stat -c%s cppcheckout.txt}} > 0 ] ; then
+            echo "cppcheck scan failed"
+            exit -1
+          if
+          shell: bash
+          echo "cppcheck scan completed"
+           
