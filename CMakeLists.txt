@@ -75,19 +75,22 @@ endif()
 configure_file(${CMAKE_SOURCE_DIR}/config/config.h.in
     ${CMAKE_BINARY_DIR}/config.h @ONLY)
 
-
-if((${DISTRO_ID} MATCHES "amzn") OR (${DISTRO_ID} MATCHES "ubuntu"))
-  file(WRITE scripts/systemd/credentials-fetcher.service
+file(WRITE scripts/systemd/credentials-fetcher.service
     "[Unit]\n"
     "Description=credentials-fetcher systemd service unit file.\n\n"
     "[Service]\n"
     "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
-    "ExecStartPre=chgrp ec2-user /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
-    "ExecStartPre=chmod 755 /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+    "ExecStartPre=chgrp \${CF_DIR_GID} /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
+    "ExecStartPre=chmod \${CF_DIR_MODE} /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
     "ExecStart=/usr/sbin/credentials-fetcherd\n"
-    "ExecStartPost=chgrp ec2-user /var/credentials-fetcher/socket/credentials_fetcher.sock\n"
-    "ExecStartPost=chmod 660 /var/credentials-fetcher/socket/credentials_fetcher.sock\n"
     "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
+    "Environment=\"CF_CRED_SPEC_FILE=/var/credentials-fetcher/credspec.json\"\n"
+    "Environment=\"CF_DIR_GID=1000\"\n"
+    "Environment=\"CF_DIR_MODE=755\"\n"
+    "Environment=\"CF_KRB5CC_GID=1000\"\n"
+    "Environment=\"CF_KRB5CC_MODE=660\"\n"
+    "Environment=\"CF_SOCKET_GID=1000\"\n"
+    "Environment=\"CF_SOCKET_MODE=755\"\n"
     "Type=notify\n"
     "NotifyAccess=main\n"
     "WatchdogSec=5s\n"
@@ -95,23 +98,6 @@ if((${DISTRO_ID} MATCHES "amzn") OR (${DISTRO_ID} MATCHES "ubuntu"))
     "[Install]\n"
     "WantedBy=multi-user.target\n"
 )
-else()
-    file(WRITE scripts/systemd/credentials-fetcher.service
-            "[Unit]\n"
-            "Description=credentials-fetcher systemd service unit file.\n\n"
-            "[Service]\n"
-            "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
-            "ExecStart=/usr/sbin/credentials-fetcherd\n"
-            "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
-            "Environment=\"CF_CRED_SPEC_FILE=/var/credentials-fetcher/credspec.json\"\n"
-            "Type=notify\n"
-            "NotifyAccess=main\n"
-            "WatchdogSec=5s\n"
-            "Restart=on-failure\n\n"
-            "[Install]\n"
-            "WantedBy=multi-user.target\n"
-            )
-endif()
 
 set(sources ${daemon} ${config} ${renewal})
 
