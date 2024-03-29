@@ -398,7 +398,8 @@ static void show_usage( std::string name )
                "accessId, secretkey, sessionToken, region"
               << "\t --invalidargs \t\ttest with invalid args, failure scenario\n"
               << "\t --run_stress_test \t\tstress test with multiple accounts and leases\n"
-              << std::endl;
+              << "\t --run_perf_test \t\tperf test with multiple accounts and leases\n"
+              << std::endl;;
 }
 
 // health check daemon
@@ -565,6 +566,54 @@ int run_stress_test( CredentialsFetcherClient& client, int num_of_leases,
     {
         std::cerr << "Exception: '" << ex.what() << "'!" << std::endl;
         logfile.close();
+        return -1;
+    }
+
+    return 0;
+}
+
+
+int run_perf_test( CredentialsFetcherClient& client, int num_of_leases,
+                     int number_of_service_acounts )
+{
+    try
+    {
+        std::ifstream file( "credspec_stress_test.txt" );
+        if ( !file )
+        {
+            std::cerr << "ERROR: Cannot open 'credspec_stress_test.txt' !" << std::endl;
+            return -1;
+        }
+        std::string line;
+        std::vector<std::string> all_cred_specs;
+        while ( std::getline( file, line ) )
+        {
+            all_cred_specs.push_back( line );
+        }
+
+        int num_of_credspecs = all_cred_specs.size();
+        int num_of_service_accounts_in_lease = number_of_service_acounts;
+
+        // build subsets of credspecs to make gRPC calls
+        for ( int lease = 0; lease < num_of_leases; lease++ )
+        {
+            std::random_device rd;    // obtain a random number from hardware
+            std::mt19937 gen( rd() ); // seed the generator
+            std::uniform_int_distribution<> distr( 0, num_of_credspecs - 1 ); // define the range
+
+            std::list<std::string> sub_set_credspecs;
+            for ( int ns = 0; ns < num_of_service_accounts_in_lease; ns++ )
+            {
+                int index = distr( gen );
+                sub_set_credspecs.push_back( all_cred_specs[index] );
+            }
+
+            create_krb_ticket( client, sub_set_credspecs );
+        }
+    }
+    catch ( const std::exception& ex )
+    {
+        std::cerr << "Exception: '" << ex.what() << "'!" << std::endl;
         return -1;
     }
 
@@ -841,6 +890,23 @@ int main( int argc, char** argv )
             }
             run_stress_test( client, number_of_leases, number_of_service_acounts );
             i = 1 + 2;
+        }
+        else if ( arg == "--run_perf_test" )
+        {
+            if ( i + 2 < argc )
+            {
+                number_of_leases = atoi( argv[i + 1] );
+                number_of_service_acounts = atoi( argv[i + 2] );
+            }
+            else
+            {
+                std::cout << "--run_perf_test option requires number_of_leases and "
+                             "number_of_service_account per lease arguments. "
+                          << std::endl;
+                return 0;
+            }
+            run_perf_test( client, number_of_leases, number_of_service_acounts );
+            i = i + 2;
         }
         else
         {
