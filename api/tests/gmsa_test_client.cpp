@@ -37,7 +37,7 @@
 class CredentialsFetcherClient
 {
   public:
-    CredentialsFetcherClient( std::shared_ptr<grpc::Channel> channel )
+    explicit CredentialsFetcherClient( std::shared_ptr<grpc::Channel> channel )
         : _stub{ credentialsfetcher::CredentialsFetcherService::NewStub( channel ) }
     {
     }
@@ -48,7 +48,6 @@ class CredentialsFetcherClient
      */
     std::string HealthCheckMethod( std::string service_name )
     {
-        std::string result;
         // Prepare request
         credentialsfetcher::HealthCheckRequest request;
         request.set_service( service_name );
@@ -675,7 +674,6 @@ int main( int argc, char** argv )
     std::string username;
     std::string password;
     std::string domain;
-    std::string is_renewal;
     std::string accessId;
     std::string secretkey;
     std::string sessionToken;
@@ -719,7 +717,6 @@ int main( int argc, char** argv )
 
 
     std::list<std::string>  credspec_contents_arns_domainless = {"arn:aws:s3:::gmsacredspec/gmsa-cred-spec.json"};
-    std::list<std::string> lease_ids = {"12345", "34567", "45678"};
 
    // create and delete krb tickets
    if ( argc == 1 )
@@ -749,6 +746,9 @@ int main( int argc, char** argv )
                 std::cout << "client tests successful" << std::endl;
                 return  EXIT_SUCCESS;
             }
+            //These methods are added only to test a specific flow, not unit testable
+            retrieve_credspec_from_s3_test();
+            retrieve_credspec_from_secrets_manager_test();
         }
         else if ( arg == "--check" )
         {

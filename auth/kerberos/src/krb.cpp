@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <regex>
+#include <openssl/crypto.h>
 
 // renew the ticket 1 hrs before the expiration
 #define RENEW_TICKET_HOURS 1
@@ -14,6 +15,9 @@
 // https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/naming-conventions-for-computer-domain-site-ou
 #define HOST_NAME_LENGTH_LIMIT 15
 #define ENV_CF_GMSA_OU "CF_GMSA_OU"
+static const std::vector<char> invalid_characters = {
+    '&', '|', ';', ':', '$', '*', '?', '<', '>', '!',' ', '\\', '.',']', '[', '+', '\'', '`',
+    '~', '}', '{', '"', ')', '('};
 
 static const std::string install_path_for_decode_exe =
     "/usr/sbin/credentials_fetcher_utf16_private.exe";
@@ -82,10 +86,11 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
 {
     std::pair<int, std::string> result;
 
-    std::pair<int, std::string> hostname_result = exec_shell_cmd( "hostname -s | tr -d '\n'" );
-    if ( hostname_result.first != 0 )
+    char hostname[HOST_NAME_MAX];
+    int status = gethostname(hostname, HOST_NAME_MAX);
+    if ( status )
     {
-        result.first = hostname_result.first;
+        result.first = status;
         return result;
     }
 
@@ -113,7 +118,8 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
         return result;
     }
 
-    std::string host_name = hostname_result.second;
+    std::string s = std::string(hostname);
+    std::string host_name = s.substr(0, s.find('.'));
 
     // truncate the hostname to the host name size limit defined by microsoft
     if(host_name.length() > HOST_NAME_LENGTH_LIMIT){
@@ -122,8 +128,8 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
              __func__, __LINE__ );
         host_name = host_name.substr(0,HOST_NAME_LENGTH_LIMIT);
         std::cout << getCurrentTime() << '\t' << "INFO: hostname exceeds 15 characters this can "
-                                                 "cause problems in getting kerberos tickets, please reduce hostname length" <<
-            std::endl;
+                                                 "cause problems in getting kerberos tickets, "
+                                                 "please reduce hostname length" << std::endl;
     }
 
     /**
@@ -319,8 +325,8 @@ int get_domainless_user_krb_ticket( std::string domain_name, std::string usernam
     kinit_argv[1] = (char *)username.c_str();
     kinit_argv[2] = (char *)password.c_str();
     ret = my_kinit_main(2, kinit_argv);
-    username = "xxxx";
-    password = "xxxx";
+    clearString(username);
+    clearString(password);
 
     //TODO: nit - return pair later
     return ret;
@@ -868,7 +874,7 @@ bool is_ticket_ready_for_renewal( creds_fetcher::krb_ticket_info* krb_ticket_inf
             char renewal_date[80];
             char renewal_time[80];
 
-            sscanf( renewal_date_time.c_str(), "%s %s", renewal_date, renewal_time );
+            sscanf( renewal_date_time.c_str(), "%79s %79s", renewal_date, renewal_time );
 
             renew_until = std::string( renewal_date ) + " " + std::string( renewal_time );
             // trim extra spaces
@@ -999,7 +1005,7 @@ std::string renew_gmsa_ticket( creds_fetcher::krb_ticket_info* krb_ticket, std::
                                                   krb_cc_name, cf_logger );
         if ( gmsa_ticket_result.first != 0 )
         {
-            if ( num_retries == 0 )
+            if ( i == 0 )
             {
                 cf_logger.logger( LOG_WARNING,
                                   "WARNING: Cannot get gMSA krb ticket "
@@ -1118,7 +1124,7 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
 
 std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
 {
-    const char* ecs_config_file_name = "/etc/ecs/ecs.config"; // TBD:: Add commandline if needed
+    const char* ecs_config_file_name = "/etc/ecs/ecs.config";
 
     std::ifstream config_file( ecs_config_file_name );
     std::string line;
@@ -1127,9 +1133,16 @@ std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
     while ( std::getline( config_file, line ) )
     {
         results = split_string(line, '=');
+
+        if(results.empty() || results.size() != 2)
+        {
+            std::cout << getCurrentTime() << '\t' << "invalid configuration format" << std::endl;
+            return "";
+        }
+
         std::string key = results[0];
         std::string value = results[1];
-        if ( ecs_variable_name.compare( key ) == 0 )
+        if ( !contains_invalid_characters_in_credentials(value) && ecs_variable_name.compare(key)==0 )
         {
             value.erase( std::remove( value.begin(), value.end(), '"' ), value.end() );
 
@@ -1139,8 +1152,13 @@ std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
                     std::endl;
                 return "";
             }
-
             return value;
+        }
+        else{
+            std::cout << getCurrentTime() << '\t' << "invalid configuration provided, either "
+                                                     "key/value is not in the correct format" <<
+                std::endl;
+            return "";
         }
     }
     return "";
@@ -1200,4 +1218,14 @@ std::string getCurrentTime()
 
     std::string curr_time =  std::string(buf);
     return curr_time;
+}
+
+/** clear string **/
+void clearString(std::string& str) {
+    if (!str.empty()) {
+        // Use OPENSSL_cleanse to securely clear the memory
+        OPENSSL_cleanse(&str[0], str.size());
+    }
+    // Clear the string content
+    str.clear();
 }
