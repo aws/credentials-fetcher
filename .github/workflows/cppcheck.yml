@@ -16,5 +16,5 @@ jobs:
        - name: cppcheck
          run: |
           sudo apt-get install -y cppcheck
-          cppcheck --enable=all --suppressions-list=suppressions.txt .
+          cppcheck --enable=all --force --suppressions-list=suppressions.txt .
           echo "cppcheck completed"
