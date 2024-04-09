@@ -7,15 +7,6 @@ missingInclude:*
 unmatchedSuppression:*
 ConfigurationNotChecked:*
 cstyleCast:daemon/src/daemon.cpp
-unusedFunction:*
-unreadVariable:*
-unusedVariable:*
-uselessAssignmentArg:*
-knownConditionTrueFalse:*
 passedByValue:*
-toomanyconfigs:*
-constParameter:*
-noExplicitConstructor:*
-invalidscanf:auth/kerberos/src/krb.cpp
 useStlAlgorithm:auth/kerberos/src/krb.cpp
 useInitializationList:api/src/gmsa_service.cpp

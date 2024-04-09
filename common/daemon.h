@@ -70,8 +70,6 @@ namespace creds_fetcher
      */
     class CF_logger
     {
-        /* TBD:: Fill this later */
-
       public:
         int log_level = LOG_NOTICE;
 
@@ -223,6 +221,8 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
 
 std::string generate_lease_id();
 
+void clearString(std::string& str);
+
 #if AMAZON_LINUX_DISTRO
 std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aws::Auth::AWSCredentials credentials,  bool test);
 bool check_file_size_s3(std::string s3_arn, std::string region,
@@ -249,5 +249,6 @@ int write_meta_data_json( creds_fetcher::krb_ticket_info* krb_ticket_info,
 
 int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list,
                           std::string lease_id, std::string krb_files_dir );
+
 
 #endif // _daemon_h_

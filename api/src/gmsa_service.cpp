@@ -155,8 +155,8 @@ class CredentialsFetcherImpl final
      * @param unix_socket_dir: path to unix domain socket
      * @param cf_logger : log to systemd
      */
-    void RunServer( std::string& unix_socket_dir, std::string& krb_files_dir,
-                     creds_fetcher::CF_logger& cf_logger, std::string& aws_sm_secret_name )
+    void RunServer( const std::string& unix_socket_dir, const std::string& krb_files_dir,
+                     creds_fetcher::CF_logger& cf_logger, const std::string& aws_sm_secret_name )
     {
         std::string unix_socket_address =
             std::string( "unix:" ) + unix_socket_dir + "/" + std::string( UNIX_SOCKET_NAME );
@@ -846,7 +846,6 @@ class CredentialsFetcherImpl final
                 std::string region = renew_krb_arn_request_.region();
                 std::string username = "";
                 std::string password = "";
-                std::string domain = "";
 
                 std::string err_msg;
                 if ( !accessId.empty() && !secretKey.empty() && !sessionToken.empty() &&
@@ -913,7 +912,7 @@ class CredentialsFetcherImpl final
 
                                     username = std::get<0>( userCreds );
                                     password = std::get<1>( userCreds );
-                                    domain = std::get<2>( userCreds );
+                                    std::string domain = std::get<2>( userCreds );
 
                                     if ( isValidDomain( domain ) &&
                                          !contains_invalid_characters_in_ad_account_name(
@@ -2531,8 +2530,8 @@ bool check_file_size_s3(std::string s3_arn, std::string region,
                 return false;
             }
             long objLen =  outcome.GetResult().GetContentLength();
-            //value should be less than 2000 bytes
-            if(objLen > 2000)
+            //value should be less than 4000 bytes
+            if(objLen > 4000)
             {
                 return false;
             }
