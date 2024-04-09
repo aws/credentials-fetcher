@@ -223,6 +223,8 @@ std::string generate_lease_id();
 
 void clearString(std::string& str);
 
+std::string GetCallerIdentity();
+
 #if AMAZON_LINUX_DISTRO
 std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aws::Auth::AWSCredentials credentials,  bool test);
 bool check_file_size_s3(std::string s3_arn, std::string region,

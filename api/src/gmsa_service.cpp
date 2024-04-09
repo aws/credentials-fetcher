@@ -2582,9 +2582,20 @@ std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aw
                 return dummy_credspec;
             }
 
+            // regex for callerId
+            std::regex callerIdRegex("^\\d{12}$");
+            std::string callerId = GetCallerIdentity();
+            if(callerId.empty() &&  !std::regex_match( callerId, callerIdRegex))
+            {
+                std::cout << getCurrentTime() << '\t' << "ERROR: Unable to get caller information"
+                          << std::endl;
+                return std::string("");
+            }
+
             Aws::S3::S3Client s3Client (credentials,Aws::MakeShared<Aws::S3::S3EndpointProvider>
                 (Aws::S3::S3Client::ALLOCATION_TAG), clientConfig);
             Aws::S3::Model::GetObjectRequest request;
+            request.SetExpectedBucketOwner(callerId);
             request.SetBucket(s3Bucket);
             request.SetKey(objectName);
             Aws::S3::Model::GetObjectOutcome outcome =
@@ -2667,4 +2678,5 @@ std::tuple<std::string, std::string,
     }
     return {"","",""};
 }
+
 #endif
