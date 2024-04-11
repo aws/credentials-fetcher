@@ -639,33 +639,28 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
 
 
     std::string fqdn;
-    fqdn = retrieve_secret_from_ecs_config(domain_controller_gmsa);
-
-    if(fqdn.empty())
+    std::pair<int, std::vector<std::string>> domain_ips = get_domain_ips( domain_name );
+    if ( domain_ips.first != 0 )
     {
-        std::pair<int, std::vector<std::string>> domain_ips = get_domain_ips( domain_name );
-        if ( domain_ips.first != 0 )
-        {
-            cf_logger.logger( LOG_ERR, "ERROR: Cannot resolve domain IPs of %s", __func__, __LINE__,
+        cf_logger.logger( LOG_ERR, "ERROR: Cannot resolve domain IPs of %s", __func__, __LINE__,
                               domain_name.c_str() );
-            std::cout << getCurrentTime() << '\t' << "ERROR: Cannot resolve domain IPs" <<
+        std::cout << getCurrentTime() << '\t' << "ERROR: Cannot resolve domain IPs" <<
                 std::endl;
-            return std::make_pair( -1, std::string( "" ) );
-        }
+        return std::make_pair( -1, std::string( "" ) );
+    }
 
-        for ( auto domain_ip : domain_ips.second )
+    for ( auto domain_ip : domain_ips.second )
+    {
+        auto fqdn_result = get_fqdn_from_domain_ip( domain_ip, domain_name );
+        if ( fqdn_result.first == 0 )
         {
-            auto fqdn_result = get_fqdn_from_domain_ip( domain_ip, domain_name );
-            if ( fqdn_result.first == 0 )
-            {
-                fqdn = fqdn_result.second;
-                break;
-            }
+            fqdn = fqdn_result.second;
+            break;
         }
-        if ( fqdn.empty() )
-        {
-            return std::make_pair( -1, std::string( "" ) );
-        }
+    }
+    if ( fqdn.empty() )
+    {
+        return std::make_pair( -1, std::string( "" ) );
     }
 
     /**
@@ -1120,48 +1115,6 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
         return delete_krb_ticket_paths;
     }
     return delete_krb_ticket_paths;
-}
-
-std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
-{
-    const char* ecs_config_file_name = "/etc/ecs/ecs.config";
-
-    std::ifstream config_file( ecs_config_file_name );
-    std::string line;
-    std::vector<std::string> results;
-
-    while ( std::getline( config_file, line ) )
-    {
-        results = split_string(line, '=');
-
-        if(results.empty() || results.size() != 2)
-        {
-            std::cout << getCurrentTime() << '\t' << "invalid configuration format" << std::endl;
-            return "";
-        }
-
-        std::string key = results[0];
-        std::string value = results[1];
-        if ( !contains_invalid_characters_in_credentials(value) && ecs_variable_name.compare(key)==0 )
-        {
-            value.erase( std::remove( value.begin(), value.end(), '"' ), value.end() );
-
-            if( contains_invalid_characters_in_ad_account_name(value))
-            {
-                std::cout << getCurrentTime() << '\t' << "invalid domain controller name" <<
-                    std::endl;
-                return "";
-            }
-            return value;
-        }
-        else{
-            std::cout << getCurrentTime() << '\t' << "invalid configuration provided, either "
-                                                     "key/value is not in the correct format" <<
-                std::endl;
-            return "";
-        }
-    }
-    return "";
 }
 
 /**

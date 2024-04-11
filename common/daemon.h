@@ -199,7 +199,6 @@ bool isValidDomain(const std::string& value);
 int HealthCheck(std::string serviceName);
 
 int parse_config_file( creds_fetcher::Daemon& cf_daemon );
-std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name);
 std::vector<std::string> split_string(std::string input_string, char delimiter);
 
 /**
