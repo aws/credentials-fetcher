@@ -9,7 +9,7 @@ get_filename_component(credentialsfetcher_proto_path "${credentialsfetcher_proto
 message(${credentialsfetcher_proto})
 set(AWSSDK_INSTALL_LIBDIR /usr/lib64)
 
-set(SERVICE_COMPONENTS s3 secretsmanager)
+set(SERVICE_COMPONENTS s3 secretsmanager sts)
 
 if(${DISTRO_ID} MATCHES "amzn")
     find_package(AWSSDK REQUIRED COMPONENTS ${SERVICE_COMPONENTS})
