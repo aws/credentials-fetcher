@@ -747,8 +747,10 @@ int main( int argc, char** argv )
                 return  EXIT_SUCCESS;
             }
             //These methods are added only to test a specific flow, not unit testable
+            #if AMAZON_LINUX_DISTRO
             retrieve_credspec_from_s3_test();
             retrieve_credspec_from_secrets_manager_test();
+            #endif
         }
         else if ( arg == "--check" )
         {
