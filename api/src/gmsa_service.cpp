@@ -14,12 +14,15 @@
 #if AMAZON_LINUX_DISTRO
 #include <aws/core/Aws.h>
 #include <aws/s3/S3Client.h>
+#include <aws/sts/STSClient.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/core/utils/logging/LogLevel.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/secretsmanager/SecretsManagerClient.h>
 #include <aws/secretsmanager/model/GetSecretValueRequest.h>
+#include <aws/sts/model/GetCallerIdentityRequest.h>
+#include <aws/sts/model/GetAccessKeyInfoRequest.h>
 #endif
 
 
@@ -2480,6 +2483,53 @@ Aws::Auth::AWSCredentials get_credentials(std::string accessKeyId, std::string s
     return credentials;
 }
 
+// get caller id (accountid)
+std::string get_caller_id(std::string region,
+                         Aws::Auth::AWSCredentials credentials)
+{
+    std::string callerId = "";
+    Aws::SDKOptions options;
+    try {
+        Aws::InitAPI(options);
+        {
+            Aws::Client::ClientConfiguration clientConfig;
+            clientConfig.region = region;
+            auto provider = Aws::MakeShared<Aws::Auth::SimpleAWSCredentialsProvider>("alloc-tag", credentials);
+            auto creds = provider->GetAWSCredentials();
+            if (creds.IsEmpty()) {
+                std::cout << getCurrentTime() << '\t' << "ERROR: Failed authentication invalid creds" << std::endl;
+                return std::string("");
+            }
+            std::smatch arn_match;
+
+            Aws::STS::STSClient stsClient (credentials,Aws::MakeShared<Aws::STS::STSEndpointProvider>
+                                        (Aws::STS::STSClient::ALLOCATION_TAG), clientConfig);
+            Aws::STS::Model::GetCallerIdentityRequest request;
+
+            auto outcome = stsClient.GetCallerIdentity(request);
+
+            if (!outcome.IsSuccess())
+            {
+                const Aws::STS::STSError &err = outcome.GetError();
+                std::cout << getCurrentTime() << '\t' << "ERROR: retrieving caller info failed:"
+                          << err.GetExceptionName() << ": " <<
+                    err.GetMessage() << std::endl;
+                return std::string("");
+            }
+            callerId =  outcome.GetResult().GetAccount();
+        }
+    }
+    catch ( ... )
+    {
+        std::cout << getCurrentTime() << '\t' << "ERROR: retrieving caller id "
+                                                 "failed" << std::endl;
+        return std::string("");
+    }
+    std::cout << getCurrentTime() << '\t' << "INFO: successfully retrieved callerId" <<
+        std::endl;
+    return callerId;
+}
+
 // check file size s3
 // example : arn:aws:s3:::gmsacredspec/gmsa-cred-spec.json
 bool check_file_size_s3(std::string s3_arn, std::string region,
@@ -2584,7 +2634,7 @@ std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aw
 
             // regex for callerId
             std::regex callerIdRegex("^\\d{12}$");
-            std::string callerId = GetCallerIdentity();
+            std::string callerId = get_caller_id(region, creds);
             if(callerId.empty() &&  !std::regex_match( callerId, callerIdRegex))
             {
                 std::cout << getCurrentTime() << '\t' << "ERROR: Unable to get caller information"

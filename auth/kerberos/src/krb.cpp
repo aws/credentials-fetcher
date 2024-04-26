@@ -1229,25 +1229,3 @@ void clearString(std::string& str) {
     // Clear the string content
     str.clear();
 }
-
-
-// get caller identity - accountId
-std::string GetCallerIdentity()
-{
-    std::string command =
-        install_path_for_aws_cli + " sts get-caller-identity --query Account";
-    // /usr/bin/aws aws sts get-caller-identity --query Account
-    std::pair<int, std::string> result = exec_shell_cmd( command );
-
-    std::string callerId = result.second;
-    ltrim( callerId );
-    rtrim( callerId );
-
-    // remove quotes if they are present
-    if ( callerId.front() == '"' ) {
-        callerId.erase( 0, 1 ); // erase the first character
-        callerId.erase( callerId.size() - 1 ); // erase the last character
-    }
-
-    return callerId;
-}
