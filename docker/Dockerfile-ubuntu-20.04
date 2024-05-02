@@ -6,7 +6,11 @@ RUN apt-get update \
     && DEBIAN_FRONTEND="noninteractive" TZ="${TIME_ZONE}" \
         apt install -y git clang wget curl autoconf \
         libglib2.0-dev libboost-dev libkrb5-dev libsystemd-dev libssl-dev \
-        libboost-program-options-dev libboost-filesystem-dev byacc make libjsoncpp-dev
+        libboost-program-options-dev libboost-filesystem-dev byacc make libjsoncpp-dev \
+        clang-12
+
+RUN ln -sf /usr/lib/llvm-12/bin/clang /usr/bin/clang \
+    && ln -sf /usr/lib/llvm-12/bin/clang++ /usr/bin/clang++
 
 RUN git clone https://github.com/Kitware/CMake.git -b release /root/CMake \
     && cd /root/CMake && ./configure && make -j4 &&  pwd && make install
