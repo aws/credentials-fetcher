@@ -8,21 +8,21 @@ RUN apt-get update \
         libglib2.0-dev libboost-dev libkrb5-dev libsystemd-dev libssl-dev \
         libboost-program-options-dev libboost-filesystem-dev byacc make libjsoncpp-dev
 
-RUN cd /root && git clone https://github.com/Kitware/CMake.git -b release \
-    && cd CMake && ./configure && make -j4 &&  pwd && make install
+RUN git clone https://github.com/Kitware/CMake.git -b release /root/CMake \
+    && cd /root/CMake && ./configure && make -j4 &&  pwd && make install
 
-RUN cd /root && git clone https://github.com/krb5/krb5.git -b krb5-1.21.2-final \
-   && cd krb5/src && autoconf && autoreconf && ./configure && make -j4 && make install
+RUN git clone https://github.com/krb5/krb5.git -b krb5-1.21.2-final /root/krb5 \
+   && cd /root/krb5/src && autoconf && autoreconf && ./configure && make -j4 && make install
 
-RUN cd /root && git clone --recurse-submodules -b v1.58.0 https://github.com/grpc/grpc \
-    && cd grpc/ && mkdir build && cd build \
+RUN git clone --recurse-submodules -b v1.58.0 https://github.com/grpc/grpc /root/grpc \
+    && mkdir -p /root/grpc/build && cd /root/grpc/build \
     && cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_CXX_STANDARD=17 ../ \
-    && make -j4 \
-    && make install
-    && cd grpc/ && mkdir -p cmake/build && cd cmake/build && cmake -DgRPC_BUILD_TESTS=ON ../.. && make grpc_cli
-    && cp grpc/cmake/build/grpc_cli /usr/local/bin
+    && make -j4 && make install \
+    && mkdir -p /root/grpc/cmake/build && cd /root/grpc/cmake/build \
+    && cmake -DgRPC_BUILD_TESTS=ON ../.. && make grpc_cli \
+    && cp /root/grpc/cmake/build/grpc_cli /usr/local/bin
 
-RUN apt-get install wget -y && wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
+RUN cd /root && wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
     && dpkg -i packages-microsoft-prod.deb \
     && rm packages-microsoft-prod.deb \
     && apt remove 'dotnet*' 'aspnetcore*' 'netstandard*' \
@@ -30,13 +30,13 @@ RUN apt-get install wget -y && wget https://packages.microsoft.com/config/ubuntu
     && apt update \
     && apt-get install -y dotnet-sdk-6.0
 
-#RUN cd /root && git clone -b credentials-fetcher-credfile https://github.com/fordth/credentials-fetcher \
-RUN cd /root && git clone https://github.com/aws/credentials-fetcher \
-    && mkdir -p credentials-fetcher/build \
+#RUN git clone -b credentials-fetcher-credfile https://github.com/fordth/credentials-fetcher /root/credentials-fetcher \
+RUN git clone https://github.com/aws/credentials-fetcher /root/credentials-fetcher \
+    && mkdir -p /root/credentials-fetcher/build \
     && mkdir -p /usr/lib64/glib-2.0/ \
     && ln -s '/usr/lib/x86_64-linux-gnu/glib-2.0/include/' '/usr/lib64/glib-2.0/include' \
     && ln -s '/usr/include/jsoncpp/json/' '/usr/include/json' \
-    && cd credentials-fetcher && cd build \
+    && cd /root/credentials-fetcher/build \
     && cmake ../ && make -j4 && make install
 
 WORKDIR /root/credentials-fetcher/build
@@ -44,4 +44,3 @@ WORKDIR /root/credentials-fetcher/build
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
 CMD ["/bin/bash"]
-
