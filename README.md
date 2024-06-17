@@ -23,7 +23,8 @@ For other linux distributions, the daemon binary needs to be built from source c
 
 - Active Directory server ( Windows Server )
 - Linux instances or hosts that are domain-joined to Active Directory
-  - Unless you are using Amazon Elastic Container Service - Fargate. In that case you must [use domainless gMSA](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-linux-gmsa.html#fargate-linux-gmsa-considerations).
+  - [EC2 Linux containers on Amazon ECS](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html#linux-gmsa-considerations) provides the option of domainless gMSA and joining each instance to a single domain
+  - [Linux containers on Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-linux-gmsa.html#fargate-linux-gmsa-considerations) must use domainless gMSA
 - gMSA account(s) in Active Directory - Follow instructions provided to create service accounts - https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts
 - Required packages as mentioned in RPM spec file.
 - Create username ec2-user or modify the systemd unit file.
