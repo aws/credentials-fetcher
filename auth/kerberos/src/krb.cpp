@@ -25,6 +25,28 @@ static const std::string install_path_for_aws_cli = "/usr/bin/aws";
 
 extern "C" int my_kinit_main(int, char **);
 
+static void _chgrp(const char* file, const char* env_name)
+{
+    if ( getenv( env_name ) != NULL)
+    {
+        char* c_str = getenv( env_name );
+        std::stringstream s_str;
+        s_str << c_str;
+        gid_t gid;
+        s_str >> gid;
+        chown( file, (uid_t)-1, gid );
+    }
+}
+
+static void _chmod(const char* file, const char* env_name)
+{
+    if ( getenv( env_name ) != NULL)
+    {
+        mode_t mode = strtol( getenv( env_name ), NULL, 8 );
+        chmod( file, (mode_t)mode );
+    }
+}
+
 /**
  * Check if binary is writable other than root
  * @param filename - must be owned and writable only by root
@@ -737,6 +759,8 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     OPENSSL_cleanse( password_found_result.second, password_found_result.first );
     OPENSSL_free( password_found_result.second );
 
+    _chgrp( krb_cc_name.c_str(), "CF_KRB5CC_GID" );
+    _chmod( krb_cc_name.c_str(), "CF_KRB5CC_MODE" );
     return std::make_pair( error_code, krb_cc_name );
 }
 
