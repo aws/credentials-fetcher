@@ -16,7 +16,9 @@ fi
 echo "dotnethome=$dotnethome"
 
 dotnetlib=$dotnethome/shared/Microsoft.NETCore.App/$fwkver
-if [ -d /usr/share/dotnet/packs/Microsoft.NETCore.App.Ref/$fwkver/ref/net6.0/ ]; then
+if [ -d /usr/share/dotnet/packs/Microsoft.NETCore.App.Ref/$fwkver/ref/net8.0/ ]; then
+   dotnetlib=/usr/share/dotnet/packs/Microsoft.NETCore.App.Ref/$fwkver/ref/net8.0/
+elif [ -d /usr/share/dotnet/packs/Microsoft.NETCore.App.Ref/$fwkver/ref/net6.0/ ]; then
    dotnetlib=/usr/share/dotnet/packs/Microsoft.NETCore.App.Ref/$fwkver/ref/net6.0/
 fi
 echo "dotnetlib=$dotnetlib"

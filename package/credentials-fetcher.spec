@@ -16,13 +16,22 @@ Source0:        credentials-fetcher-v.1.3.6.tar.gz
 
 BuildRequires:  cmake3 make chrpath openldap-clients grpc-devel gcc-c++ glib2-devel jsoncpp-devel
 BuildRequires:  openssl-devel zlib-devel protobuf-devel re2-devel krb5-devel systemd-devel
-BuildRequires:  systemd-rpm-macros dotnet-sdk-6.0 grpc-plugins
+BuildRequires:  systemd-rpm-macros grpc-plugins
 
 %if 0%{?amzn} >= 2023
 BuildRequires:  aws-sdk-cpp-devel aws-sdk-cpp aws-sdk-cpp-static
 %endif
- 
-Requires: bind-utils openldap openldap-clients awscli dotnet-runtime-6.0 jsoncpp
+
+# fedora41 does not support .NET6
+%if 0%{?fedora} >= 41
+BuildRequires:  dotnet-sdk-8.0
+Requires:       dotnet-runtime-8.0
+%else
+BuildRequires:  dotnet-sdk-6.0
+Requires:       dotnet-runtime-6.0
+%endif
+
+Requires: bind-utils openldap openldap-clients awscli jsoncpp
 # No one likes you i686
 ExclusiveArch: x86_64 aarch64 s390x
  
