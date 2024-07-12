@@ -835,7 +835,7 @@ int main( int argc, char** argv )
             std::cout << "krb tickets will get created" << std::endl;
             create_krb_ticket_non_domain_joined( client, credspec_contents, username, password,
                                                  domain );
-            i++;
+            return 0;
         }
         else if(arg == "--renew_kerberos_tickets_non_domain_joined" ){
             if ( i + 2 < argc )
