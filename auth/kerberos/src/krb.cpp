@@ -25,6 +25,18 @@ static const std::string install_path_for_aws_cli = "/usr/bin/aws";
 
 extern "C" int my_kinit_main(int, char **);
 
+bool ecs_mode = false;
+
+bool set_ecs_mode( bool mode )
+{
+    ecs_mode = mode;
+}
+
+bool is_ecs_mode()
+{
+    return ecs_mode;
+}
+
 /**
  * Check if binary is writable other than root
  * @param filename - must be owned and writable only by root
@@ -596,6 +608,15 @@ std::pair<int, std::string> get_fqdn_from_domain_ip( std::string domain_ip,
         if ( !fqdn_str.empty() && ( fqdn_str.find( domain_name ) != std::string::npos ) )
         {
             return std::make_pair( EXIT_SUCCESS, fqdn_str );
+	} else {
+	    std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
+                    []( unsigned char c ) { return std::tolower( c ); } );
+            if ( !fqdn_str.empty() && ( fqdn_str.find( domain_name ) != std::string::npos ) )
+            {
+                 return std::make_pair( EXIT_SUCCESS, fqdn_str );
+            } else {
+                 return std::make_pair( EXIT_FAILURE, "" );
+            }
         }
     }
 
@@ -641,7 +662,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     std::string fqdn;
     fqdn = retrieve_secret_from_ecs_config(domain_controller_gmsa);
 
-    if(fqdn.empty())
+    if(fqdn.empty() && !is_ecs_mode())
     {
         std::pair<int, std::vector<std::string>> domain_ips = get_domain_ips( domain_name );
         if ( domain_ips.first != 0 )
