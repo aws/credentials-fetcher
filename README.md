@@ -114,6 +114,115 @@ journalctl -u credentials-fetcher
 |                      | '/var/credentials-fetcher/my-credspec.json:myLeaseId' | An optional lease id specified after a colon                               |
 | `CF_GMSA_OU`         | 'CN=Managed Service Accounts'                         | Component of GMSA distinguished name (see docs/cf_gmsa_ou.md)              |
 
+
+### Examples
+
+#### Testing with Active Directory domain-joined mode (opensource)
+ Credentials-fetcher in domainless mode assuming gMSA account 'WebApp01' has been setup as per https://learn.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts#use-case-for-creating-gmsa-account-for-domain-joined-container-hosts
+
+ * Either launch Amazon-Linux 2023 instance or build from source and run.
+ * Make sure the instance/server is domain-joined using the `realm list` command in Linux.
+ * Make sure Credentials-fetcher is running using:
+ 
+        journalctl -u credentials-fetcher
+ 
+* Install grpc for python as per https://grpc.io/docs/languages/python/quickstart/
+*  Create the grpc pb2 files using [credentialsfetcher.proto](https://github.com/aws/credentials-fetcher/blob/mainline/protos/credentialsfetcher.proto):
+
+       # python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. credentialsfetcher.proto
+
+*    Copy this code ([Create the credspec](https://learn.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts#create-a-credential-spec) and add it to the script as below ) (Alternatively, configure using the managed services at [AWS ECS mode](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html) and [AWS Fargate mode](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-linux-gmsa.html)
+)
+
+            # cat credentials_fetcher_client.py
+            import grpc
+            import credentialsfetcher_pb2
+            import credentialsfetcher_pb2_grpc
+
+            def run():
+            with grpc.insecure_channel('unix:///var/credentials-fetcher/socket/credentials_fetcher.sock') as channel:
+                stub = credentialsfetcher_pb2_grpc.CredentialsFetcherServiceStub(channel)
+                credspec_contents="{\"CmsPlugins\":[\"ActiveDirectory\"],\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-2725122404-4129967127-2630707939\",\"MachineAccountName\":\"WebApp01\",\"Guid\":\"e96e0e09-9305-462f-9e44-8a8179722897\",\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"WebApp01\",\"Scope\":\"contoso.com\"},{\"Name\":\"WebApp01\",\"Scope\":\"contoso\"}]}}"
+                contents = []
+                contents += [credspec_contents]
+                response = stub.AddKerberosLease(credentialsfetcher_pb2.CreateKerberosLeaseRequest(credspec_contents = contents))
+                print(f"Server response: {response}")
+
+            if __name__ == '__main__':
+                run()
+
+*   Configure Credentials-fetcher to create tickets for the 'WebApp01' gMSA account.
+
+        # python3 credentials_fetcher_client.py
+            Server response: lease_id: "94efba947d75728bbf70"
+            created_kerberos_file_paths: "/var/credentials-fetcher/krbdir/94efba947d75728bbf70/WebApp01"
+
+* Here is the resulting kerberos ticket that can be shared
+
+        # klist  /var/credentials-fetcher/krbdir/94efba947d75728bbf70/WebApp01/krb5cc
+            Ticket cache: FILE:/var/credentials-fetcher/krbdir/94efba947d75728bbf70/WebApp01/krb5cc
+            Default principal: WebApp01$@CONTOSO.COM
+
+      Valid starting     Expires            Service principal
+      07/17/24 22:42:42  07/18/24 08:42:42  krbtgt/CONTOSO.COM@CONTOSO.COM
+	    renew until 07/24/24 22:42:42
+
+#### Testing with Active Directory domainless mode (opensource )
+
+ Credentials-fetcher in domainless mode assuming gMSA account 'WebApp01' has been setup as per https://learn.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts#use-case-for-creating-gmsa-account-for-non-domain-joined-container-hosts 
+( Please substitute username, secret and password as needed)
+
+* Run credentials-fetcher as follows:
+
+        # credentials-fetcherd --aws_sm_secret_name aws/directoryservices/d-xxxxxx/gmsa // Substitute your secret name in AWS secrets manager
+
+* Install grpc for python as per https://grpc.io/docs/languages/python/quickstart/
+
+* Create the grpc pb2 files using [credentialsfetcher.proto](https://github.com/aws/credentials-fetcher/blob/mainline/protos/credentialsfetcher.proto):
+
+       # python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. credentialsfetcher.proto
+
+*    Copy this code ([Create the credspec](https://learn.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/manage-serviceaccounts#create-a-credential-spec) and add it to the script as below ) (Alternatively, configure using the managed services at [AWS ECS mode](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html) and [AWS Fargate mode](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-linux-gmsa.html)
+)
+
+    #  cat credentials_fetcher_client.py
+
+        import grpc
+        import credentialsfetcher_pb2
+        import credentialsfetcher_pb2_grpc
+
+        def run():
+            with grpc.insecure_channel('unix:///var/credentials-fetcher/socket/credentials_fetcher.sock') as channel:
+                stub = credentialsfetcher_pb2_grpc.CredentialsFetcherServiceStub(channel)
+                credspec_contents="{\"CmsPlugins\":[\"ActiveDirectory\"],\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-2725122404-4129967127-2630707939\",\"MachineAccountName\":\"WebApp01\",\"Guid\":\"e96e0e09-9305-462f-9e44-8a8179722897\",\"DnsTreeName\":\"contoso.com\",\"DnsName\":\"contoso.com\",\"NetBiosName\":\"contoso\"},\"ActiveDirectoryConfig\":{\"GroupManagedServiceAccounts\":[{\"Name\":\"WebApp01\",\"Scope\":\"contoso.com\"},{\"Name\":\"WebApp01\",\"Scope\":\"contoso\"}]}}"
+                contents = []
+                contents += [credspec_contents]
+                response = stub.AddNonDomainJoinedKerberosLease(credentialsfetcher_pb2.CreateNonDomainJoinedKerberosLeaseRequest(credspec_contents = contents, username="admin", password="mypassword", domain="contoso.com"))
+                print(f"Server response: {response}")
+
+        if __name__ == '__main__':
+            run()
+
+
+*   Configure Credentials-fetcher (in opensource mode) to create tickets for the 'WebApp01' gMSA account ( Alternatively, configure using the managed services at [AWS ECS mode](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html) and [AWS Fargate mode](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-linux-gmsa.html))
+
+        # python3 credentials_fetcher_client.py
+
+            Server response: lease_id: "34e2b89e3fd8a9bcb297"
+            created_kerberos_file_paths: "/var/credentials-fetcher/krbdir/34e2b89e3fd8a9bcb297/WebApp01"
+
+*   Here is the resulting kerberos ticket that can be shared
+
+        # klist  /var/credentials-fetcher/krbdir/34e2b89e3fd8a9bcb297/WebApp01/krb5cc
+
+            Ticket cache: FILE:/var/credentials-fetcher/krbdir/34e2b89e3fd8a9bcb297/WebApp01/krb5cc
+            Default principal: WebApp01$@CONTOSO.COM
+
+            Valid starting     Expires            Service principal
+            07/17/24 22:10:29  07/18/24 08:10:29  krbtgt/CONTOSO.COM@CONTOSO.COM
+                renew until 07/18/24 22:10:29
+
+
 ## Compatibility
 
 Running the Credentials-fetcher outside of Linux distributions is not
