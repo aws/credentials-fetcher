@@ -252,7 +252,7 @@ int write_meta_data_json( creds_fetcher::krb_ticket_info* krb_ticket_info,
 int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list,
                           std::string lease_id, std::string krb_files_dir );
 
-bool set_ecs_mode(bool);
+void set_ecs_mode(bool);
 bool is_ecs_mode();
 
 
