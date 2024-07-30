@@ -733,6 +733,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
             break;
         }
     }
+    fqdn_list.clear();
 
     if ( !found_valid_fqdn ) // ldapsearch did not work in any FQDN
     {
