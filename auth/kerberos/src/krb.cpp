@@ -15,6 +15,7 @@
 // https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/naming-conventions-for-computer-domain-site-ou
 #define HOST_NAME_LENGTH_LIMIT 15
 #define ENV_CF_GMSA_OU "CF_GMSA_OU"
+#define ENV_CF_GMSA_BASE_DN "CF_GMSA_BASE_DN" // baseObject scope - only the entry specified by the search base DN should be considered.
 static const std::vector<char> invalid_characters = {
     '&', '|', ';', ':', '$', '*', '?', '<', '>', '!',' ', '\\', '.',']', '[', '+', '\'', '`',
     '~', '}', '{', '"', ')', '('};
@@ -671,6 +672,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     if ( fqdn.empty() && !is_ecs_mode() )
     {
         std::pair<int, std::vector<std::string>> domain_ips = get_domain_ips( domain_name );
+        // TBD:: Use nslookup -type=any _ldap._tcp.dc._msdcs.CONTOSO.COM | grep msdcs | awk '{print $NF}' | sed 's/.$//g'
         if ( domain_ips.first != 0 )
         {
             cf_logger.logger( LOG_ERR, "ERROR: Cannot resolve domain IPs of %s", __func__, __LINE__,
@@ -688,6 +690,10 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
                 fqdn_list.push_back( fqdn_result.second );
             }
         }
+    } else {
+        if ( !fqdn.empty() ) {
+           fqdn_list.push_back(fqdn);
+        }
     }
 
     /**
@@ -696,9 +702,12 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
      *   msDS-ManagedPassword
      */
     std::string gmsa_ou = std::string( ",CN=Managed Service Accounts," );
+    std::string env_base_dn;
     if ( getenv( ENV_CF_GMSA_OU ) != NULL )
     {
         gmsa_ou = std::string( "," ) + std::string( getenv( ENV_CF_GMSA_OU ) ) + std::string( "," );
+    } else if ( getenv( ENV_CF_GMSA_BASE_DN ) != NULL ){
+        env_base_dn = std::string( getenv( ENV_CF_GMSA_BASE_DN ) );
     }
 
     bool found_valid_fqdn = false; // Valid if ldapsearch succeeds with a valid FQDN
@@ -706,11 +715,17 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
 
     for ( auto fqdn : fqdn_list )
     {
-        std::string cmd = std::string( "ldapsearch -H ldap://" ) + fqdn;
-        cmd += std::string( " -b 'CN=" ) + gmsa_account_name + gmsa_ou + base_dn +
-               std::string( "'" ) +
-               std::string( " -s sub  '(objectClass=msDs-GroupManagedServiceAccount)' "
+        std::string cmd;
+        if ( !env_base_dn.empty() ) {
+	    cmd = std::string("ldapsearch -LLL -Y GSSAPI -H ldap://") + fqdn;
+            cmd += std::string(" -b '") + env_base_dn + std::string("' msds-ManagedPassword");
+        } else {
+            cmd = std::string( "ldapsearch -H ldap://" ) + fqdn;
+            cmd += std::string( " -b 'CN=" ) + gmsa_account_name + gmsa_ou + base_dn +
+                   std::string( "'" ) +
+                   std::string( " -s sub  '(objectClass=msDs-GroupManagedServiceAccount)' "
                             " msDS-ManagedPassword" );
+        }
 
         cf_logger.logger( LOG_INFO, "%s", cmd.c_str() );
         std::cout << getCurrentTime() << '\t' << "INFO: " << cmd << std::endl;
