@@ -7,6 +7,8 @@
 #include <sys/types.h>
 #include <regex>
 #include <openssl/crypto.h>
+#include <iostream>
+#include <cstdio>
 
 // renew the ticket 1 hrs before the expiration
 #define RENEW_TICKET_HOURS 1
@@ -702,7 +704,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
      *   msDS-ManagedPassword
      */
     std::string gmsa_ou = std::string( ",CN=Managed Service Accounts," );
-    std::string env_base_dn;
+    std::string env_base_dn = retrieve_secret_from_ecs_config( ENV_CF_GMSA_BASE_DN );
     if ( getenv( ENV_CF_GMSA_OU ) != NULL )
     {
         gmsa_ou = std::string( "," ) + std::string( getenv( ENV_CF_GMSA_OU ) ) + std::string( "," );
@@ -718,7 +720,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
         std::string cmd;
         if ( !env_base_dn.empty() ) {
 	    cmd = std::string("ldapsearch -LLL -Y GSSAPI -H ldap://") + fqdn;
-            cmd += std::string(" -b '") + env_base_dn + std::string("' msds-ManagedPassword");
+            cmd += std::string(" -b ") + env_base_dn + std::string(" msds-ManagedPassword");
         } else {
             cmd = std::string( "ldapsearch -H ldap://" ) + fqdn;
             cmd += std::string( " -b 'CN=" ) + gmsa_account_name + gmsa_ou + base_dn +
@@ -730,23 +732,27 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
         cf_logger.logger( LOG_INFO, "%s", cmd.c_str() );
         std::cout << getCurrentTime() << '\t' << "INFO: " << cmd << std::endl;
         std::cout << cmd << std::endl;
-        ldap_search_result = exec_shell_cmd( cmd );
-        if ( ldap_search_result.first != 0 )
-        {
-            cf_logger.logger( LOG_ERR, "ERROR: %s:%d ldapsearch failed with FQDN = %s", __func__,
+
+	for (int i = 0; i < 2; i++)  {
+           ldap_search_result = exec_shell_cmd( cmd );
+           // Add retry, ldapsearch seems to fail and then succeed on retry
+           if ( ldap_search_result.first != 0 )
+           {
+               cf_logger.logger( LOG_ERR, "ERROR: %s:%d ldapsearch failed with FQDN = %s", __func__,
                               __LINE__, fqdn );
-            std::cout << "ERROR: ldapsearch failed with FQDN = " << fqdn << std::endl;
-            std::cout << getCurrentTime() << '\t'
+               std::cout << "ERROR: ldapsearch failed with FQDN = " << fqdn << std::endl;
+               std::cout << getCurrentTime() << '\t'
                       << "ERROR: ldapsearch failed to get gMSA credentials" << std::endl;
-        }
-        else
-        {
-            cf_logger.logger( LOG_INFO, "INFO: %s:%d ldapsearch succeeded with FQDN = %s", __func__,
+           }
+           else
+           {
+               cf_logger.logger( LOG_INFO, "INFO: %s:%d ldapsearch succeeded with FQDN = %s", __func__,
                               __LINE__, fqdn );
-            std::cout << "INFO: ldapsearch succeeded with FQDN = " << fqdn << std::endl;
-            found_valid_fqdn = true;
-            break;
-        }
+               std::cout << "INFO: ldapsearch succeeded with FQDN = " << fqdn << std::endl;
+               found_valid_fqdn = true;
+               break;
+           }
+	}
     }
     fqdn_list.clear();
 
@@ -1200,25 +1206,37 @@ std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
 
         std::string key = results[0];
         std::string value = results[1];
-        if ( !contains_invalid_characters_in_credentials(value) && ecs_variable_name.compare(key)==0 )
-        {
-            value.erase( std::remove( value.begin(), value.end(), '"' ), value.end() );
+        rtrim(key);
+        ltrim(value);
 
-            if( contains_invalid_characters_in_ad_account_name(value))
-            {
-                std::cout << getCurrentTime() << '\t' << "invalid domain controller name" <<
-                    std::endl;
-                return "";
-            }
-            return value;
+        if ( (key.compare("CF_GMSA_BASE_DN") == 0  && ecs_variable_name.compare(key) == 0) ||
+	     (key.compare("DOMAIN_CONTROLLER_GMSA") == 0 && ecs_variable_name.compare(key) == 0) ) {
+              return value;
         }
-        else{
-            std::cout << getCurrentTime() << '\t' << "invalid configuration provided, either "
+
+	if ( key.compare("CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA") == 0 &&
+               ecs_variable_name.compare(key) == 0 ) {
+             if ( !contains_invalid_characters_in_credentials(value) && ecs_variable_name.compare(key) == 0 )
+             {
+                 value.erase( std::remove( value.begin(), value.end(), '"' ), value.end() );
+
+                 if( contains_invalid_characters_in_ad_account_name(value))
+                 {
+                     std::cout << getCurrentTime() << '\t' << "invalid domain controller name" <<
+                         std::endl;
+                     return "";
+                 }
+                 return value;
+             }
+             else {
+                 std::cout << getCurrentTime() << '\t' << "invalid configuration provided, either "
                                                      "key/value is not in the correct format" <<
-                std::endl;
-            return "";
-        }
+                 std::endl;
+                 return "";
+             }
+	}
     }
+
     return "";
 }
 
@@ -1237,6 +1255,13 @@ std::vector<std::string> split_string(std::string input_string, char delimiter)
     while (std::getline(input_string_stream, token, delimiter))
     {
         results.push_back(token);
+        if (delimiter == '=') {
+            while (std::getline(input_string_stream, token))
+            {
+               results.push_back(token);
+            }
+            break;
+        }
     }
     return results;
 }
