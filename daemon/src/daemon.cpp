@@ -184,23 +184,23 @@ void truncate_log_files()
                 result = exec_shell_cmd( cmd );
                 if ( result.first != 0 )
                 {
-                    std::cout << getCurrentTime() << '\t' << "ERROR: truncating log file failed" << std::endl;
+                    std::cerr << getCurrentTime() << '\t' << "ERROR: truncating log file failed" << std::endl;
                 }
                 cmd = "cp -f " + log_path + "/tmp.log " +log_path + "/credentials-fetcher.log";
 
                 result = exec_shell_cmd( cmd );
                 if ( result.first != 0 )
                 {
-                    std::cout << getCurrentTime() << '\t' << "ERROR: copy file failed" <<
+                    std::cerr << getCurrentTime() << '\t' << "ERROR: copy file failed" <<
                         std::endl;
                 }
             }
-            std::cout << getCurrentTime() << '\t' << "INFO: log file truncate successful" <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: log file truncate successful" <<
                                                               std::endl;
         }
         catch ( const std::exception& ex  )
         {
-            std::cout << getCurrentTime() << '\t' << "ERROR: failed truncate log file" << ex.what()
+            std::cerr << getCurrentTime() << '\t' << "ERROR: failed truncate log file" << ex.what()
                       << std::endl;
         }
     }
@@ -251,8 +251,8 @@ int main( int argc, const char* argv[] )
     cf_daemon.logging_dir = CF_LOGGING_DIR;
     cf_daemon.unix_socket_dir = CF_UNIX_DOMAIN_SOCKET_DIR;
 
-    std::cout << "credentials-fetcher daemon has started and running"  << std::endl;
-    std::cout << "on request failures check logs located at " + cf_daemon.logging_dir << std::endl;;
+    std::cerr << "credentials-fetcher daemon has started and running"  << std::endl;
+    std::cerr << "on request failures check logs located at " + cf_daemon.logging_dir << std::endl;;
 
     if ( getenv(ENV_CF_CRED_SPEC_FILE) != NULL)
     {
@@ -262,7 +262,7 @@ int main( int argc, const char* argv[] )
 
         if (parseResult == EXIT_FAILURE)
         {
-            std::cout << "Failed parsing environment variable " << getenv(ENV_CF_CRED_SPEC_FILE) << std::endl;
+            std::cerr << "Failed parsing environment variable " << getenv(ENV_CF_CRED_SPEC_FILE) << std::endl;
             cf_daemon.cf_logger.logger( LOG_ERR, "Failed parsing environment variable %s", getenv(ENV_CF_CRED_SPEC_FILE) );
 
             exit( EXIT_FAILURE);
@@ -271,7 +271,7 @@ int main( int argc, const char* argv[] )
         if (!std::filesystem::exists( cred_file))
         {
             cred_file_lease_id.clear();
-            std::cout << "Ignoring CF_CREF_FILE, file " << cred_file << " not found" << std::endl;
+            std::cerr << "Ignoring CF_CREF_FILE, file " << cred_file << " not found" << std::endl;
         }
         else
         {
@@ -286,11 +286,11 @@ int main( int argc, const char* argv[] )
     cf_daemon.domain_name = CF_TEST_DOMAIN_NAME;
     cf_daemon.gmsa_account_name = CF_TEST_GMSA_ACCOUNT;
 
-    std::cout << "krb_files_dir = " << cf_daemon.krb_files_dir << std::endl;
-    //std::cout << "cred_file = " << cf_daemon.cred_file <<  " (lease id: " << cred_file_lease_id
+    std::cerr << "krb_files_dir = " << cf_daemon.krb_files_dir << std::endl;
+    //std::cerr << "cred_file = " << cf_daemon.cred_file <<  " (lease id: " << cred_file_lease_id
              //   << ")" << std::endl;
-    std::cout << "logging_dir = " << cf_daemon.logging_dir << std::endl;
-    std::cout << "unix_socket_dir = " << cf_daemon.unix_socket_dir << std::endl;
+    std::cerr << "logging_dir = " << cf_daemon.logging_dir << std::endl;
+    std::cerr << "unix_socket_dir = " << cf_daemon.unix_socket_dir << std::endl;
 
     if ( cf_daemon.run_diagnostic )
     {
@@ -319,7 +319,7 @@ int main( int argc, const char* argv[] )
         
         int specFileReturn = ProcessCredSpecFile(cf_daemon.krb_files_dir, cf_daemon.cred_file, cf_daemon.cf_logger, cred_file_lease_id);
         if (specFileReturn == EXIT_FAILURE) {
-            std::cout << "ProcessCredSpecFile() non 0 " << std::endl;
+            std::cerr << "ProcessCredSpecFile() non 0 " << std::endl;
             exit( EXIT_FAILURE );
         }
     }

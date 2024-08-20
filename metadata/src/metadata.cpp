@@ -65,7 +65,7 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
                 {
                     std::cout << getCurrentTime() << '\t' << "ERROR: krb file path contains invalid characters"  <<
                         std::endl;
-                    free( krb_ticket_info );
+                    delete ( krb_ticket_info );
                     break;
                 }
 

@@ -63,6 +63,7 @@ namespace creds_fetcher
         std::string domain_name;
         std::string domainless_user;
         std::string credspec_info;
+        std::string distinguished_name;
     };
 
     /*
@@ -145,28 +146,26 @@ namespace creds_fetcher
  * Methods in auth module
  */
 std::vector<std::string>  get_meta_data_file_paths(std::string krbdir);
-std::string renew_gmsa_ticket( creds_fetcher::krb_ticket_info* krb_ticket, std::string
-                                                                               domain_name,
+std::string renew_gmsa_ticket( creds_fetcher::krb_ticket_info* krb_ticket, std::string domain_name,
                                std::string username, std::string password,
                                creds_fetcher::CF_logger& cf_logger  );
 void truncate_log_files();
 std::string getCurrentTime();
 int generate_host_machine_krb_ticket( const char* krb_ccname = "" );
 std::pair<int, std::string> exec_shell_cmd( std::string cmd );
-int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger );
-int get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name,
-                         creds_fetcher::CF_logger& cf_logger );
-int get_domainless_user_krb_ticket( std::string domain_name, std::string username, std::string
-                                                                                   password,
-                                creds_fetcher::CF_logger& cf_logger );
+std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger );
+std::pair<int, std::string> get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name,
+                                                 creds_fetcher::CF_logger& cf_logger );
+std::pair<int, std::string> get_domainless_user_krb_ticket( std::string domain_name,
+                                                            std::string username, std::string password,
+                                                            creds_fetcher::CF_logger& cf_logger );
 
 std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
                                                  const std::string& gmsa_account_name,
                                                  const std::string& krb_cc_name,
                                                  creds_fetcher::CF_logger& cf_logger );
 
-std::list<std::string> renew_kerberos_tickets_domainless(std::string krb_files_dir, std::string
-                                                                                         domain_name,
+std::list<std::string> renew_kerberos_tickets_domainless( std::string krb_files_dir, std::string domain_name,
                                                           std::string username, std::string password,
                                                           creds_fetcher::CF_logger& cf_logger );
 
@@ -199,7 +198,7 @@ bool isValidDomain(const std::string& value);
 int HealthCheck(std::string serviceName);
 
 int parse_config_file( creds_fetcher::Daemon& cf_daemon );
-std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name);
+std::string retrieve_variable_from_ecs_config(std::string ecs_variable_name);
 std::vector<std::string> split_string(std::string input_string, char delimiter);
 
 /**

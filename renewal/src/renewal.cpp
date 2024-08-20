@@ -61,19 +61,18 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                         int num_retries = 1;
                         for ( int i = 0; i <= num_retries; i++ )
                         {
-                            gmsa_ticket_result = get_gmsa_krb_ticket(
-                                krb_ticket->domain_name, krb_ticket->service_account_name,
-                                krb_cc_name, cf_logger );
+                            gmsa_ticket_result = get_gmsa_krb_ticket (
+                                                      krb_ticket->domain_name, krb_ticket->service_account_name,
+                                                      krb_cc_name, cf_logger );
                             if ( gmsa_ticket_result.first != 0 )
                             {
-                                int status = -1;
+                                std::pair<int, std::string> status;
                                 cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket using account %s",
                                                     krb_ticket->service_account_name.c_str() );
-                                if (domainless_user.find("awsdomainlessusersecret") !=
-                                                           std::string::npos) {
+                                if (domainless_user.find("awsdomainlessusersecret") != std::string::npos) {
                                     int pos = domainless_user.find(":");
                                     std::string domainlessUser = domainless_user.substr(pos + 1);
-                                    status = get_user_krb_ticket(krb_ticket->domain_name,
+                                    status = get_user_krb_ticket( krb_ticket->domain_name,
                                                                   domainlessUser, cf_logger );
                                 }
                                 else
@@ -81,7 +80,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                                     status = get_machine_krb_ticket( krb_ticket->domain_name,
                                                                          cf_logger );
                                 }
-                                if ( status < 0 )
+                                if ( status.first < 0 )
                                 {
                                     cf_logger.logger( LOG_ERR,
                                                       "Error %d: Cannot get machine krb ticket",

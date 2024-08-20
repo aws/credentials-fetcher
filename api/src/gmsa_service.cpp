@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <regex>
 #include <openssl/crypto.h>
+#include <string>
 
 #if AMAZON_LINUX_DISTRO
 #include <aws/core/Aws.h>
@@ -176,7 +177,7 @@ class CredentialsFetcherImpl final
         cq_ = builder.AddCompletionQueue();
         // Finally assemble the server.
         server_ = builder.BuildAndStart();
-        std::cout << getCurrentTime() << '\t' << "INFO: Server listening on " << server_address
+        std::cerr << getCurrentTime() << '\t' << "INFO: Server listening on " << server_address
                   << std::endl;
 
         // Proceed to the server's main loop.
@@ -214,7 +215,7 @@ class CredentialsFetcherImpl final
                 return;
             }
 
-            std::cout << getCurrentTime() << '\t' << "INFO: CallDataHealthCheck " << this << " "
+            std::cerr << getCurrentTime() << '\t' << "INFO: CallDataHealthCheck " << this << " "
                                                                                           "status: "
                                                                                        "" <<
                 status_ << std::endl;
@@ -260,7 +261,7 @@ class CredentialsFetcherImpl final
             {
                 return;
             }
-            std::cout << getCurrentTime() << '\t' << "INFO: CallDataHealthCheck " << this << " "
+            std::cerr << getCurrentTime() << '\t' << "INFO: CallDataHealthCheck " << this << " "
                                                                                           "status: "
                                                                                        "" <<
                 status_ << std::endl;
@@ -366,7 +367,7 @@ class CredentialsFetcherImpl final
                 return;
             }
 
-            std::cout << getCurrentTime() << '\t' << "INFO: CallDataCreateKerberosArnLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: CallDataCreateKerberosArnLease " <<
                 this << "status: " << status_ << std::endl;
 
             if ( status_ == CREATE )
@@ -421,7 +422,7 @@ class CredentialsFetcherImpl final
                         {
                             err_msg = "ERROR: credentialspec arn should not be empty";
 
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
                         }
 
@@ -433,7 +434,7 @@ class CredentialsFetcherImpl final
                         {
                             err_msg = "ERROR: credentialspec arn is not valid";
 
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
                         }
 
@@ -445,7 +446,7 @@ class CredentialsFetcherImpl final
                         {
                             err_msg = "ERROR: mount path is invalid";
 
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
                         }
 
@@ -464,7 +465,7 @@ class CredentialsFetcherImpl final
                             {
                                 err_msg = "ERROR: invalid object for credentialspec in s3";
 
-                                std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                                std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                                 break;
                             }
                             std::string response =
@@ -474,7 +475,7 @@ class CredentialsFetcherImpl final
                             {
                                 err_msg = "ERROR: credentialspec cannot be retrieved from s3";
 
-                                std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                                std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                                 break;
                             }
                             krb_ticket_arns->credential_spec_arn = results[0];
@@ -483,7 +484,7 @@ class CredentialsFetcherImpl final
                             if(parse_result != 0)
                             {
                                 err_msg = "ERROR: invalid credentialspec fields";
-                                          std::cout << getCurrentTime() << '\t' << err_msg
+                                          std::cerr << getCurrentTime() << '\t' << err_msg
                                           << std::endl;
                                 break;
                             }
@@ -496,7 +497,7 @@ class CredentialsFetcherImpl final
                                 if(secretsArn.empty())
                                 {
                                     err_msg = "ERROR: invalid secrets manager arn";
-                                    std::cout << getCurrentTime() << '\t' << err_msg
+                                    std::cerr << getCurrentTime() << '\t' << err_msg
                                               << std::endl;
                                     break;
                                 }
@@ -542,7 +543,7 @@ class CredentialsFetcherImpl final
                                         else
                                         {
                                             err_msg = "ERROR: found duplicate mount paths";
-                                            std::cout << getCurrentTime() << '\t' << err_msg
+                                            std::cerr << getCurrentTime() << '\t' << err_msg
                                                       << std::endl;
                                             break;
                                         }
@@ -552,7 +553,7 @@ class CredentialsFetcherImpl final
                                         err_msg =
                                             "ERROR: domainless AD user credentials is not valid/ "
                                             "credentials should not be more than 256 charaters";
-                                        std::cout << getCurrentTime() << '\t' << err_msg
+                                        std::cerr << getCurrentTime() << '\t' << err_msg
                                                   << std::endl;
                                         break;
                                     }
@@ -560,7 +561,7 @@ class CredentialsFetcherImpl final
                                 else
                                 {
                                     err_msg = "ERROR: invalid domainName/username";
-                                    std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                                    std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                                     break;
                                 }
                             }
@@ -582,7 +583,7 @@ class CredentialsFetcherImpl final
                 else
                 {
                         err_msg = "Error: access credentials should not be empty";
-                        std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                        std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                 }
 
                 create_arn_krb_reply_.set_lease_id(lease_id);
@@ -593,24 +594,22 @@ class CredentialsFetcherImpl final
                     for ( auto krb_ticket : krb_ticket_info_list )
                     {
                         // invoke to get machine ticket
-                        int status = 0;
+                        std::pair<int, std::string> status;
                         if ( username.empty()  ||  password.empty() )
                         {
                             cf_logger.logger( LOG_ERR, "Invalid credentials for "
                                                        "domainless user ", username.c_str());
                             err_msg = "ERROR: Invalid credentials for domainless user";
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
                         }
-                        status = get_domainless_user_krb_ticket( domain,
-                                                                 username, password,
+                        status = get_domainless_user_krb_ticket( domain, username, password,
                                                                  cf_logger );
-                        if ( status < 0 )
+                        if ( status.first < 0 )
                         {
-                            cf_logger.logger( LOG_ERR, "Error %d: cannot domainless user kerberos tickets",
-                                              status );
-                            err_msg = "ERROR: cannot retrieve domainless user kerberos tickets";
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            err_msg = "ERROR :" + std::to_string(status.first) + ": Cannot retrieve domainless user kerberos tickets";
+                            cf_logger.logger( LOG_ERR, err_msg.c_str(), status );
+                            std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
                         }
 
@@ -632,18 +631,16 @@ class CredentialsFetcherImpl final
                                 krb_ccname_str, cf_logger );
                         if ( gmsa_ticket_result.first != 0 )
                         {
-                            err_msg = "ERROR: Cannot get gMSA krb ticket";
-                            std::cout << getCurrentTime() << '\t' << err_msg <<
-                                std::endl;
-                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket",
-                                              status );
+                            err_msg = "ERROR: " + std::to_string(status.first) + ": Cannot get gMSA krb ticket";
+                            std::cerr << getCurrentTime() << '\t' << err_msg.c_str() << std::endl;
+                            cf_logger.logger( LOG_ERR, err_msg.c_str(), status.first );
                             break;
                         }
                         else
                         {
                             cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
                                               gmsa_ticket_result.second.c_str() );
-                            std::cout << getCurrentTime() << '\t' << "INFO: gMSA ticket is "
+                            std::cerr << getCurrentTime() << '\t' << "INFO: gMSA ticket is "
                                                                         "created"
                                       << std::endl;
                         }
@@ -715,7 +712,7 @@ class CredentialsFetcherImpl final
                 return;
             }
 
-            std::cout << getCurrentTime() << '\t' << "INFO: CallDataCreateKerberosArnLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: CallDataCreateKerberosArnLease " <<
                 this << "status: " << status_ << std::endl;
 
             if ( status_ == CREATE )
@@ -818,7 +815,7 @@ class CredentialsFetcherImpl final
                 return;
             }
 
-            std::cout << getCurrentTime() << '\t' << "INFO: RenewKerberosArnLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: RenewKerberosArnLease " <<
                 this << "status: " << status_ << std::endl;
 
             if ( status_ == CREATE )
@@ -879,7 +876,7 @@ class CredentialsFetcherImpl final
                                 if ( response.empty() )
                                 {
                                     err_msg = "ERROR: credentialspec cannot be retrieved from s3";
-                                    std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                                    std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                                     break;
                                 }
 
@@ -889,7 +886,7 @@ class CredentialsFetcherImpl final
                                 if(parse_result != 0)
                                 {
                                     err_msg = "ERROR: invalid credentialspec fields";
-                                    std::cout << getCurrentTime() << '\t' << err_msg
+                                    std::cerr << getCurrentTime() << '\t' << err_msg
                                               << std::endl;
                                     break;
                                 }
@@ -902,7 +899,7 @@ class CredentialsFetcherImpl final
                                     if(secretsArn.empty())
                                     {
                                         err_msg = "ERROR: invalid secrets manager arn";
-                                        std::cout << getCurrentTime() << '\t' << err_msg
+                                        std::cerr << getCurrentTime() << '\t' << err_msg
                                                   << std::endl;
                                         break;
                                     }
@@ -934,7 +931,7 @@ class CredentialsFetcherImpl final
                                             err_msg =
                                                 "ERROR: domainless AD user credentials is not valid/ "
                                                 "credentials should not be more than 256 charaters";
-                                            std::cout << getCurrentTime() << '\t' << err_msg
+                                            std::cerr << getCurrentTime() << '\t' << err_msg
                                                       << std::endl;
                                             break;
                                         }
@@ -942,7 +939,7 @@ class CredentialsFetcherImpl final
                                     else
                                     {
                                         err_msg = "ERROR: invalid domainName/username";
-                                        std::cout << getCurrentTime() << '\t' << err_msg
+                                        std::cerr << getCurrentTime() << '\t' << err_msg
                                                   << std::endl;
                                         break;
                                     }
@@ -954,7 +951,7 @@ class CredentialsFetcherImpl final
                 else
                 {
                     err_msg = "ERROR: invalid credentials/region";
-                    std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                    std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                 }
 
                 secureClearString(username);
@@ -997,7 +994,7 @@ class CredentialsFetcherImpl final
             {
                 return;
             }
-            std::cout << getCurrentTime() << '\t' << "INFO: RenewKerberosArnLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: RenewKerberosArnLease " <<
                 this << "status: " << status_ << std::endl;
 
             if ( status_ == CREATE )
@@ -1106,7 +1103,7 @@ class CredentialsFetcherImpl final
                 return;
             }
 
-            std::cout << getCurrentTime() << '\t' << "INFO: CallDataCreateKerberosLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: CallDataCreateKerberosLease " <<
                 this << "status: " << status_ << std::endl;
 
             if ( status_ == CREATE )
@@ -1146,7 +1143,7 @@ class CredentialsFetcherImpl final
                     if(parse_result != 0)
                     {
                         err_msg = "ERROR: invalid credentialspec fields";
-                                  std::cout << getCurrentTime() << '\t' << err_msg
+                                  std::cerr << getCurrentTime() << '\t' << err_msg
                                   << std::endl;
                         break;
                     }
@@ -1169,7 +1166,7 @@ class CredentialsFetcherImpl final
                     else
                     {
                         err_msg = "Error: credential spec provided is not properly formatted";
-                        std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                        std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                         break;
                     }
                 }
@@ -1179,7 +1176,7 @@ class CredentialsFetcherImpl final
                     for ( auto krb_ticket : krb_ticket_info_list )
                     {
                         // invoke to get machine ticket
-                        int status = 0;
+                        std::pair<int, std::string> status;
                         if ( aws_sm_secret_name.length() != 0 )
                         {
                             status = get_user_krb_ticket( krb_ticket->domain_name,
@@ -1191,12 +1188,12 @@ class CredentialsFetcherImpl final
                         {
                             status = get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
                         }
-                        if ( status < 0 )
+                        if ( status.first < 0 )
                         {
                             cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
                                               status );
                             err_msg = "ERROR: cannot get machine krb ticket";
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
                         }
 
@@ -1206,7 +1203,7 @@ class CredentialsFetcherImpl final
                             cf_logger.logger( LOG_INFO,
                                               "Directory already exists: "
                                               "%s",
-+                                              krb_file_path.c_str() );
+                                               krb_file_path.c_str() );
                             break;
                         }
                         std::filesystem::create_directories( krb_file_path );
@@ -1227,7 +1224,7 @@ class CredentialsFetcherImpl final
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: Cannot get gMSA krb ticket";
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                             cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket",
                                               status );
                             break;
@@ -1236,7 +1233,7 @@ class CredentialsFetcherImpl final
                         {
                             cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
                                               gmsa_ticket_result.second.c_str() );
-                            std::cout << getCurrentTime() << '\t' << "INFO: gMSA ticket is at "
+                            std::cerr << getCurrentTime() << '\t' << "INFO: gMSA ticket is at "
                                                                         "" <<
                                 gmsa_ticket_result.second
                                       << std::endl;
@@ -1283,7 +1280,7 @@ class CredentialsFetcherImpl final
             {
                 return;
             }
-            std::cout << getCurrentTime() << '\t' << "INFO: CallDataCreateKerberosLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: CallDataCreateKerberosLease " <<
                 this << "status: " << status_ << std::endl;
 
             if ( status_ == CREATE )
@@ -1386,7 +1383,7 @@ class CredentialsFetcherImpl final
                 return;
             }
 
-            std::cout << getCurrentTime() << '\t' << "INFO: AddNonDomainJoinedKerberosLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: AddNonDomainJoinedKerberosLease " <<
                 this << "status: " << status_ << std::endl;
 
             if ( status_ == CREATE )
@@ -1437,7 +1434,7 @@ class CredentialsFetcherImpl final
                             {
                                 err_msg = "Error: credentialspec content shouldn't be empty "
                                           "formatted";
-                                std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                                std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                                 break;
                             }
                             creds_fetcher::krb_ticket_info* krb_ticket_info =
@@ -1450,7 +1447,7 @@ class CredentialsFetcherImpl final
                             if(parse_result != 0)
                             {
                                 err_msg = "ERROR: invalid credentialspec fields";
-                                          std::cout << getCurrentTime() << '\t' << err_msg
+                                          std::cerr << getCurrentTime() << '\t' << err_msg
                                           << std::endl;
                                 break;
                             }
@@ -1474,7 +1471,7 @@ class CredentialsFetcherImpl final
                             {
                                 err_msg = "Error: credential spec provided is not properly "
                                           "formatted";
-                                std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                                std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                                 break;
                             }
                         }
@@ -1483,13 +1480,13 @@ class CredentialsFetcherImpl final
                     {
                         err_msg = "Error: domainless AD user credentials is not valid/ "
                                   "credentials should not be more than 256 charaters";
-                        std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                        std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                     }
                 }
                 else
                 {
                    err_msg = "Error: invalid domainName/username";
-                   std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                   std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                 }
                 if ( err_msg.empty() )
                 {
@@ -1497,24 +1494,23 @@ class CredentialsFetcherImpl final
                     for ( auto krb_ticket : krb_ticket_info_list )
                     {
                         // invoke to get machine ticket
-                        int status = 0;
+                        std::pair<int, std::string> status;
                         if ( username.empty()  ||  password.empty() )
                         {
                             cf_logger.logger( LOG_ERR, "Invalid credentials for "
                                                        "domainless user ", username.c_str());
                             err_msg = "ERROR: Invalid credentials for domainless user";
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
                         }
-                        status = get_domainless_user_krb_ticket( domain,
-                                                                 username, password,
-                                                                     cf_logger );
-                        if ( status < 0 )
+                        status = get_domainless_user_krb_ticket( domain, username, password,
+                                                                 cf_logger );
+                        if ( status.first < 0 )
                         {
-                            cf_logger.logger( LOG_ERR, "Error %d: cannot domainless user kerberos tickets",
-                                              status );
-                            err_msg = "ERROR: cannot retrieve domainless user kerberos tickets";
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                            err_msg = "ERROR: " + std::to_string(status.first) +
+                                      ": cannot retrieve domainless user kerberos tickets";
+                            cf_logger.logger( LOG_ERR, err_msg.c_str(), status.first );
+                            std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
                         }
 
@@ -1545,17 +1541,15 @@ class CredentialsFetcherImpl final
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: Cannot get gMSA krb ticket";
-                            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
-                            cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket",
-                                              status );
+                            std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
+                            cf_logger.logger( LOG_ERR, err_msg.c_str(), gmsa_ticket_result.second );
                             break;
                         }
                         else
                         {
                             cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
                                               gmsa_ticket_result.second.c_str() );
-                            std::cout << getCurrentTime() << '\t' << "INFO: gMSA ticket is "
-                                                                        "created"
+                            std::cerr << getCurrentTime() << '\t' << "INFO: gMSA ticket is created"
                                       << std::endl;
                         }
                         create_domainless_krb_reply_.add_created_kerberos_file_paths( krb_file_path );
@@ -1605,7 +1599,7 @@ class CredentialsFetcherImpl final
             {
                 return;
             }
-            std::cout << getCurrentTime() << '\t' << "INFO: AddNonDomainJoinedKerberosLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: AddNonDomainJoinedKerberosLease " <<
                 this << "status: " << status_ << std::endl;
 
             if ( status_ == CREATE )
@@ -1712,7 +1706,7 @@ class CredentialsFetcherImpl final
                 return;
             }
 
-            std::cout << getCurrentTime() << '\t' << "INFO: RenewNonDomainJoinedKerberosLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: RenewNonDomainJoinedKerberosLease " <<
                 this << "status: " << status_ << std::endl;
 
             if ( status_ == CREATE )
@@ -1763,13 +1757,13 @@ class CredentialsFetcherImpl final
                     {
                         err_msg = "Error: domainless AD user credentials is not valid/ "
                                   "credentials should not be more than 256 charaters";
-                        std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                        std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                     }
                 }
                 else
                 {
                     err_msg = "Error: invalid domainName/username";
-                    std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                    std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                 }
 
                 secureClearString(username);
@@ -1807,7 +1801,7 @@ class CredentialsFetcherImpl final
             {
                 return;
             }
-            std::cout << getCurrentTime() << '\t' << "INFO: RenewNonDomainJoinedKerberosLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: RenewNonDomainJoinedKerberosLease " <<
                 this << "status: " << status_ << std::endl;
             if ( status_ == CREATE )
             {
@@ -1914,7 +1908,7 @@ class CredentialsFetcherImpl final
             {
                 return;
             }
-            std::cout << getCurrentTime() << '\t' << "INFO: CallDataDeleteKerberosLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: CallDataDeleteKerberosLease " <<
                 this << "status: " << status_ << std::endl;
 
             if ( status_ == CREATE )
@@ -1956,7 +1950,7 @@ class CredentialsFetcherImpl final
                 else
                 {
                     err_msg = "Error: lease_id is not valid";
-                    std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+                    std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
                 }
 
                 // And we are done! Let the gRPC runtime know we've finished, using the
@@ -1990,7 +1984,7 @@ class CredentialsFetcherImpl final
             {
                 return;
             }
-            std::cout << getCurrentTime() << '\t' << "INFO: CallDataDeleteKerberosLease " <<
+            std::cerr << getCurrentTime() << '\t' << "INFO: CallDataDeleteKerberosLease " <<
                 this << "status: " << status_ << std::endl;
 
             if ( status_ == CREATE )
@@ -2217,7 +2211,7 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
     {
         if ( credspec_data.empty() )
         {
-            std::cout << getCurrentTime() << '\t' << "ERROR: credspec is empty"<< std::endl;
+            std::cerr << getCurrentTime() << '\t' << "ERROR: credspec is empty"<< std::endl;
             return -1;
         }
 
@@ -2243,7 +2237,7 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
         if(!isValidDomain(domain_name) ||
              contains_invalid_characters_in_ad_account_name(service_account_name))
         {
-            std::cout << getCurrentTime() << '\t' << "ERROR: credentialspec file is not formatted"
+            std::cerr << getCurrentTime() << '\t' << "ERROR: credentialspec file is not formatted"
                                                      " properly" <<
                 std::endl;
             return -1;
@@ -2254,7 +2248,7 @@ int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* 
     }
     catch ( ... )
     {
-        std::cout << getCurrentTime() << '\t' << "ERROR: domain-joined credspec is not properly "
+        std::cerr << getCurrentTime() << '\t' << "ERROR: domain-joined credspec is not properly "
                                                  "formatted "
                                                  "failed" << std::endl;
         return -1;
@@ -2277,7 +2271,7 @@ int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ti
     {
         if ( credspec_data.empty() )
         {
-            std::cout << getCurrentTime() << '\t' << "ERROR: credspec is empty"<< std::endl;
+            std::cerr << getCurrentTime() << '\t' << "ERROR: credspec is empty"<< std::endl;
             return -1;
         }
 
@@ -2303,7 +2297,7 @@ int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ti
         if(!isValidDomain(domain_name) ||
              contains_invalid_characters_in_ad_account_name(service_account_name))
         {
-            std::cout << getCurrentTime() << '\t' << "ERROR: credentialspec file is not formatted"
+            std::cerr << getCurrentTime() << '\t' << "ERROR: credentialspec file is not formatted"
                                                      " properly" <<
                 std::endl;
             return -1;
@@ -2313,7 +2307,7 @@ int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ti
         std::string domainless_user_arn = root["ActiveDirectoryConfig"]["HostAccountConfig"]["PluginInput"]["CredentialArn"].asString();
         if (domainless_user_arn.empty())
         {
-            std::cout << getCurrentTime() << '\t' << "ERROR: secrets manager arn is not valid" <<
+            std::cerr << getCurrentTime() << '\t' << "ERROR: secrets manager arn is not valid" <<
                 std::endl;
             return -1;
         }
@@ -2327,7 +2321,7 @@ int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ti
     }
     catch ( ... )
     {
-        std::cout << getCurrentTime() << '\t' << "ERROR: domainless credspec is not properly "
+        std::cerr << getCurrentTime() << '\t' << "ERROR: domainless credspec is not properly "
                                                  "formatted "
                                                  "failed" << std::endl;
         return -1;
@@ -2351,7 +2345,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     cf_logger.logger( LOG_INFO, "Generating lease id %s", cred_file_lease_id.c_str());
 
     if ( !std::filesystem::exists( credspec_filepath ) ){
-        std::cout << getCurrentTime() << '\t' << "The credential spec file " << credspec_filepath << " was not found!" << std::endl;
+        std::cerr << getCurrentTime() << '\t' << "The credential spec file " << credspec_filepath << " was not found!" << std::endl;
         cf_logger.logger( LOG_ERR, "The credential spec file %s was not found!",
                                     credspec_filepath.c_str() );
         return EXIT_FAILURE;
@@ -2368,7 +2362,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     else 
     {
         cf_logger.logger( LOG_ERR, "Unable to open credential spec file: %s", credspec_filepath.c_str());
-        std::cout << getCurrentTime() << '\t' << "Unable to open credential spec file: " <<
+        std::cerr << getCurrentTime() << '\t' << "Unable to open credential spec file: " <<
             credspec_filepath <<
             std::endl;
 
@@ -2390,15 +2384,15 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
     else
     {
         err_msg = "Error: credential spec provided is not properly formatted";
-        std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+        std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
     }
     
     if ( err_msg.empty() )
     {
-        int status;
+        std::pair<int, std::string> status;
         // invoke to get machine ticket
         status = get_machine_krb_ticket( krb_ticket_info->domain_name, cf_logger );
-        if ( status < 0 )
+        if ( status.first < 0 )
         {
             cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket",
                                 status );
@@ -2434,7 +2428,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
         if ( gmsa_ticket_result.first != 0 )
         {
             err_msg = "ERROR: Cannot get gMSA krb ticket";
-            std::cout << getCurrentTime() << '\t' << err_msg << std::endl;
+            std::cerr << getCurrentTime() << '\t' << err_msg << std::endl;
             cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket",
                                 status );
         }
@@ -2444,7 +2438,7 @@ int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath
 
             cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
                                 gmsa_ticket_result.second.c_str() );
-            std::cout << getCurrentTime() << '\t' << "INFO: gMSA ticket is created"
+            std::cerr << getCurrentTime() << '\t' << "INFO: gMSA ticket is created"
                         << std::endl;
         }
     }
@@ -2497,7 +2491,7 @@ std::string get_caller_id(std::string region,
             auto provider = Aws::MakeShared<Aws::Auth::SimpleAWSCredentialsProvider>("alloc-tag", credentials);
             auto creds = provider->GetAWSCredentials();
             if (creds.IsEmpty()) {
-                std::cout << getCurrentTime() << '\t' << "ERROR: Failed authentication invalid creds" << std::endl;
+                std::cerr << getCurrentTime() << '\t' << "ERROR: Failed authentication invalid creds" << std::endl;
                 return std::string("");
             }
             std::smatch arn_match;
@@ -2511,7 +2505,7 @@ std::string get_caller_id(std::string region,
             if (!outcome.IsSuccess())
             {
                 const Aws::STS::STSError &err = outcome.GetError();
-                std::cout << getCurrentTime() << '\t' << "ERROR: retrieving caller info failed:"
+                std::cerr << getCurrentTime() << '\t' << "ERROR: retrieving caller info failed:"
                           << err.GetExceptionName() << ": " <<
                     err.GetMessage() << std::endl;
                 return std::string("");
@@ -2521,11 +2515,11 @@ std::string get_caller_id(std::string region,
     }
     catch ( ... )
     {
-        std::cout << getCurrentTime() << '\t' << "ERROR: retrieving caller id "
+        std::cerr << getCurrentTime() << '\t' << "ERROR: retrieving caller id "
                                                  "failed" << std::endl;
         return std::string("");
     }
-    std::cout << getCurrentTime() << '\t' << "INFO: successfully retrieved callerId" <<
+    std::cerr << getCurrentTime() << '\t' << "INFO: successfully retrieved callerId" <<
         std::endl;
     return callerId;
 }
@@ -2545,13 +2539,13 @@ bool check_file_size_s3(std::string s3_arn, std::string region,
             auto provider = Aws::MakeShared<Aws::Auth::SimpleAWSCredentialsProvider>("alloc-tag", credentials);
             auto creds = provider->GetAWSCredentials();
             if (creds.IsEmpty()) {
-                std::cout << getCurrentTime() << '\t' << "ERROR: Failed authentication invalid creds" << std::endl;
+                std::cerr << getCurrentTime() << '\t' << "ERROR: Failed authentication invalid creds" << std::endl;
                 return false;
             }
             std::smatch arn_match;
             std::regex pattern("arn:([^:]+):s3:::([^/]+)/(.+)");
             if (!std::regex_search(s3_arn, arn_match, pattern)) {
-                std::cout << getCurrentTime() << '\t' << "ERROR: s3 arn provided is not valid " <<
+                std::cerr << getCurrentTime() << '\t' << "ERROR: s3 arn provided is not valid " <<
                     s3_arn << std::endl;
                 return false;
             }
@@ -2560,8 +2554,8 @@ bool check_file_size_s3(std::string s3_arn, std::string region,
 
             if(test)
             {
-                std::cout << s3Bucket;
-                std::cout << objectName;
+                std::cerr << s3Bucket;
+                std::cerr << objectName;
                 return true;
             }
 
@@ -2575,7 +2569,7 @@ bool check_file_size_s3(std::string s3_arn, std::string region,
 
             if (!outcome.IsSuccess()) {
                 const Aws::S3::S3Error &err = outcome.GetError();
-                std::cout << getCurrentTime() << '\t' << "ERROR: HeadObject: " <<
+                std::cerr << getCurrentTime() << '\t' << "ERROR: HeadObject: " <<
                     err.GetExceptionName() << ": " << err.GetMessage() << std::endl;
                 return false;
             }
@@ -2589,11 +2583,11 @@ bool check_file_size_s3(std::string s3_arn, std::string region,
     }
     catch ( ... )
     {
-        std::cout << getCurrentTime() << '\t' << "ERROR: retrieving credentialspec from s3 "
+        std::cerr << getCurrentTime() << '\t' << "ERROR: retrieving credentialspec from s3 "
                                                  "failed" << std::endl;
         return false;
     }
-    std::cout << getCurrentTime() << '\t' << "INFO: credentialspec object size retrieved" <<
+    std::cerr << getCurrentTime() << '\t' << "INFO: credentialspec object size retrieved" <<
         std::endl;
     return true;
 }
@@ -2612,13 +2606,13 @@ std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aw
             auto provider = Aws::MakeShared<Aws::Auth::SimpleAWSCredentialsProvider>("alloc-tag", credentials);
             auto creds = provider->GetAWSCredentials();
             if (creds.IsEmpty()) {
-                std::cout << getCurrentTime() << '\t' << "ERROR: Failed authentication invalid creds" << std::endl;
+                std::cerr << getCurrentTime() << '\t' << "ERROR: Failed authentication invalid creds" << std::endl;
                 return std::string("");
             }
             std::smatch arn_match;
             std::regex pattern("arn:([^:]+):s3:::([^/]+)/(.+)");
             if (!std::regex_search(s3_arn, arn_match, pattern)) {
-                std::cout << getCurrentTime() << '\t' << "ERROR: s3 arn provided is not valid " <<
+                std::cerr << getCurrentTime() << '\t' << "ERROR: s3 arn provided is not valid " <<
                     s3_arn << std::endl;
                 return std::string("");
             }
@@ -2627,8 +2621,8 @@ std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aw
 
             if(test)
             {
-                std::cout << s3Bucket;
-                std::cout << objectName;
+                std::cerr << s3Bucket;
+                std::cerr << objectName;
                 return dummy_credspec;
             }
 
@@ -2637,7 +2631,7 @@ std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aw
             std::string callerId = get_caller_id(region, creds);
             if(callerId.empty() &&  !std::regex_match( callerId, callerIdRegex))
             {
-                std::cout << getCurrentTime() << '\t' << "ERROR: Unable to get caller information"
+                std::cerr << getCurrentTime() << '\t' << "ERROR: Unable to get caller information"
                           << std::endl;
                 return std::string("");
             }
@@ -2653,7 +2647,7 @@ std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aw
 
             if (!outcome.IsSuccess()) {
                 const Aws::S3::S3Error &err = outcome.GetError();
-                std::cout << getCurrentTime() << '\t' << "ERROR: GetObject: " <<
+                std::cerr << getCurrentTime() << '\t' << "ERROR: GetObject: " <<
                           err.GetExceptionName() << ": " << err.GetMessage() << std::endl;
                 return std::string("");
             }
@@ -2664,11 +2658,11 @@ std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aw
     }
     catch ( ... )
     {
-        std::cout << getCurrentTime() << '\t' << "ERROR: retrieving credentialspec from s3 "
+        std::cerr << getCurrentTime() << '\t' << "ERROR: retrieving credentialspec from s3 "
                                                  "failed" << std::endl;
         return std::string("");
     }
-    std::cout << getCurrentTime() << '\t' << "INFO: credentialspec info is successfully retrieved" << std::endl;
+    std::cerr << getCurrentTime() << '\t' << "INFO: credentialspec info is successfully retrieved" << std::endl;
     return response;
 }
 
@@ -2688,7 +2682,7 @@ std::tuple<std::string, std::string,
             auto provider = Aws::MakeShared<Aws::Auth::SimpleAWSCredentialsProvider>("alloc-tag", credentials);
             auto creds = provider->GetAWSCredentials();
             if (creds.IsEmpty()) {
-                std::cout << getCurrentTime() << '\t' << "ERROR: failed authentication invalid "
+                std::cerr << getCurrentTime() << '\t' << "ERROR: failed authentication invalid "
                                                          "creds"
                                                           <<
                                                  std::endl;
@@ -2703,7 +2697,7 @@ std::tuple<std::string, std::string,
             if (getSecretValueOutcome.IsSuccess()) {
                 response = getSecretValueOutcome.GetResult().GetSecretString();
             } else {
-                std::cout << getCurrentTime() << '\t' << "ERROR: " << getSecretValueOutcome
+                std::cerr << getCurrentTime() << '\t' << "ERROR: " << getSecretValueOutcome
                                                                        .GetError() << std::endl;
                 return {"","",""};
             }
@@ -2714,13 +2708,13 @@ std::tuple<std::string, std::string,
         std::istringstream sm_stream(response);
         std::string errors;
         Json::parseFromStream(reader, sm_stream, &root, &errors);
-        std::cout << getCurrentTime() << '\t' << "INFO: gMSA user information is successfully "
+        std::cerr << getCurrentTime() << '\t' << "INFO: gMSA user information is successfully "
                                                 "retrieved" << std::endl;
         return {root["username"].asString(),root["password"].asString(), root["domainName"].asString()};
     }
     catch ( ... )
     {
-        std::cout << getCurrentTime() << '\t' << "ERROR: retrieving user info from secrets manager "
+        std::cerr << getCurrentTime() << '\t' << "ERROR: retrieving user info from secrets manager "
                                                  "failed"
                   <<
             std::endl;
