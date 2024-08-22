@@ -15,9 +15,15 @@
 #define SECONDS_IN_HOUR 3600
 // Active Directory uses NetBIOS computer names that do not exceed 15 characters.
 // https://learn.microsoft.com/en-us/troubleshoot/windows-server/identity/naming-conventions-for-computer-domain-site-ou
+
+
+/* Environment variables in /etc/ecs/ecs.config or shell */
 #define HOST_NAME_LENGTH_LIMIT 15
 #define ENV_CF_GMSA_OU "CF_GMSA_OU"
 #define ENV_CF_GMSA_BASE_DN "CREDENTIALS_FETCHER_GMSA_BASE_DN" // baseObject scope - only the entry specified by the search base DN should be considered.
+#define ENV_CF_GMSA_SECRET_NAME "CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA"
+#define ENV_CF_DOMAIN_CONTROLLER "DOMAIN_CONTROLLER_GMSA"
+
 static const std::vector<char> invalid_characters = {
     '&', '|', ';', ':', '$', '*', '?', '<', '>', '!',' ', '\\', '.',']', '[', '+', '\'', '`',
     '~', '}', '{', '"', ')', '('};
@@ -687,7 +693,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
                                                  const std::string& krb_cc_name,
                                                  creds_fetcher::CF_logger& cf_logger )
 {
-    std::string domain_controller_gmsa( "DOMAIN_CONTROLLER_GMSA" );
+    std::string domain_controller_gmsa( ENV_CF_DOMAIN_CONTROLLER );
     std::vector<std::string> results;
 
     if ( domain_name.empty() || gmsa_account_name.empty() )
@@ -746,16 +752,20 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     if ( getenv( ENV_CF_GMSA_OU ) != NULL )
     {
         gmsa_ou = std::string( "," ) + std::string( getenv( ENV_CF_GMSA_OU ) ) + std::string( "," );
-    } else if ( getenv( ENV_CF_GMSA_BASE_DN ) != NULL ){
+    } else if ( getenv( ENV_CF_GMSA_BASE_DN ) != NULL ) {
         env_base_dn = std::string( getenv( ENV_CF_GMSA_BASE_DN ) );
     }
 
-    std::string secret_name = retrieve_variable_from_ecs_config( "CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA" );
+    std::string secret_name = retrieve_variable_from_ecs_config( ENV_CF_GMSA_SECRET_NAME );
     Json::Value root = get_secret_from_secrets_manager( secret_name ); 
     std::string distinguished_name = root["distinguishedName"].asString();
     if (!distinguished_name.empty())
     {
        env_base_dn = distinguished_name;
+       if ( env_base_dn.find( "msds-ManagedPassword" ) == std::string::npos )
+       {
+           env_base_dn = env_base_dn + std::string( " msds-ManagedPassword" );
+       }
     }
 
     bool found_valid_fqdn = false; // Valid if ldapsearch succeeds with a valid FQDN
@@ -1261,13 +1271,13 @@ std::string retrieve_variable_from_ecs_config(std::string ecs_variable_name)
               return value;
         }
 
-        if ( key.compare("CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA") == 0  &&
+        if ( key.compare(ENV_CF_GMSA_SECRET_NAME) == 0  &&
              ecs_variable_name.compare(key) == 0 )
         {
               return value;
         }
 
-        if ( key.compare("DOMAIN_CONTROLLER_GMSA") == 0  && ecs_variable_name.compare(key) == 0 )
+        if ( key.compare(ENV_CF_DOMAIN_CONTROLLER) == 0  && ecs_variable_name.compare(key) == 0 )
         {
               return value;
         }
