@@ -123,7 +123,7 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
 
         if ( cf_daemon.aws_sm_secret_name.empty() ) {
             cf_daemon.aws_sm_secret_name = retrieve_variable_from_ecs_config(domainless_gmsa_field);
-            set_ecs_mode(true);
+            Util::set_ecs_mode(true);
         }
     }
     catch ( const std::exception& ex )

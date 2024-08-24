@@ -38,7 +38,7 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
     {
         if ( file_path.empty() )
         {
-            std::cout << getCurrentTime() << '\t' << "ERROR: meta data file is empty"  <<
+            std::cout << Util::getCurrentTime() << '\t' << "ERROR: meta data file is empty"  <<
                 std::endl;
             return krb_ticket_info_list;
         }
@@ -63,7 +63,7 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
 
                 if ( contains_invalid_characters( krb_file_path ) )
                 {
-                    std::cout << getCurrentTime() << '\t' << "ERROR: krb file path contains invalid characters"  <<
+                    std::cout << Util::getCurrentTime() << '\t' << "ERROR: krb file path contains invalid characters"  <<
                         std::endl;
                     delete ( krb_ticket_info );
                     break;
@@ -90,8 +90,8 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
     }
     catch ( const std::exception& ex )
     {
-        std::cout << getCurrentTime() << '\t' << "ERROR: '" << ex.what() << "'!" << std::endl;
-        std::cout << getCurrentTime() << '\t' << "ERROR: meta data file is not properly formatted"  <<
+        std::cout << Util::getCurrentTime() << '\t' << "ERROR: '" << ex.what() << "'!" << std::endl;
+        std::cout << Util::getCurrentTime() << '\t' << "ERROR: meta data file is not properly formatted"  <<
             std::endl;
         return krb_ticket_info_list;
     }
@@ -175,13 +175,13 @@ int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_
         }
         else
         {
-            std::cout << getCurrentTime() << '\t' << "ERROR: Failed to write JSON file: " << file_path << std::endl;
+            std::cout << Util::getCurrentTime() << '\t' << "ERROR: Failed to write JSON file: " << file_path << std::endl;
         }
     }
     catch ( const std::exception& ex )
     {
-        std::cout << getCurrentTime() << '\t' << "ERROR: '" << ex.what() << "'!" << std::endl;
-        std::cout << getCurrentTime() << '\t' << "ERROR: failed to write meta data file"  <<
+        std::cout << Util::getCurrentTime() << '\t' << "ERROR: '" << ex.what() << "'!" << std::endl;
+        std::cout << Util::getCurrentTime() << '\t' << "ERROR: failed to write meta data file"  <<
             std::endl;
         return -1;
     }

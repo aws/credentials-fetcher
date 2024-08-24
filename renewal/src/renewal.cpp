@@ -21,7 +21,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
         {
             auto x = std::chrono::steady_clock::now() + std::chrono::minutes( interval );
             std::this_thread::sleep_until( x );
-            std::cout << getCurrentTime() << '\t' << "INFO: renewal started" << std::endl;
+            std::cout << Util::getCurrentTime() << '\t' << "INFO: renewal started" << std::endl;
 
             // identify the metadata files in the krb directory
             std::vector<std::string> metadatafiles;
@@ -102,9 +102,9 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
         }
         catch ( const std::exception& ex  )
         {
-            std::cout << getCurrentTime() << '\t' << "ERROR: '" << ex.what() << "'!" <<
+            std::cout << Util::getCurrentTime() << '\t' << "ERROR: '" << ex.what() << "'!" <<
                                                          std::endl;
-            std::cout << getCurrentTime() << '\t' << "ERROR: failed to run the ticket renewal"
+            std::cout << Util::getCurrentTime() << '\t' << "ERROR: failed to run the ticket renewal"
                       << std::endl;
             break;
         }

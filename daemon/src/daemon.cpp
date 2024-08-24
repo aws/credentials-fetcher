@@ -167,7 +167,7 @@ void truncate_log_files()
             int number_of_log_lines = 1000;
             std::string log_path = "/var/credentials-fetcher/logging";
             std::string cmd = "wc -l " + log_path + "/credentials-fetcher.log | awk '{print $1}'";
-            static std::pair<int, std::string> result = exec_shell_cmd( cmd );
+            static std::pair<int, std::string> result = Util::exec_shell_cmd( cmd );
 
             int num = number_of_log_lines;
             if(!result.second.empty())
@@ -181,26 +181,26 @@ void truncate_log_files()
                cmd = "tail -500 "+ log_path + "/credentials-fetcher.log > "
                       + log_path + "/tmp.log";
 
-                result = exec_shell_cmd( cmd );
+                result = Util::exec_shell_cmd( cmd );
                 if ( result.first != 0 )
                 {
-                    std::cerr << getCurrentTime() << '\t' << "ERROR: truncating log file failed" << std::endl;
+                    std::cerr << Util::getCurrentTime() << '\t' << "ERROR: truncating log file failed" << std::endl;
                 }
                 cmd = "cp -f " + log_path + "/tmp.log " +log_path + "/credentials-fetcher.log";
 
-                result = exec_shell_cmd( cmd );
+                result = Util::exec_shell_cmd( cmd );
                 if ( result.first != 0 )
                 {
-                    std::cerr << getCurrentTime() << '\t' << "ERROR: copy file failed" <<
+                    std::cerr << Util::getCurrentTime() << '\t' << "ERROR: copy file failed" <<
                         std::endl;
                 }
             }
-            std::cerr << getCurrentTime() << '\t' << "INFO: log file truncate successful" <<
+            std::cerr << Util::getCurrentTime() << '\t' << "INFO: log file truncate successful" <<
                                                               std::endl;
         }
         catch ( const std::exception& ex  )
         {
-            std::cerr << getCurrentTime() << '\t' << "ERROR: failed truncate log file" << ex.what()
+            std::cerr << Util::getCurrentTime() << '\t' << "ERROR: failed truncate log file" << ex.what()
                       << std::endl;
         }
     }

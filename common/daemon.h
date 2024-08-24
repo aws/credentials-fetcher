@@ -1,13 +1,18 @@
 #include "config.h"
-#include <json/json.h>
+#include <algorithm>
 #include <csignal>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
+#include <getopt.h>
 #include <glib.h>
+#include <iomanip>
 #include <iostream>
+#include <json/json.h>
 #include <krb5/krb5.h>
 #include <list>
+#include <map>
 #include <netinet/in.h>
 #include <resolv.h>
 #include <systemd/sd-daemon.h>
@@ -15,11 +20,8 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
-#include <getopt.h>
-#include <iomanip>
-#include <map>
-#include <algorithm>
-#include <filesystem>
+#include <regex>
+#include "util.hpp"
 
 #if AMAZON_LINUX_DISTRO
 #include <aws/core/Aws.h>
@@ -42,8 +44,8 @@ namespace creds_fetcher
      */
 
     /**
-    * krb_ticket_info defines the information of the kerberos ticket created
-    */
+     * krb_ticket_info defines the information of the kerberos ticket created
+     */
     class krb_ticket_arn_mapping
     {
       public:
@@ -85,8 +87,10 @@ namespace creds_fetcher
             if ( level >= log_level )
             {
                 std::string logFmt = fmt;
-                for (int i = 0; logFmt[i] != '\0'; ++i) {
-                    if (logFmt[i] == '\n') {
+                for ( int i = 0; logFmt[i] != '\0'; ++i )
+                {
+                    if ( logFmt[i] == '\n' )
+                    {
                         logFmt[i] = ' '; // Replace '\n' with space
                     }
                 }
@@ -94,11 +98,10 @@ namespace creds_fetcher
             }
         }
 
-
-        void init_file_logger ()
+        void init_file_logger()
         {
             std::string log_file_path = LOG_FILE_PATH;
-            freopen( log_file_path.c_str() , "a+", stdout );
+            freopen( log_file_path.c_str(), "a+", stdout );
         }
     };
 
@@ -145,19 +148,22 @@ namespace creds_fetcher
 /**
  * Methods in auth module
  */
-std::vector<std::string>  get_meta_data_file_paths(std::string krbdir);
+std::vector<std::string> get_meta_data_file_paths( std::string krbdir );
 std::string renew_gmsa_ticket( creds_fetcher::krb_ticket_info* krb_ticket, std::string domain_name,
                                std::string username, std::string password,
-                               creds_fetcher::CF_logger& cf_logger  );
+                               creds_fetcher::CF_logger& cf_logger );
 void truncate_log_files();
 std::string getCurrentTime();
 int generate_host_machine_krb_ticket( const char* krb_ccname = "" );
 std::pair<int, std::string> exec_shell_cmd( std::string cmd );
-std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& cf_logger );
-std::pair<int, std::string> get_user_krb_ticket( std::string domain_name, std::string aws_sm_secret_name,
+std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name,
+                                                    creds_fetcher::CF_logger& cf_logger );
+std::pair<int, std::string> get_user_krb_ticket( std::string domain_name,
+                                                 std::string aws_sm_secret_name,
                                                  creds_fetcher::CF_logger& cf_logger );
 std::pair<int, std::string> get_domainless_user_krb_ticket( std::string domain_name,
-                                                            std::string username, std::string password,
+                                                            std::string username,
+                                                            std::string password,
                                                             creds_fetcher::CF_logger& cf_logger );
 
 std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
@@ -165,8 +171,10 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
                                                  const std::string& krb_cc_name,
                                                  creds_fetcher::CF_logger& cf_logger );
 
-std::list<std::string> renew_kerberos_tickets_domainless( std::string krb_files_dir, std::string domain_name,
-                                                          std::string username, std::string password,
+std::list<std::string> renew_kerberos_tickets_domainless( std::string krb_files_dir,
+                                                          std::string domain_name,
+                                                          std::string username,
+                                                          std::string password,
                                                           creds_fetcher::CF_logger& cf_logger );
 
 void krb_ticket_creation( const char* ldap_uri_arg, const char* gmsa_account_name_arg,
@@ -183,7 +191,7 @@ void ltrim( std::string& s );
 void rtrim( std::string& s );
 
 // unit tests
-//int test_utf16_decode();
+// int test_utf16_decode();
 int config_parse_test();
 int read_meta_data_json_test();
 int read_meta_data_invalid_json_test();
@@ -194,12 +202,12 @@ int renewal_failure_krb_dir_not_found_test();
  * Methods in config module
  */
 int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemon );
-bool isValidDomain(const std::string& value);
-int HealthCheck(std::string serviceName);
+bool isValidDomain( const std::string& value );
+int HealthCheck( std::string serviceName );
 
 int parse_config_file( creds_fetcher::Daemon& cf_daemon );
-std::string retrieve_variable_from_ecs_config(std::string ecs_variable_name);
-std::vector<std::string> split_string(std::string input_string, char delimiter);
+std::string retrieve_variable_from_ecs_config( std::string ecs_variable_name );
+std::vector<std::string> split_string( std::string input_string, char delimiter );
 
 /**
  * Methods in api module
@@ -212,26 +220,31 @@ bool contains_invalid_characters_in_ad_account_name( const std::string& value );
 
 int parse_cred_spec( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info );
 
-int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ticket_info* krb_ticket_info, creds_fetcher::krb_ticket_arn_mapping* krb_ticket_mapping );
+int parse_cred_spec_domainless( std::string credspec_data,
+                                creds_fetcher::krb_ticket_info* krb_ticket_info,
+                                creds_fetcher::krb_ticket_arn_mapping* krb_ticket_mapping );
 
-int parse_cred_file_path(const std::string& cred_file_path, std::string& cred_file, std::string& cred_file_lease_id );
+int parse_cred_file_path( const std::string& cred_file_path, std::string& cred_file,
+                          std::string& cred_file_lease_id );
 
-int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id);
+int ProcessCredSpecFile( std::string krb_files_dir, std::string credspec_filepath,
+                         creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id );
 
 std::string generate_lease_id();
 
-void clearString(std::string& str);
+void clearString( std::string& str );
 
 #if AMAZON_LINUX_DISTRO
-std::string retrieve_credspec_from_s3(std::string s3_arn, std::string region, Aws::Auth::AWSCredentials credentials,  bool test);
-bool check_file_size_s3(std::string s3_arn, std::string region,
-                         Aws::Auth::AWSCredentials credentials, bool test);
-std::string get_caller_id(std::string region,
-                           Aws::Auth::AWSCredentials credentials);
-std::tuple<std::string, std::string,
-           std::string> retrieve_credspec_from_secrets_manager(std::string sm_arn, std::string region, Aws::Auth::AWSCredentials credentials);
+std::string retrieve_credspec_from_s3( std::string s3_arn, std::string region,
+                                       Aws::Auth::AWSCredentials credentials, bool test );
+bool check_file_size_s3( std::string s3_arn, std::string region,
+                         Aws::Auth::AWSCredentials credentials, bool test );
+std::string get_caller_id( std::string region, Aws::Auth::AWSCredentials credentials );
+std::tuple<std::string, std::string, std::string> retrieve_credspec_from_secrets_manager(
+    std::string sm_arn, std::string region, Aws::Auth::AWSCredentials credentials );
 
-Aws::Auth::AWSCredentials get_credentials(std::string accessKeyId, std::string secretKey, std::string sessionToken);
+Aws::Auth::AWSCredentials get_credentials( std::string accessKeyId, std::string secretKey,
+                                           std::string sessionToken );
 #endif
 
 /**
@@ -245,14 +258,10 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon );
 bool contains_invalid_characters( const std::string& path );
 std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path );
 
-int write_meta_data_json( creds_fetcher::krb_ticket_info* krb_ticket_info,
-                          std::string lease_id, std::string krb_files_dir );
+int write_meta_data_json( creds_fetcher::krb_ticket_info* krb_ticket_info, std::string lease_id,
+                          std::string krb_files_dir );
 
 int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list,
                           std::string lease_id, std::string krb_files_dir );
-
-void set_ecs_mode(bool);
-bool is_ecs_mode();
-
 
 #endif // _daemon_h_
