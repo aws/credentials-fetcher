@@ -56,7 +56,7 @@ static std::pair<int, std::vector<std::string>> get_domain_ips( std::string doma
 std::pair<int, std::string> get_machine_principal( std::string domain_name,
                                                    creds_fetcher::CF_logger& cf_logger )
 {
-    std::pair<int, std::string> result;
+    std::pair<int, std::string> result = std::make_pair( -1, "" );
 
     char hostname[HOST_NAME_MAX];
     int status = gethostname( hostname, HOST_NAME_MAX );
@@ -101,7 +101,7 @@ std::pair<int, std::string> get_machine_principal( std::string domain_name,
      * Machine principal is of the format EC2AMAZ-Q5VJZQ$@CONTOSO.COM'
      */
     result.first = 0;
-    result.second = host_name + "$@" + realm_name_result.second;
+    result.second = "'" + host_name + "$@'" + realm_name_result.second;
 
     return result;
 }
@@ -208,14 +208,10 @@ std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name,
         return result;
     }
 
-    result = Util::execute_kinit_in_domain_joined_case( result.second );
-    if ( result.first != 0 )
-    {
-        cf_logger.logger( LOG_ERR, result.second.c_str() );
-        return result;
-    }
-
-    result = get_machine_principal( std::move( domain_name ), cf_logger );
+     /**
+      ** Machine principal is of the format 'EC2AMAZ-Q5VJZQ$'@CONTOSO.COM
+      **/
+    std::pair<int, std::string> machine_principal = get_machine_principal( domain_name, cf_logger );
     if ( result.first != 0 )
     {
         std::cerr << "ERROR: " << __func__ << ":" << __LINE__ << " invalid machine principal"
@@ -223,6 +219,13 @@ std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name,
         std::string err_msg = "ERROR: invalid machine principal";
         cf_logger.logger( LOG_ERR, err_msg.c_str() );
         result = std::make_pair( -1, err_msg );
+        return result;
+    }
+
+    result = Util::execute_kinit_in_domain_joined_case( machine_principal.second );
+    if ( result.first != 0 )
+    {
+        cf_logger.logger( LOG_ERR, result.second.c_str() );
         return result;
     }
 
@@ -704,11 +707,12 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
             // Add retry, ldapsearch seems to fail and then succeed on retry
             if ( ldap_search_result.first != 0 )
             {
-                cf_logger.logger( LOG_ERR, "ERROR: %s:%d ldapsearch failed with FQDN = %s",
-                                  __func__, __LINE__, fqdn );
-                std::cerr << "ERROR: ldapsearch failed with FQDN = " << fqdn << std::endl;
-                std::cerr << Util::getCurrentTime() << '\t'
-                          << "ERROR: ldapsearch failed to get gMSA credentials" << std::endl;
+                std::string err_msg =  std::string("ERROR: ldapsearch failed with FQDN = ")  + fqdn;
+                cf_logger.logger( LOG_ERR, err_msg.c_str() );
+                std::cerr << err_msg << std::endl;
+                err_msg =  Util::getCurrentTime() +  std::string("ERROR: ldapsearch failed to get gMSA credentials: " + ldap_search_result.second);
+                cf_logger.logger( LOG_ERR, err_msg.c_str() );
+                std::cerr << err_msg << std::endl;
             }
             else
             {

@@ -121,9 +121,13 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
             }
         }
 
-        if ( cf_daemon.aws_sm_secret_name.empty() ) {
+        if ( cf_daemon.aws_sm_secret_name.empty() )
+        {
             cf_daemon.aws_sm_secret_name = retrieve_variable_from_ecs_config(domainless_gmsa_field);
-            Util::set_ecs_mode(true);
+            if ( !cf_daemon.aws_sm_secret_name.empty() )
+            {
+                Util::set_ecs_mode(true);
+            }
         }
     }
     catch ( const std::exception& ex )
@@ -131,6 +135,6 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         std::cout << "Run with --help to see options" << std::endl;
         return EXIT_FAILURE;
     }
-    
+
     return EXIT_SUCCESS;
 }

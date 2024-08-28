@@ -2334,7 +2334,8 @@ int parse_cred_spec_domainless( std::string credspec_data, creds_fetcher::krb_ti
  * @param cred_file_lease_id - The lease id to use for this credential spec file
  * @return - return 0 on success
  */
-int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id) {
+int ProcessCredSpecFile(std::string krb_files_dir, std::string credspec_filepath, creds_fetcher::CF_logger& cf_logger, std::string cred_file_lease_id)
+{
     std::string err_msg;
     std::string credspec_contents;
     

@@ -216,10 +216,10 @@ class Util
 
     static std::pair<int, std::string> execute_kinit_in_domain_joined_case( std::string principal )
     {
-        // kinit -kt /etc/krb5.keytab  'EC2AMAZ-GG97ZL$'@CONTOSO.COM
+        // kinit -k 'EC2AMAZ-8L8GWS$@CONTOSO.COM'
         std::transform( principal.begin(), principal.end(), principal.begin(),
-                        []( unsigned char c ) { return std::toupper( c ); } );
-        std::string kinit_cmd = "kinit -kt /etc/krb5.keytab '" + principal + "'";
+            []( unsigned char c ) { return std::toupper( c ); } );
+        std::string kinit_cmd = "kinit -kt /etc/krb5.keytab " + principal;
         std::pair<int, std::string> result = exec_shell_cmd( kinit_cmd );
         return result;
     }
