@@ -182,32 +182,27 @@ class Util
         return result;
     }
 
-    static std::pair<int, std::string> get_dns_ips_list( std::string domain_name )
-    {
-        std::string cmd = "dig +noall +answer " + domain_name + " | awk '{ print $5 }'";
-
-        std::pair<int, std::string> result = Util::exec_shell_cmd( cmd );
-        if ( result.first != 0 )
-        {
-            return std::make_pair( -1, "" );
-        }
-        return result;
-    }
-
-    static std::pair<int, std::string> get_FQDNs( std::string domain_ip, std::string domain_name )
+    static std::pair<int, std::string> get_FQDN( std::string domain_name )
     {
         /**
-         * We expect fqdns to have hostnames, only the second entry is picked from below.
-         * $ dig -x 172.32.157.20 +noall +short +answer
-         * contoso.com.
-         * win-cqec6o8gd7i.contoso.com.
+         * Find ptr record:
+         *    "The PTR or "pointer" DNS record type maps an IP address to a domain name in the DNS.
+         *     This is called a DNS reverse lookup."
+         *  https://www.nslookup.io/learning/dns-record-types/ptr/
          */
         std::string cmd =
-            "dig -x " + domain_ip + " +noall +answer +short | grep -v ^" + domain_name;
+            "nslookup -q=ptr " + domain_name + " grep origin | awk -F= '{print $2}' | sed 's/^[ ]*//g";
 
         std::pair<int, std::string> reverse_dns_output = Util::exec_shell_cmd( cmd );
         if ( reverse_dns_output.first != 0 )
         {
+            cmd = "dig ptr " + domain_name + " | grep -C1 'AUTHORITY SECTION' | grep -v 'AUTHORITY SECTION' | awk '{ print $5 }'";
+            cmd.pop_back();
+            std::pair<int, std::string> reverse_dns_output = Util::exec_shell_cmd( cmd );
+            if ( reverse_dns_output.first == 0 )
+            {
+               return reverse_dns_output;
+            }
             return std::make_pair( reverse_dns_output.first, std::string( "" ) );
         }
 

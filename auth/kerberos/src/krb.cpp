@@ -20,34 +20,6 @@ const std::string install_path_for_decode_exe =
 const std::string install_path_for_aws_cli = "/usr/bin/aws";
 
 /**
- * Get list of domain-ips representing a domain
- * @param domain_name Like 'contoso.com'
- * @return - Pair of result and string, 0 if successful and FQDN like win-m744.contoso.com
- */
-static std::pair<int, std::vector<std::string>> get_domain_ips( std::string domain_name )
-{
-    std::vector<std::string> list_of_ips = { "" };
-    std::vector<std::string> dummy_ips = { "" };
-
-    std::pair<int, std::string> result = Util::get_dns_ips_list( domain_name );
-    list_of_ips = Util::split_string( result.second, '\n' );
-
-    // regex for ip
-    std::regex ipregex( "(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.){3}"
-                        "([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])" );
-
-    for ( const auto& str : list_of_ips )
-    {
-        if ( !std::regex_match( str, ipregex ) )
-        {
-            return std::make_pair( -1, dummy_ips );
-        }
-    }
-
-    return std::make_pair( EXIT_SUCCESS, list_of_ips );
-}
-
-/**
  * If the host is domain-joined, the result is of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM'
  * @param domain_name: Expected domain name as per configuration
  * @return result pair<int, std::string> (error-code - 0 if successful
@@ -111,48 +83,23 @@ std::pair<int, std::string> get_machine_principal( std::string domain_name,
  * @param domain_name Like 'contoso.com'
  * @return - Pair of result and string, 0 if successful and FQDN like win-m744.contoso.com
  */
-static std::pair<int, std::string> get_fqdn_from_domain_ip( std::string domain_ip,
-                                                            std::string domain_name )
+static std::pair<int, std::string> get_fqdn_from_domain_name( std::string domain_name,
+                                                              creds_fetcher::CF_logger& cf_logger )
 {
 
-    std::pair<int, std::string> reverse_dns_output = Util::get_FQDNs( domain_ip, domain_name );
+    std::pair<int, std::string> reverse_dns_output = Util::get_FQDN( domain_name );
 
-    std::vector<std::string> list_of_dc_names;
-    list_of_dc_names = Util::split_string( reverse_dns_output.second, '\n' );
-    for ( auto fqdn_str : list_of_dc_names )
+    if (reverse_dns_output.first != 0)
     {
-        if ( fqdn_str.length() == 0 )
-        {
-            return std::make_pair( EXIT_FAILURE, "" );
-        }
-        fqdn_str.pop_back(); // Remove trailing .
-
-        /**
-         * We can ignore DNS resolution like ip-10-0-0-162.us-west-1.compute.internal
-         * since it does not have a domain such as "contoso.com"
-         */
-        if ( !fqdn_str.empty() && ( fqdn_str.find( domain_name ) != std::string::npos ) )
-        {
-            return std::make_pair( EXIT_SUCCESS, fqdn_str );
-        }
-        else
-        {
-            std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
-                            []( unsigned char c ) { return std::tolower( c ); } );
-            if ( !fqdn_str.empty() && ( fqdn_str.find( domain_name ) != std::string::npos ) )
-            {
-                return std::make_pair( EXIT_SUCCESS, fqdn_str );
-            }
-            else
-            {
-                return std::make_pair( EXIT_FAILURE, "" );
-            }
-        }
+         cf_logger.logger( LOG_ERR, reverse_dns_output.second.c_str() );
+         std::string error_string = Util::getCurrentTime() + '\t' + "ERROR: getting FQDN from domain ip";
+         cf_logger.logger( LOG_ERR, error_string.c_str() );
+         return std::make_pair( -1, "" );
     }
 
-    std::cerr << Util::getCurrentTime() << '\t' << "ERROR: getting FQDN from domain ip"
-              << std::endl;
-    return std::make_pair( EXIT_FAILURE, "" );
+    std::string log_string = std::string( "Got FQDN " + reverse_dns_output.second );
+    cf_logger.logger( LOG_INFO, log_string.c_str() );
+    return std::make_pair( 0, reverse_dns_output.second );
 }
 
 /**
@@ -620,24 +567,10 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     std::list<std::string> fqdn_list;
     if ( fqdn.empty() && !Util::is_ecs_mode() )
     {
-        std::pair<int, std::vector<std::string>> domain_ips = get_domain_ips( domain_name );
-        // TBD:: Use nslookup -type=any _ldap._tcp.dc._msdcs.CONTOSO.COM | grep msdcs | awk '{print
-        // $NF}' | sed 's/.$//g'
-        if ( domain_ips.first != 0 )
+        auto fqdn_result = get_fqdn_from_domain_name( domain_name, cf_logger );
+        if ( fqdn_result.first == 0 )
         {
-            std::string err_msg = "ERROR: Cannot resolve domain IPs for " + domain_name;
-            cf_logger.logger( LOG_ERR, err_msg.c_str() );
-            std::cerr << Util::getCurrentTime() << '\t' << err_msg << std::endl;
-            return std::make_pair( -1, err_msg );
-        }
-
-        for ( auto domain_ip : domain_ips.second )
-        {
-            auto fqdn_result = get_fqdn_from_domain_ip( domain_ip, domain_name );
-            if ( fqdn_result.first == 0 )
-            {
-                fqdn_list.push_back( fqdn_result.second );
-            }
+            fqdn_list.push_back( fqdn_result.second );
         }
     }
     else if ( !fqdn.empty() )
