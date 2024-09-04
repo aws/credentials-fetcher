@@ -2,12 +2,13 @@
 #include <filesystem>
 #include <chrono>
 #include <stdlib.h>
+#include "util.hpp"
 
-int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
+int krb_ticket_renew_handler( Daemon cf_daemon )
 {
     std::string krb_files_dir = cf_daemon.krb_files_dir;
     int interval = cf_daemon.krb_ticket_handle_interval;
-    creds_fetcher::CF_logger cf_logger = cf_daemon.cf_logger;
+    CF_logger cf_logger = cf_daemon.cf_logger;
 
     if ( krb_files_dir.empty() )
     {
@@ -21,7 +22,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
         {
             auto x = std::chrono::steady_clock::now() + std::chrono::minutes( interval );
             std::this_thread::sleep_until( x );
-            std::cout << getCurrentTime() << '\t' << "INFO: renewal started" << std::endl;
+            std::cout << Util::getCurrentTime() << '\t' << "INFO: renewal started" << std::endl;
 
             // identify the metadata files in the krb directory
             std::vector<std::string> metadatafiles;
@@ -44,7 +45,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
             // read the information of service account from the files
             for ( auto file_path : metadatafiles )
             {
-                std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list =
+                std::list<krb_ticket_info_t*> krb_ticket_info_list =
                     read_meta_data_json( file_path );
 
                 // refresh the kerberos tickets for the service accounts, if tickets ready for
@@ -61,19 +62,18 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                         int num_retries = 1;
                         for ( int i = 0; i <= num_retries; i++ )
                         {
-                            gmsa_ticket_result = get_gmsa_krb_ticket(
-                                krb_ticket->domain_name, krb_ticket->service_account_name,
-                                krb_cc_name, cf_logger );
+                            gmsa_ticket_result = get_gmsa_krb_ticket (
+                                                      krb_ticket->domain_name, krb_ticket->service_account_name,
+                                                      krb_cc_name, cf_logger );
                             if ( gmsa_ticket_result.first != 0 )
                             {
-                                int status = -1;
+                                std::pair<int, std::string> status;
                                 cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket using account %s",
                                                     krb_ticket->service_account_name.c_str() );
-                                if (domainless_user.find("awsdomainlessusersecret") !=
-                                                           std::string::npos) {
+                                if (domainless_user.find("awsdomainlessusersecret") != std::string::npos) {
                                     int pos = domainless_user.find(":");
                                     std::string domainlessUser = domainless_user.substr(pos + 1);
-                                    status = get_user_krb_ticket(krb_ticket->domain_name,
+                                    status = get_user_krb_ticket( krb_ticket->domain_name,
                                                                   domainlessUser, cf_logger );
                                 }
                                 else
@@ -81,7 +81,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
                                     status = get_machine_krb_ticket( krb_ticket->domain_name,
                                                                          cf_logger );
                                 }
-                                if ( status < 0 )
+                                if ( status.first < 0 )
                                 {
                                     cf_logger.logger( LOG_ERR,
                                                       "Error %d: Cannot get machine krb ticket",
@@ -103,9 +103,9 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
         }
         catch ( const std::exception& ex  )
         {
-            std::cout << getCurrentTime() << '\t' << "ERROR: '" << ex.what() << "'!" <<
+            std::cout << Util::getCurrentTime() << '\t' << "ERROR: '" << ex.what() << "'!" <<
                                                          std::endl;
-            std::cout << getCurrentTime() << '\t' << "ERROR: failed to run the ticket renewal"
+            std::cout << Util::getCurrentTime() << '\t' << "ERROR: failed to run the ticket renewal"
                       << std::endl;
             break;
         }

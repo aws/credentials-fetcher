@@ -1,4 +1,5 @@
 #include "daemon.h"
+#include "util.hpp"
 
 /**
  * This function prints formatted help descriptions
@@ -59,7 +60,7 @@ void print_help( const struct option* long_options,
  * @return status - 0 if successful
  */
 
-int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemon )
+int parse_options( int argc, const char* argv[], Daemon& cf_daemon )
 {
     try
     {
@@ -121,9 +122,13 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
             }
         }
 
-        if ( cf_daemon.aws_sm_secret_name.empty() ) {
-            cf_daemon.aws_sm_secret_name = retrieve_secret_from_ecs_config(domainless_gmsa_field);
-            set_ecs_mode(true);
+        if ( cf_daemon.aws_sm_secret_name.empty() )
+        {
+            cf_daemon.aws_sm_secret_name = Util::retrieve_variable_from_ecs_config(domainless_gmsa_field);
+            if ( !cf_daemon.aws_sm_secret_name.empty() )
+            {
+                Util::set_ecs_mode(true);
+            }
         }
     }
     catch ( const std::exception& ex )
@@ -131,6 +136,6 @@ int parse_options( int argc, const char* argv[], creds_fetcher::Daemon& cf_daemo
         std::cout << "Run with --help to see options" << std::endl;
         return EXIT_FAILURE;
     }
-    
+
     return EXIT_SUCCESS;
 }
