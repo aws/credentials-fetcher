@@ -23,7 +23,7 @@ int read_meta_data_json_test()
         }
     }
 
-    std::list<creds_fetcher::krb_ticket_info*> result = read_meta_data_json( metadata_file_path );
+    std::list<krb_ticket_info_t*> result = read_meta_data_json( metadata_file_path );
 
     if ( result.empty() || result.size() != 2 )
     {
@@ -47,7 +47,7 @@ int read_meta_data_invalid_json_test()
 {
     std::string metadata_file_path = "metadata_invalid_sample.json";
 
-    std::list<creds_fetcher::krb_ticket_info*> result = read_meta_data_json( metadata_file_path );
+    std::list<krb_ticket_info_t*> result = read_meta_data_json( metadata_file_path );
 
     if ( result.empty() )
     {
@@ -79,7 +79,7 @@ int write_meta_data_json_test()
         }
     }
 
-    std::list<creds_fetcher::krb_ticket_info*> test_ticket_info =
+    std::list<krb_ticket_info_t *> test_ticket_info =
         read_meta_data_json( metadata_file_path );
 
     std::string krb_files_dir = "/usr/share/credentials-fetcher/krbdir";

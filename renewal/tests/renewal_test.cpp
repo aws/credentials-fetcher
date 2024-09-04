@@ -3,7 +3,7 @@
 
 int renewal_failure_krb_dir_not_found_test()
 {
-    creds_fetcher::Daemon cf_daemon;
+    Daemon cf_daemon;
 
     int result = krb_ticket_renew_handler( cf_daemon );
 

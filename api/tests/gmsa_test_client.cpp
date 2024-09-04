@@ -622,10 +622,10 @@ int run_perf_test( CredentialsFetcherClient& client, int num_of_leases,
 // unit tests
 bool parse_credspec_domainless_test(std::string credspec)
 {
-    creds_fetcher::krb_ticket_info* krb_ticket_info =
-                new creds_fetcher::krb_ticket_info;
-    creds_fetcher::krb_ticket_arn_mapping* krb_ticket_arn_mapping  =
-                new creds_fetcher::krb_ticket_arn_mapping;
+    krb_ticket_info_t* krb_ticket_info =
+                new krb_ticket_info_t;
+    krb_ticket_arn_mapping_t* krb_ticket_arn_mapping  =
+                new krb_ticket_arn_mapping_t;
     int response = parse_cred_spec_domainless(credspec, krb_ticket_info, krb_ticket_arn_mapping );
     std::cout << krb_ticket_arn_mapping->credential_spec_arn;
     std::cout << krb_ticket_arn_mapping->krb_file_path;

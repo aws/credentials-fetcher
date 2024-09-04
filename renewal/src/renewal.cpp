@@ -2,12 +2,13 @@
 #include <filesystem>
 #include <chrono>
 #include <stdlib.h>
+#include "util.hpp"
 
-int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
+int krb_ticket_renew_handler( Daemon cf_daemon )
 {
     std::string krb_files_dir = cf_daemon.krb_files_dir;
     int interval = cf_daemon.krb_ticket_handle_interval;
-    creds_fetcher::CF_logger cf_logger = cf_daemon.cf_logger;
+    CF_logger cf_logger = cf_daemon.cf_logger;
 
     if ( krb_files_dir.empty() )
     {
@@ -44,7 +45,7 @@ int krb_ticket_renew_handler( creds_fetcher::Daemon cf_daemon )
             // read the information of service account from the files
             for ( auto file_path : metadatafiles )
             {
-                std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list =
+                std::list<krb_ticket_info_t*> krb_ticket_info_list =
                     read_meta_data_json( file_path );
 
                 // refresh the kerberos tickets for the service accounts, if tickets ready for

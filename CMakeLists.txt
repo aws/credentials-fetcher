@@ -6,12 +6,31 @@ include(GNUInstallDirs)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(CFLAGS "${CFLAGS} -std=c++17 -Wall -fstack-protector-all -pthread")
-set(CFLAGS "${CFLAGS} -Wl,--strip-all -Wformat -Wformat-security")
 set(CFLAGS "${CFLAGS} -fstack-clash-protection -fPIE -fPIC")
-set(CFLAGS "${CFLAGS} -O2 -D_FORTIFY_SOURCE=2")
 set(CMAKE_CXX_FLAGS ${CFLAGS})
 set(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS} -z noexecstack -z relro -z now")
 set(CMAKE_SHARED_LINKER_FLAGS "${LDFLAGS} -z noexecstack -z relro -z now")
+
+# cmake ../ -DENABLE_DEBUGGING=ON
+option(ENABLE_DEBUGGING "Enable debugging" ON)
+if(ENABLE_DEBUGGING)
+    message("Enable debugging")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,--strip-all -Wformat -Wformat-security")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -D_FORTIFY_SOURCE=2")
+endif()
+
+# cmake ../ -DCODE_COVERAGE=ON
+option(CODE_COVERAGE "Enable code coverage" OFF)
+
+if(CODE_COVERAGE)
+  # GCC/Clang
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
+  endif()
+endif()
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf CONFIG)

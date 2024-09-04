@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <fstream>
 #include <vector>
+#include "util.hpp"
 
 static const std::vector<char> invalid_path_characters = {
     '&', ':', '\\', '|', '*', '?', '<', '>', '`', '$', '{', '}', '(', ')', '"', ';' };
@@ -31,15 +32,14 @@ bool contains_invalid_characters( const std::string& path )
  * @param krb_files_dir - path of the dir for kerberos tickets
  * @return vector of kerberos ticket info
  */
-std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file_path )
+std::list<krb_ticket_info_t *> read_meta_data_json( std::string file_path )
 {
-    std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
+    std::list<krb_ticket_info_t *> krb_ticket_info_list;
     try
     {
         if ( file_path.empty() )
         {
-            std::cout << Util::getCurrentTime() << '\t' << "ERROR: meta data file is empty"  <<
-                std::endl;
+            std::cout << Util::getCurrentTime() << '\t' << "ERROR: meta data file is empty"  << std::endl;
             return krb_ticket_info_list;
         }
 
@@ -57,8 +57,8 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
 
             for ( const Json::Value& krb_info : child_tree_krb_info )
             {
-                creds_fetcher::krb_ticket_info* krb_ticket_info =
-                    new creds_fetcher::krb_ticket_info;
+                krb_ticket_info_t * krb_ticket_info =
+                    new krb_ticket_info_t ;
                 std::string krb_file_path = krb_info["krb_file_path"].asString();
 
                 if ( contains_invalid_characters( krb_file_path ) )
@@ -120,10 +120,10 @@ std::list<creds_fetcher::krb_ticket_info*> read_meta_data_json( std::string file
  * @return 0 or 1 for successful or failed writes
  */
 
-int write_meta_data_json( creds_fetcher::krb_ticket_info* krb_ticket_info,
+int write_meta_data_json( krb_ticket_info_t* krb_ticket_info,
                           std::string lease_id, std::string krb_files_dir )
 {
-    std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list;
+    std::list<krb_ticket_info_t *> krb_ticket_info_list;
 
     krb_ticket_info_list.push_back(krb_ticket_info);
     
@@ -135,7 +135,7 @@ int write_meta_data_json( creds_fetcher::krb_ticket_info* krb_ticket_info,
  * @param krb_files_dir - path of the dir for kerberos tickets
  * @return 0 or 1 for successful or failed writes
  */
-int write_meta_data_json( std::list<creds_fetcher::krb_ticket_info*> krb_ticket_info_list,
+int write_meta_data_json( std::list<krb_ticket_info_t*> krb_ticket_info_list,
                           std::string lease_id, std::string krb_files_dir )
 {
     try
