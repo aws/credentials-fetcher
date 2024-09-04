@@ -190,14 +190,13 @@ class Util
          *     This is called a DNS reverse lookup."
          *  https://www.nslookup.io/learning/dns-record-types/ptr/
          */
-        std::string cmd =
-            "nslookup -q=ptr " + domain_name + " grep origin | awk -F= '{print $2}' | sed 's/^[ ]*//g";
+        std::string cmd = "dig ptr " + domain_name + " | grep -C1 'AUTHORITY SECTION' | grep -v 'AUTHORITY SECTION' | awk '{ print $5 }'";
+        cmd.pop_back();
 
         std::pair<int, std::string> reverse_dns_output = Util::exec_shell_cmd( cmd );
         if ( reverse_dns_output.first != 0 )
         {
-            cmd = "dig ptr " + domain_name + " | grep -C1 'AUTHORITY SECTION' | grep -v 'AUTHORITY SECTION' | awk '{ print $5 }'";
-            cmd.pop_back();
+            cmd = "nslookup -q=ptr " + domain_name + " grep origin | awk -F= '{print $2}' | sed 's/^[ ]*//g";
             std::pair<int, std::string> reverse_dns_output = Util::exec_shell_cmd( cmd );
             if ( reverse_dns_output.first == 0 )
             {
