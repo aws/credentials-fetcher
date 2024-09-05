@@ -27,8 +27,8 @@ option(CODE_COVERAGE "Enable code coverage" OFF)
 if(CODE_COVERAGE)
   # GCC/Clang
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage -fprofile-arcs -ftest-coverage -lgcov -DEXIT_USING_FILE")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -fprofile-arcs -ftest-coverage -lgcov ")
   endif()
 endif()
 
@@ -100,6 +100,9 @@ if((${DISTRO_ID} MATCHES "amzn") OR (${DISTRO_ID} MATCHES "ubuntu"))
     "[Unit]\n"
     "Description=credentials-fetcher systemd service unit file.\n\n"
     "[Service]\n"
+    "StandardError=journal\n"
+    "StandardOutput=journal\n"
+    "StandardInput=null\n"
     "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
     "ExecStartPre=chgrp ec2-user /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
     "ExecStartPre=chmod 755 /var/credentials-fetcher ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
@@ -119,6 +122,9 @@ else()
             "[Unit]\n"
             "Description=credentials-fetcher systemd service unit file.\n\n"
             "[Service]\n"
+            "StandardError=journal\n"
+            "StandardOutput=journal\n"
+            "StandardInput=null\n"
             "ExecStartPre=mkdir -p ${CF_KRB_DIR} ${CF_UNIX_DOMAIN_SOCKET_DIR} ${CF_LOGGING_DIR}\n"
             "ExecStart=/usr/sbin/credentials-fetcherd\n"
             "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
