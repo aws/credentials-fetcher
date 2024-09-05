@@ -1,4 +1,5 @@
 #include "daemon.h"
+#include "util.hpp"
 #include <cstdio>
 #include <dirent.h>
 #include <filesystem>
@@ -6,18 +7,14 @@
 #include <openssl/crypto.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include "util.hpp"
 
-bool ecs_mode = false;
-
-const std::vector<char> invalid_characters = {
-    '&', '|', ';', ':', '$', '*', '?', '<', '>', '!',' ', '\\', '.',']', '[', '+', '\'', '`',
-    '~', '}', '{', '"', ')', '('};
+const std::vector<char> invalid_characters = { '&',  '|', ';', ':',  '$', '*', '?', '<',
+                                               '>',  '!', ' ', '\\', '.', ']', '[', '+',
+                                               '\'', '`', '~', '}',  '{', '"', ')', '(' };
 
 const std::string install_path_for_decode_exe = "/usr/sbin/credentials_fetcher_utf16_private.exe";
 
 const std::string install_path_for_aws_cli = "/usr/bin/aws";
-
 
 /**
  * If the host is domain-joined, the result is of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM'
@@ -25,8 +22,7 @@ const std::string install_path_for_aws_cli = "/usr/bin/aws";
  * @return result pair<int, std::string> (error-code - 0 if successful
  *                          string of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM')
  */
-std::pair<int, std::string> get_machine_principal( std::string domain_name,
-                                                   CF_logger& cf_logger )
+std::pair<int, std::string> get_machine_principal( std::string domain_name, CF_logger& cf_logger )
 {
     std::pair<int, std::string> result = std::make_pair( -1, "" );
 
@@ -84,8 +80,7 @@ std::pair<int, std::string> get_machine_principal( std::string domain_name,
  * @param cf_daemon - parent daemon object
  * @return error-code - 0 if successful
  */
-std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name,
-                                                    CF_logger& cf_logger )
+std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name, CF_logger& cf_logger )
 {
     std::pair<int, std::string> result;
 
@@ -131,9 +126,9 @@ std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name,
         return result;
     }
 
-     /**
-      ** Machine principal is of the format 'EC2AMAZ-Q5VJZQ$'@CONTOSO.COM
-      **/
+    /**
+     ** Machine principal is of the format 'EC2AMAZ-Q5VJZQ$'@CONTOSO.COM
+     **/
     std::pair<int, std::string> machine_principal = get_machine_principal( domain_name, cf_logger );
     if ( result.first != 0 )
     {
@@ -303,7 +298,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     }
     base_dn.pop_back(); // Remove last comma
 
-    std::pair<int, std::list<std::string>> fqdn_list_result = Util::get_fqdn_list( domain_name );
+    std::vector<std::string> fqdn_list_result = Util::get_FQDN_list( domain_name );
 
     /**
      * ldapsearch -H ldap://<fqdn> -b 'CN=webapp01,CN=Managed Service
@@ -333,23 +328,26 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
 
     std::pair<int, std::string> ldap_search_result;
 
-    for ( auto fqdn : fqdn_list_result.second )
+    for ( auto fqdn : fqdn_list_result )
     {
-        ldap_search_result = Util::execute_ldapsearch( gmsa_account_name, env_base_dn, base_dn, gmsa_ou, fqdn );
-	if ( ldap_search_result.first == 0 )
+        ldap_search_result =
+            Util::execute_ldapsearch( gmsa_account_name, env_base_dn, base_dn, gmsa_ou, fqdn );
+        if ( ldap_search_result.first == 0 )
         {
-           break;
+            std::cerr << "ldapsearch successful with FQDN = " << fqdn << std::endl;
+            break;
         }
     }
     cf_logger.logger( LOG_ERR, ldap_search_result.second.c_str() );
-    fqdn_list_result.second.clear();
+    fqdn_list_result.clear();
 
     if ( ldap_search_result.first != 0 ) // ldapsearch did not work in any FQDN
     {
         return std::make_pair( -1, std::string( "" ) );
     }
 
-    std::pair<size_t, void*> password_found_result = Util::find_password( ldap_search_result.second );
+    std::pair<size_t, void*> password_found_result =
+        Util::find_password( ldap_search_result.second );
 
     if ( password_found_result.first == 0 || password_found_result.second == nullptr )
     {
@@ -583,8 +581,7 @@ std::list<std::string> renew_kerberos_tickets_domainless( std::string krb_files_
     // read the information of service account from the files
     for ( auto file_path : metadatafiles )
     {
-        std::list<krb_ticket_info_t*> krb_ticket_info_list =
-            read_meta_data_json( file_path );
+        std::list<krb_ticket_info_t*> krb_ticket_info_list = read_meta_data_json( file_path );
 
         // refresh the kerberos tickets for the service accounts, if tickets ready for
         // renewal
@@ -641,8 +638,7 @@ std::vector<std::string> get_meta_data_file_paths( std::string krbdir )
  * @param cf_logger - credentials fetcher logger
  */
 std::string renew_gmsa_ticket( krb_ticket_info_t* krb_ticket, std::string domain_name,
-                               std::string username, std::string password,
-                               CF_logger& cf_logger )
+                               std::string username, std::string password, CF_logger& cf_logger )
 {
     std::string renewed_krb_ticket_path;
     std::pair<int, std::string> gmsa_ticket_result;

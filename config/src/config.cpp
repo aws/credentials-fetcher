@@ -125,10 +125,6 @@ int parse_options( int argc, const char* argv[], Daemon& cf_daemon )
         if ( cf_daemon.aws_sm_secret_name.empty() )
         {
             cf_daemon.aws_sm_secret_name = Util::retrieve_variable_from_ecs_config(domainless_gmsa_field);
-            if ( !cf_daemon.aws_sm_secret_name.empty() )
-            {
-                Util::set_ecs_mode(true);
-            }
         }
     }
     catch ( const std::exception& ex )

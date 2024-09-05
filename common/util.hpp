@@ -306,51 +306,28 @@ class Util
         return result;
     }
 
-    /**
-     * DNS reverse lookup, given IP, return domain name
-     * @param domain_name Like 'contoso.com'
-     * @return - Pair of result and string, 0 if successful and FQDN like win-m744.contoso.com
-     */
-    static std::pair<int, std::string> get_fqdn_from_domain_name( std::string domain_name )
-    {
-
-        std::pair<int, std::string> reverse_dns_output = Util::get_FQDN( domain_name );
-
-        if ( reverse_dns_output.first != 0 )
-        {
-            std::string error_string =
-                Util::getCurrentTime() + '\t' + "ERROR: getting FQDN from domain ip";
-            return std::make_pair( -1, error_string.c_str() );
-        }
-
-        return std::make_pair( 0, reverse_dns_output.second );
-    }
-
-    static std::pair<int, std::list<std::string>> get_fqdn_list( std::string domain_name )
+    static std::vector<std::string> get_FQDN_list( std::string domain_name )
     {
         std::string domain_controller_gmsa( ENV_CF_DOMAIN_CONTROLLER );
 
-        std::string fqdn;
-        fqdn = Util::retrieve_variable_from_ecs_config( domain_controller_gmsa );
+        std::string fqdn_from_env_var;
+        fqdn_from_env_var = Util::retrieve_variable_from_ecs_config( domain_controller_gmsa );
 
-        std::list<std::string> fqdn_list;
-        if ( fqdn.empty() && !Util::is_ecs_mode() )
+        std::vector<std::string> fqdn_list;
+        if ( fqdn_from_env_var.empty() )
         {
-            auto fqdn_result = Util::get_fqdn_from_domain_name( domain_name );
-            if ( fqdn_result.first == 0 )
+            fqdn_list = Util::get_FQDNs( domain_name );
+            for ( auto fqdn : fqdn_list )
             {
-                fqdn_list.push_back( fqdn_result.second );
+                std::cerr << "Found ldap._tcp.dc._msdcs DNS controller " << fqdn << std::endl;
             }
-        }
-        else if ( !fqdn.empty() )
-        {
-            fqdn_list.push_back( fqdn );
         }
         else
         {
-            return std::make_pair( -1, fqdn_list );
+            fqdn_list.push_back( fqdn_from_env_var );
         }
-        return std::make_pair( 0, fqdn_list );
+
+        return fqdn_list;
     }
 
     /**
@@ -617,35 +594,55 @@ class Util
         return arg;
     }
 
-    static std::pair<int, std::string> get_FQDN( std::string domain_name )
+    static std::vector<std::string> get_FQDNs( std::string domain_name )
     {
         /**
-         * Find ptr record:
-         *    "The PTR or "pointer" DNS record type maps an IP address to a domain name in the DNS.
-         *     This is called a DNS reverse lookup."
-         *  https://www.nslookup.io/learning/dns-record-types/ptr/
+         * Find SRV record
+         *  "The SRV or "service locator" DNS record type enables service discovery in the DNS.
+         *   SRV records allow services to be advertised on specific ports and used in an order
+         * controlled by the owner of the service. SRV also provides a load balancing feature."
+         *  https://www.nslookup.io/learning/dns-record-types/srv/
          */
-        std::string cmd = "dig ptr " + domain_name + " +noall +authority | awk '{print $5}'";
 
-        std::pair<int, std::string> reverse_dns_output = Util::exec_shell_cmd( cmd );
-        reverse_dns_output.second = remove_trailing_dot_and_newline( reverse_dns_output.second );
+        // https://learn.microsoft.com/en-us/troubleshoot/windows-server/networking/verify-srv-dns-records-have-been-created#method-3-use-nslookup
+        std::string cmd = "nslookup -type=srv _ldap._tcp.dc._msdcs." + domain_name + " | grep " +
+                          domain_name + " | sed 's/^.* //g'";
 
-        if ( reverse_dns_output.first != 0 )
+        std::pair<int, std::string> nslookup_output = Util::exec_shell_cmd( cmd );
+        std::vector<std::string> fqdns;
+
+        if ( nslookup_output.first == 0 )
         {
-            // nslookup -q=NS contoso.com | grep contoso.com | awk '{ print $NF }'
-            cmd = "nslookup -q=NS " + domain_name + " | grep " + domain_name +
-                  " | awk '{ print $NF }'";
-            std::pair<int, std::string> reverse_dns_output = Util::exec_shell_cmd( cmd );
-            if ( reverse_dns_output.first == 0 )
+            fqdns = split_string( nslookup_output.second, '\n' );
+            for ( auto& fqdn : fqdns )
             {
-                reverse_dns_output.second =
-                    remove_trailing_dot_and_newline( reverse_dns_output.second );
-                return reverse_dns_output;
+                if ( fqdn.back() == '.' )
+                {
+                    fqdn.pop_back();
+                }
             }
-            return std::make_pair( reverse_dns_output.first, std::string( "" ) );
+
+            return fqdns;
+        }
+        else
+        {
+            cmd = "dig +short _ldap._tcp.dc._msdcs." + domain_name + " -t any | sed 's/^.* //g'";
+            nslookup_output = Util::exec_shell_cmd( cmd );
+            if ( nslookup_output.first == 0 )
+            {
+                std::vector<std::string> fqdns = split_string( nslookup_output.second, '\n' );
+                for ( auto& fqdn : fqdns )
+                {
+                    if ( fqdn.back() == '.' )
+                    {
+                        fqdn.pop_back();
+                    }
+                }
+                return fqdns;
+            }
         }
 
-        return reverse_dns_output;
+        return fqdns;
     }
 
     static std::pair<int, std::string> execute_kinit_in_domain_joined_case( std::string principal )
@@ -734,17 +731,5 @@ class Util
         }
         // Clear the string content
         str.clear();
-    }
-
-    static void set_ecs_mode( bool mode )
-    {
-        extern bool ecs_mode;
-        ecs_mode = mode;
-    }
-
-    static bool is_ecs_mode()
-    {
-        extern bool ecs_mode;
-        return ecs_mode;
     }
 };
