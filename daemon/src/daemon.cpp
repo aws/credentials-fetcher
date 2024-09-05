@@ -19,6 +19,7 @@ static const char* grpc_thread_name = "grpc_thread";
 
 static void systemd_shutdown_signal_catcher( int signo )
 {
+    printf("Credentials-fetcher shutdown: Caught signo %d\n", signo);
     cf_daemon.got_systemd_shutdown_signal = 1;
 }
 
@@ -232,7 +233,9 @@ int main( int argc, const char* argv[] )
     cf_daemon.got_systemd_shutdown_signal = 0;
     memset( &sa, 0, sizeof( struct sigaction ) );
     sa.sa_handler = &systemd_shutdown_signal_catcher;
-    if ( sigaction( SIGTERM, &sa, NULL ) == -1 )
+    if ( ( sigaction( SIGTERM, &sa, NULL ) == -1 ) ||
+         ( sigaction( SIGINT, &sa, NULL ) == -1 ) ||
+         ( sigaction( SIGHUP, &sa, NULL ) == -1 ) )
     {
         perror( "sigaction" );
         return EXIT_FAILURE;
@@ -322,6 +325,16 @@ int main( int argc, const char* argv[] )
         sd_notifyf( 0, "STATUS=Watchdog notify count = %d",
                     i ); // TBD: Remove later, visible in systemctl status
         ++i;
+#ifdef EXIT_USING_FILE
+       struct stat st;
+       if ( lstat( "/tmp/credentials_fetcher_exit.txt", &st ) != -1 )
+       {
+          if (S_ISREG(st.st_mode))
+          {
+             cf_daemon.got_systemd_shutdown_signal = 1;
+          }
+       }
+#endif
     }
 
     return EXIT_SUCCESS;
