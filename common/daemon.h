@@ -143,17 +143,18 @@ void truncate_log_files();
 std::string getCurrentTime();
 int generate_host_machine_krb_ticket( const char* krb_ccname = "" );
 std::pair<int, std::string> exec_shell_cmd( std::string cmd );
-std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name,
+std::pair<int, std::string> generate_krb_ticket_from_machine_keytab( std::string domain_name,
                                                     CF_logger& cf_logger );
-std::pair<int, std::string> get_user_krb_ticket( std::string domain_name,
+std::pair<int, std::string> generate_krb_ticket_using_user_principal( std::string domain_name,
                                                  std::string aws_sm_secret_name,
                                                  CF_logger& cf_logger );
-std::pair<int, std::string> get_domainless_user_krb_ticket( std::string domain_name,
+
+std::pair<int, std::string> generate_krb_ticket_using_username_and_password( std::string domain_name,
                                                             std::string username,
                                                             std::string password,
                                                             CF_logger& cf_logger );
 
-std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
+std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket( std::string domain_name,
                                                  const std::string& gmsa_account_name,
                                                  const std::string& krb_cc_name,
                                                  CF_logger& cf_logger );
@@ -167,7 +168,7 @@ std::list<std::string> renew_kerberos_tickets_domainless( std::string krb_files_
 void krb_ticket_creation( const char* ldap_uri_arg, const char* gmsa_account_name_arg,
                           const char* krb_ccname = "" );
 
-bool is_ticket_ready_for_renewal( krb_ticket_info_t * krb_ticket_info );
+bool is_ticket_ready_for_renewal( krb_ticket_info_t * krb_ticket_info, CF_logger& cf_logger );
 
 std::string get_ticket_expiration( std::string klist_ticket_info );
 

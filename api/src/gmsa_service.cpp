@@ -607,8 +607,8 @@ class CredentialsFetcherImpl final
                             std::cerr << Util::getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
                         }
-                        status =
-                            get_domainless_user_krb_ticket( domain, username, password, cf_logger );
+                        status = Util::generate_krb_ticket_using_username_and_password(
+                            domain, username, password, cf_logger );
                         if ( status.first < 0 )
                         {
                             err_msg = "ERROR :" + std::to_string( status.first ) +
@@ -631,8 +631,10 @@ class CredentialsFetcherImpl final
                             krb_ticket->krb_file_path = krb_ccname_str;
                         }
 
-                        std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
-                            domain, krb_ticket->service_account_name, krb_ccname_str, cf_logger );
+                        std::pair<int, std::string> gmsa_ticket_result =
+                            fetch_gmsa_password_and_create_krb_ticket(
+                                domain, krb_ticket->service_account_name, krb_ccname_str,
+                                cf_logger );
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: " + std::to_string( status.first ) +
@@ -1179,14 +1181,15 @@ class CredentialsFetcherImpl final
                         std::pair<int, std::string> status;
                         if ( aws_sm_secret_name.length() != 0 )
                         {
-                            status = get_user_krb_ticket( krb_ticket->domain_name,
-                                                          aws_sm_secret_name, cf_logger );
+                            status = Util::generate_krb_ticket_using_secret_vault(
+                                krb_ticket->domain_name, aws_sm_secret_name, cf_logger );
                             krb_ticket->domainless_user =
                                 "awsdomainlessusersecret:" + aws_sm_secret_name;
                         }
                         else
                         {
-                            status = get_machine_krb_ticket( krb_ticket->domain_name, cf_logger );
+                            status = generate_krb_ticket_from_machine_keytab(
+                                krb_ticket->domain_name, cf_logger );
                         }
                         if ( status.first < 0 )
                         {
@@ -1218,9 +1221,10 @@ class CredentialsFetcherImpl final
                             krb_ticket->krb_file_path = krb_ccname_str;
                         }
 
-                        std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
-                            krb_ticket->domain_name, krb_ticket->service_account_name,
-                            krb_ccname_str, cf_logger );
+                        std::pair<int, std::string> gmsa_ticket_result =
+                            fetch_gmsa_password_and_create_krb_ticket(
+                                krb_ticket->domain_name, krb_ticket->service_account_name,
+                                krb_ccname_str, cf_logger );
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: Cannot get gMSA krb ticket";
@@ -1503,8 +1507,8 @@ class CredentialsFetcherImpl final
                             std::cerr << Util::getCurrentTime() << '\t' << err_msg << std::endl;
                             break;
                         }
-                        status =
-                            get_domainless_user_krb_ticket( domain, username, password, cf_logger );
+                        status = Util::generate_krb_ticket_using_username_and_password(
+                            domain, username, password, cf_logger );
                         if ( status.first < 0 )
                         {
                             err_msg = "ERROR: " + std::to_string( status.first ) +
@@ -1535,8 +1539,10 @@ class CredentialsFetcherImpl final
                             krb_ticket->krb_file_path = krb_ccname_str;
                         }
 
-                        std::pair<int, std::string> gmsa_ticket_result = get_gmsa_krb_ticket(
-                            domain, krb_ticket->service_account_name, krb_ccname_str, cf_logger );
+                        std::pair<int, std::string> gmsa_ticket_result =
+                            fetch_gmsa_password_and_create_krb_ticket(
+                                domain, krb_ticket->service_account_name, krb_ccname_str,
+                                cf_logger );
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: Cannot get gMSA krb ticket";
@@ -2406,7 +2412,7 @@ int ProcessCredSpecFile( std::string krb_files_dir, std::string credspec_filepat
     {
         std::pair<int, std::string> status;
         // invoke to get machine ticket
-        status = get_machine_krb_ticket( krb_ticket_info->domain_name, cf_logger );
+        status = generate_krb_ticket_from_machine_keytab( krb_ticket_info->domain_name, cf_logger );
         if ( status.first < 0 )
         {
             cf_logger.logger( LOG_ERR, "Error %d: Cannot get machine krb ticket", status );
@@ -2435,9 +2441,9 @@ int ProcessCredSpecFile( std::string krb_files_dir, std::string credspec_filepat
             krb_ticket_info->krb_file_path = krb_ccname_str;
         }
 
-        std::pair<int, std::string> gmsa_ticket_result =
-            get_gmsa_krb_ticket( krb_ticket_info->domain_name,
-                                 krb_ticket_info->service_account_name, krb_ccname_str, cf_logger );
+        std::pair<int, std::string> gmsa_ticket_result = fetch_gmsa_password_and_create_krb_ticket(
+            krb_ticket_info->domain_name, krb_ticket_info->service_account_name, krb_ccname_str,
+            cf_logger );
         if ( gmsa_ticket_result.first != 0 )
         {
             err_msg = "ERROR: Cannot get gMSA krb ticket";
