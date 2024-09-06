@@ -732,4 +732,179 @@ class Util
         // Clear the string content
         str.clear();
     }
+
+    /**
+     * This function generates kerberos ticket with user credentials
+     * User credentials must have adequate privileges to read gMSA passwords
+     * This is an alternative to the machine credentials approach above
+     * @param cf_daemon - parent daemon object
+     * @return error-code - 0 if successful
+     */
+    static std::pair<int, std::string> generate_krb_ticket_using_secret_vault(
+        std::string domain_name, std::string aws_sm_secret_name, CF_logger& cf_logger )
+    {
+        std::pair<int, std::string> result;
+
+        result = Util::check_util_binaries_permissions();
+
+        if ( result.first != 0 )
+        {
+            return result;
+        }
+
+        std::string username = "";
+        std::string password = "";
+        Json::Value root = Util::get_secret_from_secrets_manager( aws_sm_secret_name );
+
+        std::string distinguished_name = "";
+        if ( root != Json::nullValue )
+        {
+            // Read other
+            distinguished_name = root["distinguishedName"].asString();
+            username = root["username"].asString();
+            password = root["password"].asString();
+        }
+        else
+        {
+            return std::make_pair( -1, "ERROR: username and password not found in secret" );
+        }
+
+        if ( !distinguished_name.empty() )
+        {
+            std::cerr << "[Optional] DN from Secrets Manager = " << distinguished_name << std::endl;
+        }
+
+        std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
+                        []( unsigned char c ) { return std::toupper( c ); } );
+
+        // kinit using api interface
+        char* kinit_argv[3];
+
+        kinit_argv[0] = (char*)"my_kinit";
+        username = username + "@" + domain_name;
+        kinit_argv[1] = (char*)username.c_str();
+        kinit_argv[2] = (char*)password.c_str();
+        int ret = my_kinit_main( 2, kinit_argv );
+#if 0
+    /* The old way */
+    std::string kinit_cmd = "echo '"  + password +  "' | kinit -V " + username + "@" +
+                            domain_name;
+    username = "xxxx";
+    password = "xxxx";
+    result = Util::exec_shell_cmd( kinit_cmd );
+    kinit_cmd = "xxxx";
+    return result.first;
+#endif
+
+        Util::clearString( username );
+        Util::clearString( password );
+
+        result = std::make_pair( ret, distinguished_name );
+
+        return result;
+    }
+
+    /**
+     * This function generates kerberos ticket with user with access to gMSA password credentials
+     * User credentials must have adequate privileges to read gMSA passwords
+     * This is an alternative to the machine credentials approach above
+     * @param cf_daemon - parent daemon object
+     * @return error-code - 0 if successful
+     */
+    static std::pair<int, std::string> generate_krb_ticket_using_username_and_password(
+        std::string domain_name, std::string username, std::string password, CF_logger& cf_logger )
+    {
+        std::pair<int, std::string> result;
+
+        result = Util::is_kinit_cmd_present();
+        if ( result.first != 0 )
+        {
+            cf_logger.logger( LOG_ERR, result.second.c_str() );
+            return result;
+        }
+
+        result = Util::is_ldapsearch_cmd_present();
+        if ( result.first != 0 )
+        {
+            cf_logger.logger( LOG_ERR, result.second.c_str() );
+            return result;
+        }
+
+        std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
+                        []( unsigned char c ) { return std::toupper( c ); } );
+
+        // kinit using api interface
+        char* kinit_argv[3];
+
+        kinit_argv[0] = (char*)"my_kinit";
+        username = username + "@" + domain_name;
+        kinit_argv[1] = (char*)username.c_str();
+        kinit_argv[2] = (char*)password.c_str();
+        int ret = my_kinit_main( 2, kinit_argv );
+        Util::clearString( username );
+        Util::clearString( password );
+
+        result = std::make_pair( ret, "" );
+
+        return result;
+    }
+
+    /**
+     * If the host is domain-joined, the result is of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM'
+     * @param domain_name: Expected domain name as per configuration
+     * @return result pair<int, std::string> (error-code - 0 if successful
+     *                          string of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM')
+     */
+    static std::pair<int, std::string> get_machine_principal( std::string domain_name,
+                                                              CF_logger& cf_logger )
+    {
+        std::pair<int, std::string> result = std::make_pair( -1, "" );
+
+        char hostname[HOST_NAME_MAX];
+        int status = gethostname( hostname, HOST_NAME_MAX );
+        if ( status )
+        {
+            result.first = status;
+            return result;
+        }
+
+        std::pair<int, std::string> realm_name_result = Util::get_realm_name();
+        if ( realm_name_result.first != 0 )
+        {
+            return realm_name_result;
+        }
+
+        std::pair<int, std::string> domain_name_result = Util::check_domain_name( domain_name );
+        if ( domain_name_result.first != 0 )
+        {
+            return domain_name_result;
+        }
+
+        std::string s = std::string( hostname );
+        std::string host_name = s.substr( 0, s.find( '.' ) );
+
+        // truncate the hostname to the host name size limit defined by microsoft
+        if ( host_name.length() > HOST_NAME_LENGTH_LIMIT )
+        {
+            cf_logger.logger( LOG_ERR,
+                              "WARNING: %s:%d hostname exceeds 15 characters,"
+                              "this can cause problems in getting kerberos tickets, please reduce "
+                              "hostname length",
+                              __func__, __LINE__ );
+            host_name = host_name.substr( 0, HOST_NAME_LENGTH_LIMIT );
+            std::cerr << Util::getCurrentTime() << '\t'
+                      << "INFO: hostname exceeds 15 characters this can "
+                         "cause problems in getting kerberos tickets, "
+                         "please reduce hostname length"
+                      << std::endl;
+        }
+
+        /**
+         * Machine principal is of the format EC2AMAZ-Q5VJZQ$@CONTOSO.COM'
+         */
+        result.first = 0;
+        result.second = "'" + host_name + "$@'" + realm_name_result.second;
+
+        return result;
+    }
 };

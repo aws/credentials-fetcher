@@ -1,8 +1,8 @@
 #include "daemon.h"
-#include <filesystem>
-#include <chrono>
-#include <stdlib.h>
 #include "util.hpp"
+#include <chrono>
+#include <filesystem>
+#include <stdlib.h>
 
 int krb_ticket_renew_handler( Daemon cf_daemon )
 {
@@ -56,30 +56,35 @@ int krb_ticket_renew_handler( Daemon cf_daemon )
                     std::string krb_cc_name = krb_ticket->krb_file_path;
                     std::string domainless_user = krb_ticket->domainless_user;
                     // check if the ticket is ready for renewal and not created in domainless mode
-                    if ((domainless_user.empty() || domainless_user.find("awsdomainlessusersecret") !=
-                                                          std::string::npos) && is_ticket_ready_for_renewal( krb_ticket ))
+                    if ( ( domainless_user.empty() ||
+                           domainless_user.find( "awsdomainlessusersecret" ) !=
+                               std::string::npos ) &&
+                         is_ticket_ready_for_renewal( krb_ticket, cf_daemon.cf_logger ) )
                     {
                         int num_retries = 1;
                         for ( int i = 0; i <= num_retries; i++ )
                         {
-                            gmsa_ticket_result = get_gmsa_krb_ticket (
-                                                      krb_ticket->domain_name, krb_ticket->service_account_name,
-                                                      krb_cc_name, cf_logger );
+                            gmsa_ticket_result = fetch_gmsa_password_and_create_krb_ticket(
+                                krb_ticket->domain_name, krb_ticket->service_account_name,
+                                krb_cc_name, cf_logger );
                             if ( gmsa_ticket_result.first != 0 )
                             {
                                 std::pair<int, std::string> status;
-                                cf_logger.logger( LOG_ERR, "ERROR: Cannot get gMSA krb ticket using account %s",
-                                                    krb_ticket->service_account_name.c_str() );
-                                if (domainless_user.find("awsdomainlessusersecret") != std::string::npos) {
-                                    int pos = domainless_user.find(":");
-                                    std::string domainlessUser = domainless_user.substr(pos + 1);
-                                    status = get_user_krb_ticket( krb_ticket->domain_name,
-                                                                  domainlessUser, cf_logger );
+                                cf_logger.logger(
+                                    LOG_ERR, "ERROR: Cannot get gMSA krb ticket using account %s",
+                                    krb_ticket->service_account_name.c_str() );
+                                if ( domainless_user.find( "awsdomainlessusersecret" ) !=
+                                     std::string::npos )
+                                {
+                                    int pos = domainless_user.find( ":" );
+                                    std::string domainlessUser = domainless_user.substr( pos + 1 );
+                                    status = Util::generate_krb_ticket_using_secret_vault(
+                                        krb_ticket->domain_name, domainlessUser, cf_logger );
                                 }
                                 else
                                 {
-                                    status = get_machine_krb_ticket( krb_ticket->domain_name,
-                                                                         cf_logger );
+                                    status = generate_krb_ticket_from_machine_keytab(
+                                        krb_ticket->domain_name, cf_logger );
                                 }
                                 if ( status.first < 0 )
                                 {
@@ -101,12 +106,14 @@ int krb_ticket_renew_handler( Daemon cf_daemon )
                 }
             }
         }
-        catch ( const std::exception& ex  )
+        catch ( const std::exception& ex )
         {
-            std::cout << Util::getCurrentTime() << '\t' << "ERROR: '" << ex.what() << "'!" <<
-                                                         std::endl;
-            std::cout << Util::getCurrentTime() << '\t' << "ERROR: failed to run the ticket renewal"
-                      << std::endl;
+            std::string log_str = Util::getCurrentTime() + '\t' + "ERROR: '" + ex.what() + "'!\n";
+            cf_logger.logger( LOG_ERR, log_str.c_str() );
+            std::cerr << log_str << std::endl;
+            log_str = Util::getCurrentTime() + '\t' + "ERROR: failed to run ticket renewal";
+            std::cerr << log_str << std::endl;
+            cf_logger.logger( LOG_ERR, log_str.c_str() );
             break;
         }
     }

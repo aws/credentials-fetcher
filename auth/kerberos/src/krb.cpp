@@ -17,70 +17,13 @@ const std::string install_path_for_decode_exe = "/usr/sbin/credentials_fetcher_u
 const std::string install_path_for_aws_cli = "/usr/bin/aws";
 
 /**
- * If the host is domain-joined, the result is of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM'
- * @param domain_name: Expected domain name as per configuration
- * @return result pair<int, std::string> (error-code - 0 if successful
- *                          string of the form EC2AMAZ-Q5VJZQ$@CONTOSO.COM')
- */
-std::pair<int, std::string> get_machine_principal( std::string domain_name, CF_logger& cf_logger )
-{
-    std::pair<int, std::string> result = std::make_pair( -1, "" );
-
-    char hostname[HOST_NAME_MAX];
-    int status = gethostname( hostname, HOST_NAME_MAX );
-    if ( status )
-    {
-        result.first = status;
-        return result;
-    }
-
-    std::pair<int, std::string> realm_name_result = Util::get_realm_name();
-    if ( realm_name_result.first != 0 )
-    {
-        return realm_name_result;
-    }
-
-    std::pair<int, std::string> domain_name_result = Util::check_domain_name( domain_name );
-    if ( domain_name_result.first != 0 )
-    {
-        return domain_name_result;
-    }
-
-    std::string s = std::string( hostname );
-    std::string host_name = s.substr( 0, s.find( '.' ) );
-
-    // truncate the hostname to the host name size limit defined by microsoft
-    if ( host_name.length() > HOST_NAME_LENGTH_LIMIT )
-    {
-        cf_logger.logger( LOG_ERR,
-                          "WARNING: %s:%d hostname exceeds 15 characters,"
-                          "this can cause problems in getting kerberos tickets, please reduce "
-                          "hostname length",
-                          __func__, __LINE__ );
-        host_name = host_name.substr( 0, HOST_NAME_LENGTH_LIMIT );
-        std::cerr << Util::getCurrentTime() << '\t'
-                  << "INFO: hostname exceeds 15 characters this can "
-                     "cause problems in getting kerberos tickets, "
-                     "please reduce hostname length"
-                  << std::endl;
-    }
-
-    /**
-     * Machine principal is of the format EC2AMAZ-Q5VJZQ$@CONTOSO.COM'
-     */
-    result.first = 0;
-    result.second = "'" + host_name + "$@'" + realm_name_result.second;
-
-    return result;
-}
-
-/**
  * This function generates the kerberos ticket for the host machine.
  * It uses machine keytab located at /etc/krb5.keytab to generate the ticket.
  * @param cf_daemon - parent daemon object
  * @return error-code - 0 if successful
  */
-std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name, CF_logger& cf_logger )
+std::pair<int, std::string> generate_krb_ticket_from_machine_keytab( std::string domain_name,
+                                                                     CF_logger& cf_logger )
 {
     std::pair<int, std::string> result;
 
@@ -129,7 +72,8 @@ std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name, CF_
     /**
      ** Machine principal is of the format 'EC2AMAZ-Q5VJZQ$'@CONTOSO.COM
      **/
-    std::pair<int, std::string> machine_principal = get_machine_principal( domain_name, cf_logger );
+    std::pair<int, std::string> machine_principal =
+        Util::get_machine_principal( domain_name, cf_logger );
     if ( result.first != 0 )
     {
         std::cerr << "ERROR: " << __func__ << ":" << __LINE__ << " invalid machine principal"
@@ -151,120 +95,6 @@ std::pair<int, std::string> get_machine_krb_ticket( std::string domain_name, CF_
 }
 
 /**
- * This function generates kerberos ticket with user credentials
- * User credentials must have adequate privileges to read gMSA passwords
- * This is an alternative to the machine credentials approach above
- * @param cf_daemon - parent daemon object
- * @return error-code - 0 if successful
- */
-std::pair<int, std::string> get_user_krb_ticket( std::string domain_name,
-                                                 std::string aws_sm_secret_name,
-                                                 CF_logger& cf_logger )
-{
-    std::pair<int, std::string> result;
-
-    result = Util::check_util_binaries_permissions();
-
-    if ( result.first != 0 )
-    {
-        return result;
-    }
-
-    std::string username = "";
-    std::string password = "";
-    Json::Value root = Util::get_secret_from_secrets_manager( aws_sm_secret_name );
-
-    std::string distinguished_name = "";
-    if ( root != Json::nullValue )
-    {
-        distinguished_name = root["distinguishedName"].asString();
-        username = root["username"].asString();
-        password = root["password"].asString();
-    }
-    std::cerr << "[Optional] DN from Secrets Manager = " << distinguished_name << std::endl;
-
-    std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
-                    []( unsigned char c ) { return std::toupper( c ); } );
-
-    // kinit using api interface
-    char* kinit_argv[3];
-
-    kinit_argv[0] = (char*)"my_kinit";
-    username = username + "@" + domain_name;
-    kinit_argv[1] = (char*)username.c_str();
-    kinit_argv[2] = (char*)password.c_str();
-    int ret = my_kinit_main( 2, kinit_argv );
-#if 0
-    /* The old way */
-    std::string kinit_cmd = "echo '"  + password +  "' | kinit -V " + username + "@" +
-                            domain_name;
-    username = "xxxx";
-    password = "xxxx";
-    result = Util::exec_shell_cmd( kinit_cmd );
-    kinit_cmd = "xxxx";
-    return result.first;
-#endif
-
-    Util::clearString( username );
-    Util::clearString( password );
-
-    result = std::make_pair( ret, distinguished_name );
-
-    return result;
-}
-
-/**
- * This function generates kerberos ticket with user with access to gMSA password credentials
- * User credentials must have adequate privileges to read gMSA passwords
- * This is an alternative to the machine credentials approach above
- * @param cf_daemon - parent daemon object
- * @return error-code - 0 if successful
- */
-std::pair<int, std::string> get_domainless_user_krb_ticket( std::string domain_name,
-                                                            std::string username,
-                                                            std::string password,
-                                                            CF_logger& cf_logger )
-{
-    std::pair<int, std::string> result;
-
-    std::pair<int, std::string> cmd = Util::exec_shell_cmd( "which kinit" );
-    Util::rtrim( cmd.second );
-    if ( !Util::check_file_permissions( cmd.second ) )
-    {
-        std::cerr << Util::getCurrentTime() << '\t' << "ERROR: kinit not found" << std::endl;
-        result = std::make_pair( -1, "ERROR: kinit not found" );
-        return result;
-    }
-
-    cmd = Util::exec_shell_cmd( "which ldapsearch" );
-    Util::rtrim( cmd.second );
-    if ( !Util::check_file_permissions( cmd.second ) )
-    {
-        std::cerr << Util::getCurrentTime() << '\t' << "ERROR: ldapsearch not found" << std::endl;
-        result = std::make_pair( -1, "ERROR: ldapsearch not found" );
-        return result;
-    }
-
-    std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
-                    []( unsigned char c ) { return std::toupper( c ); } );
-
-    // kinit using api interface
-    char* kinit_argv[3];
-
-    kinit_argv[0] = (char*)"my_kinit";
-    username = username + "@" + domain_name;
-    kinit_argv[1] = (char*)username.c_str();
-    kinit_argv[2] = (char*)password.c_str();
-    int ret = my_kinit_main( 2, kinit_argv );
-    Util::clearString( username );
-    Util::clearString( password );
-
-    result = std::make_pair( ret, "" );
-
-    return result;
-}
-
-/**
  * This function fetches the gmsa password and creates a krb ticket
  * It uses the existing krb ticket of machine to run ldap query over
  * kerberos and do the appropriate UTF decoding.
@@ -275,10 +105,9 @@ std::pair<int, std::string> get_domainless_user_krb_ticket( std::string domain_n
  * @param cf_logger - log to systemd daemon
  * @return result code and kinit log, 0 if successful, -1 on failure
  */
-std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
-                                                 const std::string& gmsa_account_name,
-                                                 const std::string& krb_cc_name,
-                                                 CF_logger& cf_logger )
+std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket(
+    std::string domain_name, const std::string& gmsa_account_name, const std::string& krb_cc_name,
+    CF_logger& cf_logger )
 {
     std::vector<std::string> results;
 
@@ -334,11 +163,21 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
             Util::execute_ldapsearch( gmsa_account_name, env_base_dn, base_dn, gmsa_ou, fqdn );
         if ( ldap_search_result.first == 0 )
         {
-            std::cerr << "ldapsearch successful with FQDN = " << fqdn << std::endl;
+            std::size_t pos = ldap_search_result.second.find( "msDS-ManagedPassword" );
+            std::string log_str = ldap_search_result.second.substr( 0, pos );
+            log_str = "ldapsearch successful with FQDN = " + fqdn + ", cmd = " + log_str + "\n";
+            std::cerr << log_str << std::endl;
+            cf_logger.logger( LOG_INFO, log_str.c_str() );
             break;
         }
+        else
+        {
+            std::string log_str =
+                "ldapsearch failed with FQDN = " + fqdn + ldap_search_result.second.c_str();
+            std::cerr << log_str << std::endl;
+            cf_logger.logger( LOG_INFO, log_str.c_str() );
+        }
     }
-    cf_logger.logger( LOG_ERR, ldap_search_result.second.c_str() );
     fqdn_list_result.clear();
 
     if ( ldap_search_result.first != 0 ) // ldapsearch did not work in any FQDN
@@ -348,11 +187,15 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
 
     std::pair<size_t, void*> password_found_result =
         Util::find_password( ldap_search_result.second );
+    OPENSSL_cleanse( (void*)ldap_search_result.second.c_str(),
+                     strlen( ldap_search_result.second.c_str() ) );
 
     if ( password_found_result.first == 0 || password_found_result.second == nullptr )
     {
-        std::cerr << Util::getCurrentTime() << '\t' << "ERROR: Password not found" << std::endl;
-        return std::make_pair( -1, std::string( "" ) );
+        std::string log_str = Util::getCurrentTime() + '\t' + "ERROR: Password not found";
+        std::cerr << log_str << std::endl;
+        cf_logger.logger( LOG_ERR, log_str.c_str() );
+        return std::make_pair( -1, log_str );
     }
 
     blob_t* blob = ( (blob_t*)password_found_result.second );
@@ -381,11 +224,12 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     int error_code = pclose( fp );
 
     // kinit output
-    std::cerr << Util::getCurrentTime() << '\t' << "INFO: kinit return value = " << error_code
-              << std::endl;
+    std::string log_str = Util::getCurrentTime() + '\t' +
+                          "INFO: kinit return value = " + std::to_string( error_code );
+    std::cerr << log_str << std::endl;
+    cf_logger.logger( LOG_ERR, log_str.c_str() );
 
     OPENSSL_cleanse( password_found_result.second, password_found_result.first );
-    OPENSSL_free( password_found_result.second );
 
     return std::make_pair( error_code, krb_cc_name );
 }
@@ -395,7 +239,7 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
  * @param klist_ticket_info  - String output of the klist command to parse
  * @return - returns the date and time of the ticket experation otherwise an empty string
  */
-std::string get_ticket_expiration( std::string klist_ticket_info )
+std::string get_ticket_expiration( std::string klist_ticket_info, CF_logger& cf_logger )
 {
     /*
      * Ticket cache: KEYRING:persistent:1000:1000
@@ -441,8 +285,10 @@ std::string get_ticket_expiration( std::string klist_ticket_info )
         pattern = expires_regex;
         if ( !std::regex_search( klist_ticket_info, expires_match, pattern ) )
         {
-            std::cerr << "Unable to parse klist for ticket expiration: " << klist_ticket_info
-                      << std::endl;
+            std::string log_str =
+                "Unable to parse klist for ticket expiration: " + klist_ticket_info;
+            std::cerr << log_str << std::endl;
+            cf_logger.logger( LOG_ERR, log_str.c_str() );
             return std::string( "" );
         }
     }
@@ -486,6 +332,9 @@ std::string get_ticket_expiration( std::string klist_ticket_info )
         }
     }
 
+    std::string log_str = "klist expires date = " + klist_expires_date + " " + klist_expires_time;
+    std::cerr << log_str << std::endl;
+    cf_logger.logger( LOG_INFO, log_str.c_str() );
     return klist_expires_date + " " + klist_expires_time;
 }
 
@@ -495,7 +344,7 @@ std::string get_ticket_expiration( std::string klist_ticket_info )
  * @return - is renewal needed - true or false
  */
 
-bool is_ticket_ready_for_renewal( krb_ticket_info_t* krb_ticket_info )
+bool is_ticket_ready_for_renewal( krb_ticket_info_t* krb_ticket_info, CF_logger& cf_logger )
 {
     std::string cmd = "export KRB5CCNAME=" + krb_ticket_info->krb_file_path + " &&  klist";
     std::pair<int, std::string> krb_ticket_info_result = Util::exec_shell_cmd( cmd );
@@ -520,7 +369,7 @@ bool is_ticket_ready_for_renewal( krb_ticket_info_t* krb_ticket_info )
         {
             std::string renewal_date_time;
 
-            renewal_date_time = get_ticket_expiration( result );
+            renewal_date_time = get_ticket_expiration( result, cf_logger );
 
             char renewal_date[80];
             char renewal_time[80];
@@ -650,7 +499,7 @@ std::string renew_gmsa_ticket( krb_ticket_info_t* krb_ticket, std::string domain
     int num_retries = 2;
     for ( int i = 0; i < num_retries; i++ )
     {
-        gmsa_ticket_result = get_gmsa_krb_ticket(
+        gmsa_ticket_result = fetch_gmsa_password_and_create_krb_ticket(
             krb_ticket->domain_name, krb_ticket->service_account_name, krb_cc_name, cf_logger );
         if ( gmsa_ticket_result.first != 0 )
         {
@@ -675,7 +524,8 @@ std::string renew_gmsa_ticket( krb_ticket_info_t* krb_ticket, std::string domain
             if ( !domainless_user.empty() && domainless_user == username )
             {
                 std::pair<int, std::string> status =
-                    get_domainless_user_krb_ticket( domain_name, username, password, cf_logger );
+                    Util::generate_krb_ticket_using_username_and_password( domain_name, username,
+                                                                           password, cf_logger );
 
                 if ( status.first < 0 )
                 {
