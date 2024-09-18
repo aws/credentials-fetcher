@@ -1,6 +1,16 @@
+Disclaimer
+This CDK and scripts are only for test, please modify as needed.
+
 Pre-requisites
-1) Create secret in Secrets Manager as per https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html#linux-gmsa-setup
-2) 'default' AWS profile
+Please take a look at data.json for default values.
+1) Create secret in Secrets Manager as per https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html#linux-gmsa-setup with the following values:
+   ```
+    Secret key  Secret value
+    username    standarduser01
+    password    p@ssw0rd
+    domainName  activedirectory1.com
+    ```
+2) 'default' AWS profile with administrator access is needed, a separate/burner AWS account would suffice.
 
 Steps to run tasks in ECS with Credentials-fetcher.
 
@@ -41,9 +51,15 @@ Steps to run tasks in ECS with Credentials-fetcher.
         _: [ 'bootstrap' ],
     ```
 
+3) Run copy_credspecs_and_create_task_defs.py to create and copy credspecs to S3 bucket and also to register ECS task definitions
+    ```
+     (.venv) cdk % python3 copy_credspecs_and_create_task_defs.py
+    ```
+
 3) After CloudFormation stack is complete, launch tasks using run_tasks.py
     ```
         (.venv) samiull@6cb1339dd38d cdk % python3 run_tasks.py
+    ```
 4) Done: You can see the tasks in EC2 Console
 
 
