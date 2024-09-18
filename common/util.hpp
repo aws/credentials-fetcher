@@ -299,7 +299,10 @@ class Util
         {
             Json::Value root = get_secret_from_secrets_manager( secret_name );
             distinguished_name = root["distinguishedName"].asString();
-            result.first = 0;
+            if ( !distinguished_name.empty() )
+            {
+                result.first = 0;
+            }
             result.second = distinguished_name;
         }
 
