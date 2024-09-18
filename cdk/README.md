@@ -1,4 +1,8 @@
-Steps to run tasks in ECS with Credentials-fetcher after above.
+Pre-requisites
+1) Create secret in Secrets Manager as per https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html#linux-gmsa-setup
+2) 'default' AWS profile
+
+Steps to run tasks in ECS with Credentials-fetcher.
 
 1) Create a virtual env
 
