@@ -1,0 +1,30 @@
+{
+  "CmsPlugins": ["ActiveDirectory"],
+  "DomainJoinConfig": {
+    "Sid": "S-1-5-21-2421564706-1737585382-3854682907",
+    "MachineAccountName": "$gmsaName$",
+    "Guid": "6a91814c-e151-4fb0-96f0-f517566fc883",
+    "DnsTreeName": "$adDomainName$",
+    "DnsName": "$adDomainName$",
+    "NetBiosName": "$adNetBiosName$"
+  },
+  "ActiveDirectoryConfig": {
+    "GroupManagedServiceAccounts": [
+      {
+        "Name": "$gmsaName$",
+        "Scope": "$adDomainName$"
+      },
+      {
+        "Name": "$gmsaName$",
+        "Scope": "$adNetBiosName$"
+      }
+    ],
+    "HostAccountConfig": {
+      "PortableCcgVersion": "1",
+      "PluginGUID": "{859E1386-BDB4-49E8-85C7-3070B13920E1}",
+      "PluginInput": {
+        "CredentialArn": "$gmsaSecretArn$"
+      }
+    }
+  }
+}
