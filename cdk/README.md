@@ -1,3 +1,12 @@
+What this CDK does:
+CDK automation to run gMSA in ECS with EC2 instance. This CDK can be used to test RPMs for AL2023.
+This CDK does the following:
+Creates directory in Directory Service (Active Directory)
+Launch Windows instance, domain-join with Active Directory and create gMSA accounts
+Create ECS cluster
+Launch ECS-optimized Linux instance and attaches to ECS cluster
+Runs a couple of tasks in the ECS-optimized Linux instance
+
 Disclaimer
 This CDK and scripts are only for test, please modify as needed.
 
@@ -51,12 +60,12 @@ Steps to run tasks in ECS with Credentials-fetcher.
         _: [ 'bootstrap' ],
     ```
 
-3) Run copy_credspecs_and_create_task_defs.py to create and copy credspecs to S3 bucket and also to register ECS task definitions
+3) Run copy_credspecs_and_create_task_defs.py to create and copy credspecs to S3 bucket and also to register ECS task definitions.
     ```
      (.venv) cdk % python3 copy_credspecs_and_create_task_defs.py
     ```
 
-3) After CloudFormation stack is complete, launch tasks using run_tasks.py
+3) After CloudFormation stack is complete, launch tasks using run_tasks.py. (You can install a test RPM into the ECS intance here, if you like)
     ```
         (.venv) samiull@6cb1339dd38d cdk % python3 run_tasks.py
     ```
