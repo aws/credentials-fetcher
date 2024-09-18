@@ -1,11 +1,12 @@
 What this CDK does:
-CDK automation to run gMSA in ECS with EC2 instance. This CDK can be used to test RPMs for AL2023.
+CDK automation to run Linux gMSA in ECS with EC2 instance in domainless mode . This CDK can be used to test RPMs for AL2023.
+
 This CDK does the following:
 Creates directory in Directory Service (Active Directory)
 Launch Windows instance, domain-join with Active Directory and create gMSA accounts
 Create ECS cluster
 Launch ECS-optimized Linux instance and attaches to ECS cluster
-Runs a couple of tasks in the ECS-optimized Linux instance
+Runs a couple of tasks in the ECS-optimized Linux instance using gMSA in domainless mode.
 
 Disclaimer
 This CDK and scripts are only for test, please modify as needed.
@@ -13,6 +14,7 @@ This CDK and scripts are only for test, please modify as needed.
 Pre-requisites
 Please take a look at data.json for default values.
 1) Create secret in Secrets Manager as per https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html#linux-gmsa-setup with the following values:
+   This is the same secret in data.json.
    ```
     Secret key  Secret value
     username    standarduser01
