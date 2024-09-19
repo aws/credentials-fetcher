@@ -25,8 +25,12 @@ Please take a look at data.json for default values.
 
 Steps to run tasks in ECS with Credentials-fetcher.
 
-1) Create a virtual env
+3) Create a virtual env
+        Go to cdk directory
 
+        ```
+        $ cd cdk/
+        ```
         To manually create a virtualenv on MacOS and Linux:
 
         ```
@@ -40,21 +44,22 @@ Steps to run tasks in ECS with Credentials-fetcher.
         $ source .venv/bin/activate
         ```
 
-        If you are a Windows platform, you would activate the virtualenv like this:
-
-        ```
-        % .venv\Scripts\activate.bat
-        ```
-
         Once the virtualenv is activated, you can install the required dependencies.
 
         ```
         $ pip install -r requirements.txt
         ```
 
-2) Run start_stack.sh (this is a bash script) to create a CloudFormation stack
+        Install AWS cdk
 
-   2.1) This creates Managed Active Directory, launches Windows instance and domain-joins it and creates the gMSA accounts, launches an ECS-optimized Linux instance, creates a new ECS cluster and attaches it to ECS cluster.
+        ```
+        $ brew install aws-cdk
+        ```
+
+5) Run start_stack.sh (this is a bash script) to create a CloudFormation stack
+   2.1) Update start_stack.sh with your aws account number
+
+   2.2) This creates Managed Active Directory, launches Windows instance and domain-joins it and creates the gMSA accounts, launches an ECS-optimized Linux instance, creates a new ECS cluster and attaches it to ECS cluster.
     ```
     (.venv) cdk % ./start_stack.sh
         [10:29:46] CDK toolkit version: 2.156.0 (build 2966832)
@@ -62,15 +67,15 @@ Steps to run tasks in ECS with Credentials-fetcher.
         _: [ 'bootstrap' ],
     ```
 
-3) Run copy_credspecs_and_create_task_defs.py to create and copy credspecs to S3 bucket and also to register ECS task definitions.
+7) Run copy_credspecs_and_create_task_defs.py to create and copy credspecs to S3 bucket and also to register ECS task definitions.
     ```
      (.venv) cdk % python3 copy_credspecs_and_create_task_defs.py
     ```
 
-3) After CloudFormation stack is complete, launch tasks using run_tasks.py. (You can install a test RPM into the ECS intance here, if you like)
+8) After CloudFormation stack is complete, launch tasks using run_tasks.py. (You can install a test RPM into the ECS intance here, if you like)
     ```
         (.venv) samiull@6cb1339dd38d cdk % python3 run_tasks.py
     ```
-4) Done: You can see the tasks in EC2 Console
+9) Done: You can see the tasks in EC2 Console
 
 
