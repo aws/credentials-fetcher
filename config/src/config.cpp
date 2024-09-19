@@ -28,15 +28,7 @@ void print_help( const struct option* long_options,
     }
     for ( const struct option* opt = long_options; opt->name != nullptr; ++opt )
     {
-        std::string opt_string;
-        if ( opt->val != 0 )
-        {
-            opt_string = std::string( "--" ) + opt->name;
-        }
-        else
-        {
-            opt_string = std::string( "--" ) + opt->name;
-        }
+        std::string opt_string = std::string( "--" ) + opt->name;
         std::string description;
         if ( options_descriptions.count( opt->name ) > 0 )
         {
@@ -94,12 +86,9 @@ int parse_options( int argc, const char* argv[], Daemon& cf_daemon )
                 cf_daemon.run_diagnostic = true;
                 break;
             case 'v':
-                std::cout << "Verbosity level was set to " << optarg << std::endl;
                 break;
             case 's':
                 cf_daemon.aws_sm_secret_name = optarg;
-                std::cout << "Option selected for domainless operation, AWS secrets manager "
-                             "secret-name = " << optarg << std::endl;
                 break;
             case 'n':
                 std::cout << CMAKE_PROJECT_VERSION << std::endl;
