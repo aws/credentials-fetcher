@@ -23,7 +23,7 @@ Please take a look at data.json for default values.
     ```
 2) 'default' AWS profile with administrator access is needed, a separate/burner AWS account would suffice.  
 3) Create a new key-pair, this will be needed in step 5  
-4) Create a new s3 bucket, this will also be needed in step 5  
+4) Create a new s3 bucket with name "credentials-fetcher-pre-created-bucket", this will also be needed in step 5  
 5) Modify the data.json file by adding custom prefix-list, s3 bucket name created in step 4, and key-pair created in step 3  
 
 Steps to run tasks in ECS with Credentials-fetcher.
