@@ -21,16 +21,15 @@ Please take a look at data.json for default values.
     password    p@ssw0rd
     domainName  activedirectory1.com
     ```
-2) 'default' AWS profile with administrator access is needed, a separate/burner AWS account would suffice.
+2) 'default' AWS profile with administrator access is needed, a separate/burner AWS account would suffice.  
+3) Create a new key-pair, this will be needed in step 5  
+4) Create a new s3 bucket, this will also be needed in step 5  
+5) Modify the data.json file by adding custom prefix-list, s3 bucket name created in step 4, and key-pair created in step 3  
 
 Steps to run tasks in ECS with Credentials-fetcher.
 
-3) Create a virtual env
-        Go to cdk directory
+1) Create a virtual env
 
-        ```
-        $ cd cdk/
-        ```
         To manually create a virtualenv on MacOS and Linux:
 
         ```
@@ -44,22 +43,21 @@ Steps to run tasks in ECS with Credentials-fetcher.
         $ source .venv/bin/activate
         ```
 
+        If you are a Windows platform, you would activate the virtualenv like this:
+
+        ```
+        % .venv\Scripts\activate.bat
+        ```
+
         Once the virtualenv is activated, you can install the required dependencies.
 
         ```
         $ pip install -r requirements.txt
         ```
 
-        Install AWS cdk
+2) Run start_stack.sh (this is a bash script) to create a CloudFormation stack
 
-        ```
-        $ brew install aws-cdk
-        ```
-
-5) Run start_stack.sh (this is a bash script) to create a CloudFormation stack
-   2.1) Update start_stack.sh with your aws account number
-
-   2.2) This creates Managed Active Directory, launches Windows instance and domain-joins it and creates the gMSA accounts, launches an ECS-optimized Linux instance, creates a new ECS cluster and attaches it to ECS cluster.
+   2.1) This creates Managed Active Directory, launches Windows instance and domain-joins it and creates the gMSA accounts, launches an ECS-optimized Linux instance, creates a new ECS cluster and attaches it to ECS cluster.
     ```
     (.venv) cdk % ./start_stack.sh
         [10:29:46] CDK toolkit version: 2.156.0 (build 2966832)
@@ -67,15 +65,15 @@ Steps to run tasks in ECS with Credentials-fetcher.
         _: [ 'bootstrap' ],
     ```
 
-7) Run copy_credspecs_and_create_task_defs.py to create and copy credspecs to S3 bucket and also to register ECS task definitions.
+3) Run copy_credspecs_and_create_task_defs.py to create and copy credspecs to S3 bucket and also to register ECS task definitions.
     ```
      (.venv) cdk % python3 copy_credspecs_and_create_task_defs.py
     ```
 
-8) After CloudFormation stack is complete, launch tasks using run_tasks.py. (You can install a test RPM into the ECS intance here, if you like)
+3) After CloudFormation stack is complete, launch tasks using run_tasks.py. (You can install a test RPM into the ECS intance here, if you like)
     ```
         (.venv) samiull@6cb1339dd38d cdk % python3 run_tasks.py
     ```
-9) Done: You can see the tasks in EC2 Console
+4) Done: You can see the tasks in EC2 Console
 
 
