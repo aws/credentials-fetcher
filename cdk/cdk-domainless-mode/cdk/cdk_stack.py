@@ -127,8 +127,8 @@ class CdkStack(Stack):
         resolver_rule.node.add_dependency(vpc)
         resolver_rule.node.add_dependency(self.cfn_microsoft_AD)
 
-    def init_DirectoryService(self, directory_name:str, ad_password: str):
-        self.password = ad_password
+    def init_DirectoryService(self, directory_name:str, domain_admin_password: str):
+        self.password = domain_admin_password
 
         # Get subnet_ids from vpc.public_subnets
         subnet_ids = [self.subnet_1.subnet_id, self.subnet_2.subnet_id]
@@ -136,7 +136,7 @@ class CdkStack(Stack):
                                     self,
                                     directory_name,
                                     name=directory_name,
-                                    password=ad_password,
+                                    password=domain_admin_password,
                                     vpc_settings=directoryservice.CfnMicrosoftAD.VpcSettingsProperty(
                                         subnet_ids=subnet_ids,
                                         vpc_id=self.vpc.vpc_id
@@ -370,8 +370,8 @@ class CdkStack(Stack):
         # Create task definition
         task_definition = ecs.TaskDefinition(self, task_definition_template_name,
                                             compatibility=ecs.Compatibility.EC2_AND_FARGATE,
-                                            cpu="2048",
-                                            memory_mib="4096",
+                                            cpu="1024",
+                                            memory_mib="2048",
                                             task_role=role,
                                             execution_role=role
                                             )

@@ -20,7 +20,7 @@ with open('data.json', 'r') as file:
 tag = cdk.Tag("Name", "Test Credentials-fetcher in Domainless mode")
 aws_region = data["aws_region"]
 prefix_list = data["prefix_list"]
-ad_password = data["ad_password"]
+domain_admin_password = data["domain_admin_password"]
 directory_name = data["directory_name"]
 windows_instance_tag = data["windows_instance_tag"]
 linux_instance_tag = data["linux_instance_tag"]
@@ -40,18 +40,15 @@ cdk_stack = CdkStack(app, app_name)
 
 cdk_stack.init_vpc(prefix_list = prefix_list, key_pair_name=key_name, stack_name=app_name)
 
-cfn_microsoft_AD = cdk_stack.init_DirectoryService(directory_name=directory_name, ad_password=ad_password)
+cfn_microsoft_AD = cdk_stack.init_DirectoryService(directory_name=directory_name, domain_admin_password=domain_admin_password)
 
 directory_id = cfn_microsoft_AD.ref
-
-# Get dns ip addresses from AD
-dns_ip_addresses = cfn_microsoft_AD.attr_dns_ip_addresses
 
 cdk_stack.init_route53_endpoint(domain_name = directory_name,
                                 vpc = cdk_stack.vpc)
 
 windows_instance = cdk_stack.launch_windows_instance(instance_tag = windows_instance_tag,
-                          password = ad_password,
+                          password = domain_admin_password,
                           domain_name = directory_name,
                           key_name = key_name,
                           number_of_gmsa_accounts = number_of_gmsa_accounts,
@@ -62,7 +59,7 @@ windows_instance.node.add_dependency(cfn_microsoft_AD)
 
 ecs_cluster = cdk_stack.create_ecs_cluster( cluster_name,
                                             instance_tag=linux_instance_tag,
-                                            password = ad_password,
+                                            password = domain_admin_password,
                                             domain_name = directory_name,
                                             key_pair=cdk_stack.key_pair,
                                             number_of_gmsa_accounts=number_of_gmsa_accounts,

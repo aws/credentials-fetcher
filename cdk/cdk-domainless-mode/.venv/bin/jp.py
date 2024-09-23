@@ -1,4 +1,4 @@
-#!/Users/samiull/Documents/2024/gmsa/cdk/.venv/bin/python3.12
+#!/Users/samiull/Documents/Documents/2024/GH/credentials-fetcher/cdk/.venv/bin/python3.12
 
 import sys
 import json

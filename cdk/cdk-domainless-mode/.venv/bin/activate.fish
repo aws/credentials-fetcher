@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV "/Users/samiull/Documents/2024/gmsa/cdk/.venv"
+set -gx VIRTUAL_ENV "/Users/samiull/Documents/Documents/2024/GH/credentials-fetcher/cdk/cdk-domainless-mode/.venv"
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/bin" $PATH
