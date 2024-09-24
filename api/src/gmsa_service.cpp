@@ -370,6 +370,7 @@ class CredentialsFetcherImpl final
                 return;
             }
 
+            // Note: This code-path is only for Fargate
             std::cerr << Util::getCurrentTime() << '\t' << "INFO: CallDataCreateKerberosArnLease "
                       << this << "status: " << status_ << std::endl;
 
@@ -406,6 +407,7 @@ class CredentialsFetcherImpl final
                 std::string username = "";
                 std::string password = "";
                 std::string domain = "";
+                std::string distinguished_name = "";
                 bool isTest = false;
 
                 std::string err_msg;
@@ -502,7 +504,7 @@ class CredentialsFetcherImpl final
                                     break;
                                 }
                                 // retrieve domainless user credentials
-                                std::tuple<std::string, std::string, std::string> userCreds =
+                                std::tuple<std::string, std::string, std::string, std::string> userCreds =
                                     retrieve_credspec_from_secrets_manager(
                                         krb_ticket_arns->credential_domainless_user_arn, region,
                                         creds );
@@ -510,6 +512,7 @@ class CredentialsFetcherImpl final
                                 username = std::get<0>( userCreds );
                                 password = std::get<1>( userCreds );
                                 domain = std::get<2>( userCreds );
+                                distinguished_name = std::get<3>( userCreds );
 
                                 if ( isValidDomain( domain ) &&
                                      !contains_invalid_characters_in_ad_account_name( username ) )
@@ -634,7 +637,7 @@ class CredentialsFetcherImpl final
                         std::pair<int, std::string> gmsa_ticket_result =
                             fetch_gmsa_password_and_create_krb_ticket(
                                 domain, krb_ticket->service_account_name, krb_ccname_str,
-                                cf_logger );
+                                distinguished_name, cf_logger );
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: " + std::to_string( status.first ) +
@@ -912,7 +915,7 @@ class CredentialsFetcherImpl final
                                     }
 
                                     // retrieve domainless user credentials
-                                    std::tuple<std::string, std::string, std::string> userCreds =
+                                    std::tuple<std::string, std::string, std::string, std::string> userCreds =
                                         retrieve_credspec_from_secrets_manager(
                                             krb_ticket_arns->credential_domainless_user_arn, region,
                                             creds );
@@ -920,6 +923,7 @@ class CredentialsFetcherImpl final
                                     username = std::get<0>( userCreds );
                                     password = std::get<1>( userCreds );
                                     std::string domain = std::get<2>( userCreds );
+                                    // std::string distinguished_name = std::get<3>( userCreds );
 
                                     if ( isValidDomain( domain ) &&
                                          !contains_invalid_characters_in_ad_account_name(
@@ -1224,7 +1228,7 @@ class CredentialsFetcherImpl final
                         std::pair<int, std::string> gmsa_ticket_result =
                             fetch_gmsa_password_and_create_krb_ticket(
                                 krb_ticket->domain_name, krb_ticket->service_account_name,
-                                krb_ccname_str, cf_logger );
+                                krb_ccname_str, "", cf_logger ); // TBD:: Add DN
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: Cannot get gMSA krb ticket";
@@ -1239,7 +1243,6 @@ class CredentialsFetcherImpl final
                                               gmsa_ticket_result.second.c_str() );
                             std::cerr << Util::getCurrentTime() << '\t'
                                       << "INFO: gMSA ticket is at "
-                                         ""
                                       << gmsa_ticket_result.second << std::endl;
                         }
                         create_krb_reply_.add_created_kerberos_file_paths( krb_file_path );
@@ -1386,6 +1389,7 @@ class CredentialsFetcherImpl final
                 return;
             }
 
+            // Note: This path is only for ECS or opensource, not for Fargate
             std::cerr << Util::getCurrentTime() << '\t' << "INFO: AddNonDomainJoinedKerberosLease "
                       << this << "status: " << status_ << std::endl;
 
@@ -1539,13 +1543,29 @@ class CredentialsFetcherImpl final
                             krb_ticket->krb_file_path = krb_ccname_str;
                         }
 
+                        std::string distinguished_name = Util::retrieve_variable_from_ecs_config( ENV_CF_DISTINGUISHED_NAME );
+                        if ( distinguished_name.empty() )
+                        {
+                              // Read value from secrets manager
+                              std::pair<int, std::string> v = Util::get_base_dn_from_secret(krb_ticket->credential_arn);
+                              if (v.first != 0)
+                              {
+                                 err_msg = "ERROR: Cannot read secret from " + krb_ticket->credential_arn;
+                                 std::cerr << Util::getCurrentTime() << '\t' << err_msg << std::endl;
+                                 cf_logger.logger( LOG_ERR, err_msg.c_str(), v.second );
+                                 break;
+                              } else {
+                                 distinguished_name = v.second;
+                              }
+                        }
+
                         std::pair<int, std::string> gmsa_ticket_result =
                             fetch_gmsa_password_and_create_krb_ticket(
                                 domain, krb_ticket->service_account_name, krb_ccname_str,
-                                cf_logger );
+                                distinguished_name, cf_logger );
                         if ( gmsa_ticket_result.first != 0 )
                         {
-                            err_msg = "ERROR: Cannot get gMSA krb ticket";
+                            err_msg = "ERROR: Cannot get gMSA krb ticket " + gmsa_ticket_result.second;
                             std::cerr << Util::getCurrentTime() << '\t' << err_msg << std::endl;
                             cf_logger.logger( LOG_ERR, err_msg.c_str(), gmsa_ticket_result.second );
                             break;
@@ -2251,8 +2271,14 @@ int parse_cred_spec( std::string credspec_data, krb_ticket_info_t* krb_ticket_in
             return -1;
         }
 
+        // get credentialspec arn
+        std::string credential_arn =
+            root["ActiveDirectoryConfig"]["HostAccountConfig"]["PluginInput"]["CredentialArn"]
+                .asString();
+
         krb_ticket_info->domain_name = domain_name;
         krb_ticket_info->service_account_name = service_account_name;
+        krb_ticket_info->credential_arn = credential_arn;
     }
     catch ( ... )
     {
@@ -2443,7 +2469,7 @@ int ProcessCredSpecFile( std::string krb_files_dir, std::string credspec_filepat
 
         std::pair<int, std::string> gmsa_ticket_result = fetch_gmsa_password_and_create_krb_ticket(
             krb_ticket_info->domain_name, krb_ticket_info->service_account_name, krb_ccname_str,
-            cf_logger );
+            "", cf_logger ); // TBD:: add distinguished name
         if ( gmsa_ticket_result.first != 0 )
         {
             err_msg = "ERROR: Cannot get gMSA krb ticket";
@@ -2715,7 +2741,7 @@ std::string retrieve_credspec_from_s3( std::string s3_arn, std::string region,
 
 // retrieve secrets from secrets manager
 // example : arn:aws:secretsmanager:us-west-2:618112483929:secret:gMSAUserSecret-PwmPaO
-std::tuple<std::string, std::string, std::string> retrieve_credspec_from_secrets_manager(
+std::tuple<std::string, std::string, std::string, std::string> retrieve_credspec_from_secrets_manager(
     std::string sm_arn, std::string region, Aws::Auth::AWSCredentials credentials )
 {
     std::string response = "";
@@ -2735,7 +2761,7 @@ std::tuple<std::string, std::string, std::string> retrieve_credspec_from_secrets
                           << "ERROR: failed authentication invalid "
                              "creds"
                           << std::endl;
-                return { "", "", "" };
+                return { "", "", "", "" };
             }
             Aws::SecretsManager::SecretsManagerClient sm_client(
                 credentials,
@@ -2754,7 +2780,7 @@ std::tuple<std::string, std::string, std::string> retrieve_credspec_from_secrets
             {
                 std::cerr << Util::getCurrentTime() << '\t'
                           << "ERROR: " << getSecretValueOutcome.GetError() << std::endl;
-                return { "", "", "" };
+                return { "", "", "", "" };
             }
         }
 
@@ -2768,7 +2794,7 @@ std::tuple<std::string, std::string, std::string> retrieve_credspec_from_secrets
                      "retrieved"
                   << std::endl;
         return { root["username"].asString(), root["password"].asString(),
-                 root["domainName"].asString() };
+                 root["domainName"].asString(), root["distinguishedName"].asString() };
     }
     catch ( ... )
     {
@@ -2776,9 +2802,9 @@ std::tuple<std::string, std::string, std::string> retrieve_credspec_from_secrets
                   << "ERROR: retrieving user info from secrets manager "
                      "failed"
                   << std::endl;
-        return { "", "", "" };
+        return { "", "", "", "" };
     }
-    return { "", "", "" };
+    return { "", "", "", "" };
 }
 
 #endif

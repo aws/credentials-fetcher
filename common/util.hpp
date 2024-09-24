@@ -246,7 +246,7 @@ class Util
             Util::rtrim( key );
             Util::ltrim( value );
 
-            if ( key.compare( ENV_CF_GMSA_BASE_DN ) == 0 && ecs_variable_name.compare( key ) == 0 )
+            if ( key.compare( ENV_CF_GMSA_OU ) == 0 && ecs_variable_name.compare( key ) == 0 )
             {
                 return value;
             }
@@ -259,6 +259,12 @@ class Util
 
             if ( key.compare( ENV_CF_DOMAIN_CONTROLLER ) == 0 &&
                  ecs_variable_name.compare( key ) == 0 )
+            {
+                return value;
+            }
+
+            if ( key.compare( ENV_CF_DISTINGUISHED_NAME ) == 0 &&
+                ecs_variable_name.compare( key ) == 0 )
             {
                 return value;
             }
@@ -290,11 +296,10 @@ class Util
         return root;
     }
 
-    static std::pair<int, std::string> get_base_dn_from_secret()
+    static std::pair<int, std::string> get_base_dn_from_secret(std::string secret_name)
     {
         std::pair<int, std::string> result = std::make_pair( -1, "" );
         std::string distinguished_name;
-        std::string secret_name = retrieve_variable_from_ecs_config( ENV_CF_GMSA_SECRET_NAME );
         if ( !secret_name.empty() )
         {
             Json::Value root = get_secret_from_secrets_manager( secret_name );
@@ -528,26 +533,16 @@ class Util
     }
 
     static std::pair<int, std::string> execute_ldapsearch( std::string gmsa_account_name,
-                                                           std::string env_base_dn,
-                                                           std::string default_base_dn,
-                                                           std::string gmsa_ou, std::string fqdn )
+                                                           std::string distinguished_name,
+                                                           std::string fqdn )
     {
         std::string cmd;
         std::pair<int, std::string> ldap_search_result;
 
-        if ( !env_base_dn.empty() )
-        {
-            cmd = std::string( "ldapsearch -LLL -Y GSSAPI -H ldap://" ) + fqdn;
-            cmd += std::string( " -b " ) + env_base_dn + std::string( " msds-ManagedPassword" );
-        }
-        else
-        {
-            cmd = std::string( "ldapsearch -H ldap://" ) + fqdn;
-            cmd += std::string( " -b 'CN=" ) + gmsa_account_name + gmsa_ou + default_base_dn +
-                   std::string( "'" ) +
-                   std::string( " -s sub  '(objectClass=msDs-GroupManagedServiceAccount)' "
+        cmd = std::string( "ldapsearch -LLL -Y GSSAPI -H ldap://" ) + fqdn;
+        cmd += std::string( " -b '" ) + distinguished_name + std::string("'") +
+                       std::string( " -s sub  '(objectClass=msDs-GroupManagedServiceAccount)' "
                                 " msDS-ManagedPassword" );
-        }
 
         std::cerr << Util::getCurrentTime() << '\t' << "INFO: " << cmd << std::endl;
         std::cerr << cmd << std::endl;

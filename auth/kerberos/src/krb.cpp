@@ -107,7 +107,7 @@ std::pair<int, std::string> generate_krb_ticket_from_machine_keytab( std::string
  */
 std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket(
     std::string domain_name, const std::string& gmsa_account_name, const std::string& krb_cc_name,
-    CF_logger& cf_logger )
+    std::string distinguished_name, CF_logger& cf_logger )
 {
     std::vector<std::string> results;
 
@@ -119,48 +119,39 @@ std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket(
         return std::make_pair( -1, err_msg );
     }
 
-    results = Util::split_string( domain_name, '.' );
-    std::string base_dn; /* Distinguished name */
-    for ( auto& result : results )
+    if ( distinguished_name.empty() )
     {
-        base_dn += "DC=" + result + ",";
-    }
-    base_dn.pop_back(); // Remove last comma
-
-    std::vector<std::string> fqdn_list_result = Util::get_FQDN_list( domain_name );
-
-    /**
-     * ldapsearch -H ldap://<fqdn> -b 'CN=webapp01,CN=Managed Service
-     *   Accounts,DC=contoso,DC=com' -s sub  "(objectClass=msDs-GroupManagedServiceAccount)"
-     *   msDS-ManagedPassword
-     */
-    std::string gmsa_ou = std::string( ",CN=Managed Service Accounts," );
-    std::string env_base_dn = Util::retrieve_variable_from_ecs_config( ENV_CF_GMSA_BASE_DN );
-    if ( getenv( ENV_CF_GMSA_OU ) != NULL )
-    {
-        gmsa_ou = std::string( "," ) + std::string( getenv( ENV_CF_GMSA_OU ) ) + std::string( "," );
-    }
-    else if ( getenv( ENV_CF_GMSA_BASE_DN ) != NULL )
-    {
-        env_base_dn = std::string( getenv( ENV_CF_GMSA_BASE_DN ) );
-    }
-
-    std::pair<int, std::string> dn_result = Util::get_base_dn_from_secret();
-    if ( dn_result.first == 0 )
-    {
-        env_base_dn = dn_result.second;
-        if ( env_base_dn.find( "msds-ManagedPassword" ) == std::string::npos )
+        if ( getenv( ENV_CF_GMSA_OU ) == NULL )
         {
-            env_base_dn = env_base_dn + std::string( " msds-ManagedPassword" );
+        /**
+         * ldapsearch -H ldap://<fqdn> -b 'CN=webapp01,CN=Managed Service
+         *   Accounts,DC=contoso,DC=com' -s sub  "(objectClass=msDs-GroupManagedServiceAccount)"
+         *   msDS-ManagedPassword
+         */
+            results = Util::split_string( domain_name, '.' );
+            std::string base_dn;
+            for ( auto& result : results )
+            {
+                 base_dn += "DC=" + result + ",";
+            }
+            base_dn.pop_back(); // Remove last comma
+            distinguished_name = std::string( ",CN=Managed Service Accounts," ); //default value
+            //  The environment variable CF_GMSA_OU default value is "CN=Managed Service Accounts"
+            distinguished_name = "CN=" + gmsa_account_name + "," + distinguished_name + base_dn;
+        }
+        else
+        {
+            distinguished_name = std::string( getenv( ENV_CF_GMSA_OU ) );
         }
     }
 
     std::pair<int, std::string> ldap_search_result;
 
+    std::vector<std::string> fqdn_list_result = Util::get_FQDN_list( domain_name );
     for ( auto fqdn : fqdn_list_result )
     {
         ldap_search_result =
-            Util::execute_ldapsearch( gmsa_account_name, env_base_dn, base_dn, gmsa_ou, fqdn );
+            Util::execute_ldapsearch( gmsa_account_name, distinguished_name, fqdn );
         if ( ldap_search_result.first == 0 )
         {
             std::size_t pos = ldap_search_result.second.find( "msDS-ManagedPassword" );
@@ -500,7 +491,7 @@ std::string renew_gmsa_ticket( krb_ticket_info_t* krb_ticket, std::string domain
     for ( int i = 0; i < num_retries; i++ )
     {
         gmsa_ticket_result = fetch_gmsa_password_and_create_krb_ticket(
-            krb_ticket->domain_name, krb_ticket->service_account_name, krb_cc_name, cf_logger );
+            krb_ticket->domain_name, krb_ticket->service_account_name, krb_cc_name, "", cf_logger ); // TBD: Add DN
         if ( gmsa_ticket_result.first != 0 )
         {
             if ( i == 0 )

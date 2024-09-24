@@ -60,6 +60,7 @@
         std::string domainless_user;
         std::string credspec_info;
         std::string distinguished_name;
+        std::string credential_arn;
     };
 
     /*
@@ -157,6 +158,7 @@ std::pair<int, std::string> generate_krb_ticket_using_username_and_password( std
 std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket( std::string domain_name,
                                                  const std::string& gmsa_account_name,
                                                  const std::string& krb_cc_name,
+                                                 std::string distinguished_name,
                                                  CF_logger& cf_logger );
 
 std::list<std::string> renew_kerberos_tickets_domainless( std::string krb_files_dir,
@@ -223,12 +225,13 @@ std::string generate_lease_id();
 void clearString( std::string& str );
 
 #if AMAZON_LINUX_DISTRO
+
 std::string retrieve_credspec_from_s3( std::string s3_arn, std::string region,
                                        Aws::Auth::AWSCredentials credentials, bool test );
 bool check_file_size_s3( std::string s3_arn, std::string region,
                          Aws::Auth::AWSCredentials credentials, bool test );
 std::string get_caller_id( std::string region, Aws::Auth::AWSCredentials credentials );
-std::tuple<std::string, std::string, std::string> retrieve_credspec_from_secrets_manager(
+std::tuple<std::string, std::string, std::string, std::string> retrieve_credspec_from_secrets_manager(
     std::string sm_arn, std::string region, Aws::Auth::AWSCredentials credentials );
 
 Aws::Auth::AWSCredentials get_credentials( std::string accessKeyId, std::string secretKey,
