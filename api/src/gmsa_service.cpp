@@ -535,6 +535,7 @@ class CredentialsFetcherImpl final
                                         krb_ticket_info->krb_file_path = krb_files_path;
                                         krb_ticket_info->domainless_user = username;
                                         krb_ticket_arns->krb_file_path = krb_files_path;
+                                        krb_ticket_info->distinguished_name = distinguished_name;
 
                                         // handle duplicate service accounts
                                         if ( !krb_ticket_dirs.count( krb_files_path ) )
@@ -1558,6 +1559,7 @@ class CredentialsFetcherImpl final
                                  distinguished_name = v.second;
                               }
                         }
+                        krb_ticket->distinguished_name = distinguished_name;
 
                         std::pair<int, std::string> gmsa_ticket_result =
                             fetch_gmsa_password_and_create_krb_ticket(

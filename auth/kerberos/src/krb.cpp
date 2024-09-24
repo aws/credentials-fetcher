@@ -491,7 +491,8 @@ std::string renew_gmsa_ticket( krb_ticket_info_t* krb_ticket, std::string domain
     for ( int i = 0; i < num_retries; i++ )
     {
         gmsa_ticket_result = fetch_gmsa_password_and_create_krb_ticket(
-            krb_ticket->domain_name, krb_ticket->service_account_name, krb_cc_name, "", cf_logger ); // TBD: Add DN
+            krb_ticket->domain_name, krb_ticket->service_account_name, krb_cc_name,
+            krb_ticket->distinguished_name, cf_logger );
         if ( gmsa_ticket_result.first != 0 )
         {
             if ( i == 0 )
