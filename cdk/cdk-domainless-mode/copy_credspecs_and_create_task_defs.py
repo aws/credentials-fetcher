@@ -116,7 +116,7 @@ task_definition_orig = task_definition
 print(task_definition)
 for i in range(1, number_of_gmsa_accounts + 1):
     task_definition = task_definition_orig
-    credspec_template = credspec_template.replace("GMSA_NAME", f"WebApp{i}")
+    credspec_template = credspec_template.replace("GMSA_NAME", f"WebApp0{i}")
     credspec = json.loads(credspec_template)
     credspec_str = json.dumps(credspec)
     # copy credspec to S3 folder
@@ -126,9 +126,9 @@ for i in range(1, number_of_gmsa_accounts + 1):
     s3_key = ""
     try:
         # put credspec_str into s3 bucket
-        s3_key = f"WebApp{i}_credspec.json"
+        s3_key = f"WebApp0{i}_credspec.json"
         print("Putting object")
-        s3_client.put_object(Body=credspec_str, Bucket=s3_bucket, Key=f'WebApp{i}_credspec.json')
+        s3_client.put_object(Body=credspec_str, Bucket=s3_bucket, Key=f'WebApp0{i}_credspec.json')
         bucket_location = s3_client.get_bucket_location(Bucket=s3_bucket)
         bucket_arn = f"arn:aws:s3:::{s3_bucket}"
     except Exception as e:
@@ -164,7 +164,7 @@ for i in range(1, number_of_gmsa_accounts + 1):
                                         networkMode=task_definition['networkMode'],
                                         containerDefinitions=container_defs,
                                         requiresCompatibilities=["EC2", "FARGATE"],
-                                        runtimePlatform={'cpuArchitecture': 'X86_64', 'operatingSystemFamily' : 'Linux'},
+                                        runtimePlatform={'cpuArchitecture': 'X86_64', 'operatingSystemFamily' : 'LINUX'},
                                         cpu=task_definition['cpu'],
                                         memory=task_definition['memory'])
         #print(ecs_cluster_arn)

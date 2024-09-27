@@ -2,6 +2,7 @@ from aws_cdk import (
     # Duration,
     Stack,
     # aws_sqs as sqs,
+    aws_rds as rds
 )
 from constructs import Construct
 import aws_cdk.aws_directoryservice as directoryservice
@@ -90,7 +91,7 @@ class CdkStack(Stack):
     def init_route53_endpoint(self, domain_name, vpc):
 
         # create route53 endpoint
-        endpoint = route53resolver.CfnResolverEndpoint(self, "ResolverEndpoint",
+        endpoint = route53resolver.CfnResolverEndpoint(self, "CredentialsFetcherResolverEndpoint",
                                             direction="OUTBOUND",
                                             name="resolver",
                                             ip_addresses=[
@@ -103,7 +104,7 @@ class CdkStack(Stack):
                                         )
 
         # Create resolver forwarding rule
-        resolver_rule = route53resolver.CfnResolverRule(self, "ResolverRule",
+        resolver_rule = route53resolver.CfnResolverRule(self, "CredentialsFetcherResolverRule",
                                                         domain_name=domain_name,
                                                         rule_type="FORWARD",
                                                         resolver_endpoint_id=endpoint.attr_resolver_endpoint_id,
@@ -119,7 +120,7 @@ class CdkStack(Stack):
          # Associate the Resolver Rule with the VPC
         route53resolver.CfnResolverRuleAssociation(
             self,
-            "ResolverRuleAssociation",
+            "CredentialsFetcherResolverRuleAssociation",
             resolver_rule_id=resolver_rule.ref,
             vpc_id=vpc.vpc_id,
         )
@@ -204,8 +205,8 @@ class CdkStack(Stack):
         instance = ec2.CfnInstance(
                     self,
                     "MyCfnInstance",
-                    instance_type=ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.XLARGE).to_string(),
-                    image_id=ec2.WindowsImage(version=ec2.WindowsVersion.WINDOWS_SERVER_2022_ENGLISH_FULL_BASE).get_image(self).image_id,
+                    instance_type=ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.XLARGE).to_string(),
+                    image_id=ec2.WindowsImage(version=ec2.WindowsVersion.WINDOWS_SERVER_2022_ENGLISH_FULL_SQL_2022_ENTERPRISE).get_image(self).image_id,
                     user_data=user_data,
                     security_group_ids=[self.security_group.security_group_id],
                     subnet_id=self.subnet_1.subnet_id,

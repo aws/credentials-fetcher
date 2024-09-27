@@ -21,6 +21,7 @@ Write-Output "Installing Active Directory management tools..."
 Install-WindowsFeature -Name "RSAT-AD-Tools" -IncludeAllSubFeature
 Install-WindowsFeature RSAT-AD-PowerShell
 Install-Module CredentialSpec
+Install-Module -Name SqlServer -AllowClobber -Force
 
 $username = "admin@DOMAINNAME"
 $password = "INPUTPASSWORD" | ConvertTo-SecureString -AsPlainText -Force
@@ -60,7 +61,7 @@ $string_err = ""
 for (($i = 1); $i -le NUMBER_OF_GMSA_ACCOUNTS; $i++)
 {
     # Create the gMSA account
-    $gmsa_account_name = "WebApp" + $i
+    $gmsa_account_name = "WebApp0" + $i
     $gmsa_account_with_domain = $gmsa_account_name + ".DOMAINNAME"
     $gmsa_account_with_host = "host/" + $gmsa_account_name
     $gmsa_account_with_host_and_domain = $gmsa_account_with_host + ".DOMAINNAME"
@@ -74,3 +75,40 @@ for (($i = 1); $i -le NUMBER_OF_GMSA_ACCOUNTS; $i++)
         Write-Output "Error while gMSA account creation and copy credspec to S3 bucket: " + $string_err
     }
 }
+
+# Set the SQL Server instance name
+$sqlInstance = $env:computername
+
+New-NetFirewallRule -DisplayName "SQLServer default instance" -Direction Inbound -LocalPort 1433 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "SQLServer Browser service" -Direction Inbound -LocalPort 1434 -Protocol UDP -Action Allow
+netsh advfirewall firewall add rule name = SQLPort dir = in protocol = tcp action = allow localport = 1433 remoteip = localsubnet profile = DOMAIN
+
+# Create a connection string
+$connectionString0 = "Server=$sqlInstance;Integrated Security=True;"
+$connectionString1 = "Server=$sqlInstance;Database=EmployeesDB;Integrated Security=True;"
+
+$createDatabaseQuery = "CREATE DATABASE EmployeesDB"
+
+$query = @"
+CREATE TABLE dbo.EmployeesTable (
+    EmpID INT IDENTITY(1,1) PRIMARY KEY,
+    EmpName VARCHAR(50) NOT NULL,
+    Designation VARCHAR(50) NOT NULL,
+    Department VARCHAR(50) NOT NULL,
+    JoiningDate DATETIME NOT NULL
+);
+
+INSERT INTO EmployeesDB.dbo.EmployeesTable (EmpName, Designation, Department, JoiningDate)
+VALUES
+    ('CHIN YEN', 'LAB ASSISTANT', 'LAB', '2022-03-05 03:57:09.967'),
+    ('MIKE PEARL', 'SENIOR ACCOUNTANT', 'ACCOUNTS', '2022-03-05 03:57:09.967'),
+    ('GREEN FIELD', 'ACCOUNTANT', 'ACCOUNTS', '2022-03-05 03:57:09.967'),
+    ('DEWANE PAUL', 'PROGRAMMER', 'IT', '2022-03-05 03:57:09.967'),
+    ('MATTS', 'SR. PROGRAMMER', 'IT', '2022-03-05 03:57:09.967'),
+    ('PLANK OTO', 'ACCOUNTANT', 'ACCOUNTS', '2022-03-05 03:57:09.967');
+alter authorization on database::[EmployeesDB] to [WebApp01$]
+"@
+
+Invoke-Sqlcmd -ConnectionString $connectionString0 -Query $createDatabaseQuery -QueryTimeout 60
+Invoke-Sqlcmd -ConnectionString $connectionString1 -Query $query
+ 
