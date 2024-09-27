@@ -504,8 +504,8 @@ class CredentialsFetcherImpl final
                                     break;
                                 }
                                 // retrieve domainless user credentials
-                                std::tuple<std::string, std::string, std::string, std::string> userCreds =
-                                    retrieve_credspec_from_secrets_manager(
+                                std::tuple<std::string, std::string, std::string, std::string>
+                                    userCreds = retrieve_credspec_from_secrets_manager(
                                         krb_ticket_arns->credential_domainless_user_arn, region,
                                         creds );
 
@@ -916,8 +916,8 @@ class CredentialsFetcherImpl final
                                     }
 
                                     // retrieve domainless user credentials
-                                    std::tuple<std::string, std::string, std::string, std::string> userCreds =
-                                        retrieve_credspec_from_secrets_manager(
+                                    std::tuple<std::string, std::string, std::string, std::string>
+                                        userCreds = retrieve_credspec_from_secrets_manager(
                                             krb_ticket_arns->credential_domainless_user_arn, region,
                                             creds );
 
@@ -1229,7 +1229,7 @@ class CredentialsFetcherImpl final
                         std::pair<int, std::string> gmsa_ticket_result =
                             fetch_gmsa_password_and_create_krb_ticket(
                                 krb_ticket->domain_name, krb_ticket->service_account_name,
-                                krb_ccname_str, "", cf_logger ); // TBD:: Add DN
+                                krb_ccname_str, krb_ticket->distinguished_name, cf_logger );
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: Cannot get gMSA krb ticket";
@@ -1243,8 +1243,8 @@ class CredentialsFetcherImpl final
                             cf_logger.logger( LOG_INFO, "gMSA ticket is at %s",
                                               gmsa_ticket_result.second.c_str() );
                             std::cerr << Util::getCurrentTime() << '\t'
-                                      << "INFO: gMSA ticket is at "
-                                      << gmsa_ticket_result.second << std::endl;
+                                      << "INFO: gMSA ticket is at " << gmsa_ticket_result.second
+                                      << std::endl;
                         }
                         create_krb_reply_.add_created_kerberos_file_paths( krb_file_path );
                     }
@@ -1544,20 +1544,25 @@ class CredentialsFetcherImpl final
                             krb_ticket->krb_file_path = krb_ccname_str;
                         }
 
-                        std::string distinguished_name = Util::retrieve_variable_from_ecs_config( ENV_CF_DISTINGUISHED_NAME );
+                        std::string distinguished_name =
+                            Util::retrieve_variable_from_ecs_config( ENV_CF_DISTINGUISHED_NAME );
                         if ( distinguished_name.empty() )
                         {
-                              // Read value from secrets manager
-                              std::pair<int, std::string> v = Util::get_base_dn_from_secret(krb_ticket->credential_arn);
-                              if (v.first != 0)
-                              {
-                                 err_msg = "ERROR: Cannot read secret from " + krb_ticket->credential_arn;
-                                 std::cerr << Util::getCurrentTime() << '\t' << err_msg << std::endl;
-                                 cf_logger.logger( LOG_ERR, err_msg.c_str(), v.second );
-                                 break;
-                              } else {
-                                 distinguished_name = v.second;
-                              }
+                            // Read value from secrets manager
+                            std::pair<int, std::string> v =
+                                Util::get_base_dn_from_secret( krb_ticket->credential_arn );
+                            if ( v.first != 0 )
+                            {
+                                err_msg =
+                                    "ERROR: Cannot read secret from " + krb_ticket->credential_arn;
+                                std::cerr << Util::getCurrentTime() << '\t' << err_msg << std::endl;
+                                cf_logger.logger( LOG_ERR, err_msg.c_str(), v.second );
+                                break;
+                            }
+                            else
+                            {
+                                distinguished_name = v.second;
+                            }
                         }
                         krb_ticket->distinguished_name = distinguished_name;
 
@@ -1567,7 +1572,8 @@ class CredentialsFetcherImpl final
                                 distinguished_name, cf_logger );
                         if ( gmsa_ticket_result.first != 0 )
                         {
-                            err_msg = "ERROR: Cannot get gMSA krb ticket " + gmsa_ticket_result.second;
+                            err_msg =
+                                "ERROR: Cannot get gMSA krb ticket " + gmsa_ticket_result.second;
                             std::cerr << Util::getCurrentTime() << '\t' << err_msg << std::endl;
                             cf_logger.logger( LOG_ERR, err_msg.c_str(), gmsa_ticket_result.second );
                             break;
@@ -2470,8 +2476,8 @@ int ProcessCredSpecFile( std::string krb_files_dir, std::string credspec_filepat
         }
 
         std::pair<int, std::string> gmsa_ticket_result = fetch_gmsa_password_and_create_krb_ticket(
-            krb_ticket_info->domain_name, krb_ticket_info->service_account_name, krb_ccname_str,
-            "", cf_logger ); // TBD:: add distinguished name
+            krb_ticket_info->domain_name, krb_ticket_info->service_account_name, krb_ccname_str, "",
+            cf_logger ); // TBD:: add distinguished name
         if ( gmsa_ticket_result.first != 0 )
         {
             err_msg = "ERROR: Cannot get gMSA krb ticket";
@@ -2743,8 +2749,9 @@ std::string retrieve_credspec_from_s3( std::string s3_arn, std::string region,
 
 // retrieve secrets from secrets manager
 // example : arn:aws:secretsmanager:us-west-2:618112483929:secret:gMSAUserSecret-PwmPaO
-std::tuple<std::string, std::string, std::string, std::string> retrieve_credspec_from_secrets_manager(
-    std::string sm_arn, std::string region, Aws::Auth::AWSCredentials credentials )
+std::tuple<std::string, std::string, std::string, std::string>
+retrieve_credspec_from_secrets_manager( std::string sm_arn, std::string region,
+                                        Aws::Auth::AWSCredentials credentials )
 {
     std::string response = "";
     Aws::SDKOptions options;
@@ -2795,8 +2802,22 @@ std::tuple<std::string, std::string, std::string, std::string> retrieve_credspec
                   << "INFO: gMSA user information is successfully "
                      "retrieved"
                   << std::endl;
-        return { root["username"].asString(), root["password"].asString(),
-                 root["domainName"].asString(), root["distinguishedName"].asString() };
+        std::string username = root["username"].asString();
+        if ( username.empty() )
+        {
+            username = root["usernameOfStandardUserAccount"].asString();
+        }
+        std::string password = root["password"].asString();
+        if ( password.empty() )
+        {
+            password = root["passwordOfStandardUserAccount"].asString();
+        }
+        std::string distinguished_name = root["distinguishedName"].asString();
+        if ( distinguished_name.empty() )
+        {
+            distinguished_name = root["distinguishedNameOfgMSA"].asString();
+        }
+        return { username, password, root["domainName"].asString(), distinguished_name };
     }
     catch ( ... )
     {

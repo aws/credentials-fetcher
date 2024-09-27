@@ -135,7 +135,7 @@ std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket(
                  base_dn += "DC=" + result + ",";
             }
             base_dn.pop_back(); // Remove last comma
-            distinguished_name = std::string( ",CN=Managed Service Accounts," ); //default value
+            distinguished_name = std::string( "CN=Managed Service Accounts," ); //default value
             //  The environment variable CF_GMSA_OU default value is "CN=Managed Service Accounts"
             distinguished_name = "CN=" + gmsa_account_name + "," + distinguished_name + base_dn;
         }

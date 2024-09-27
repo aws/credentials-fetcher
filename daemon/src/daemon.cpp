@@ -181,7 +181,9 @@ int main( int argc, const char* argv[] )
     cf_daemon.logging_dir = CF_LOGGING_DIR;
     cf_daemon.unix_socket_dir = CF_UNIX_DOMAIN_SOCKET_DIR;
 
-    std::cerr << "credentials-fetcher daemon has started and running"  << std::endl;
+    std::string log_msg = "Credentials-fetcher daemon has started running";
+    std::cerr << log_msg << std::endl;
+    cf_daemon.cf_logger.logger( LOG_ERR, "%s", log_msg.c_str());
     std::cerr << "on request failures check logs located at " + cf_daemon.logging_dir << std::endl;;
 
     if ( getenv(ENV_CF_CRED_SPEC_FILE) != NULL)

@@ -304,6 +304,10 @@ class Util
         {
             Json::Value root = get_secret_from_secrets_manager( secret_name );
             distinguished_name = root["distinguishedName"].asString();
+            if ( distinguished_name.empty() )
+            {
+               distinguished_name = root["distinguishedNameOfgMSA"].asString();
+            }
             if ( !distinguished_name.empty() )
             {
                 result.first = 0;
@@ -757,10 +761,21 @@ class Util
         std::string distinguished_name = "";
         if ( root != Json::nullValue )
         {
-            // Read other
-            distinguished_name = root["distinguishedName"].asString();
             username = root["username"].asString();
+            if ( username.empty() )
+            {
+                username = root["usernameOfStandardUserAccount"].asString();
+            }
             password = root["password"].asString();
+            if ( password.empty() )
+            {
+                password = root["passwordOfStandardUserAccount"].asString();
+            }
+            distinguished_name = root["distinguishedName"].asString();
+            if ( distinguished_name.empty() )
+            {
+                distinguished_name = root["distinguishedNameOfgMSA"].asString();
+            }
         }
         else
         {
@@ -769,7 +784,9 @@ class Util
 
         if ( !distinguished_name.empty() )
         {
-            std::cerr << "[Optional] DN from Secrets Manager = " << distinguished_name << std::endl;
+            std::string err_msg = "[Optional] DN from Secrets Manager = " + distinguished_name;
+            std::cerr << err_msg << std::endl;
+            cf_logger.logger( LOG_ERR, err_msg.c_str() );
         }
 
         std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),
