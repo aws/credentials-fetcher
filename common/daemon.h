@@ -209,8 +209,8 @@ std::pair<int, std::string> generate_krb_ticket_using_username_and_password(
     std::string domain_name, std::string username, std::string password, CF_logger& cf_logger );
 
 std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket(
-    std::string domain_name, const std::string& gmsa_account_name, const std::string& krb_cc_name,
-    std::string distinguished_name, CF_logger& cf_logger );
+    std::string domain_name, krb_ticket_info_t*, const std::string& krb_cc_name,
+    CF_logger& cf_logger );
 
 std::list<std::string> renew_kerberos_tickets_domainless( std::string krb_files_dir,
                                                           std::string domain_name,

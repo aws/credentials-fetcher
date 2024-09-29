@@ -65,8 +65,7 @@ int krb_ticket_renew_handler( Daemon cf_daemon )
                         for ( int i = 0; i <= num_retries; i++ )
                         {
                             gmsa_ticket_result = fetch_gmsa_password_and_create_krb_ticket(
-                                krb_ticket->domain_name, krb_ticket->service_account_name, "",
-                                krb_cc_name, cf_logger ); // TBD:: Add DN
+                                krb_ticket->domain_name, krb_ticket, krb_cc_name, cf_logger );
                             if ( gmsa_ticket_result.first != 0 )
                             {
                                 std::pair<int, std::string> status;

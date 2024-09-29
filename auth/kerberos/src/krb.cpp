@@ -106,10 +106,18 @@ std::pair<int, std::string> generate_krb_ticket_from_machine_keytab( std::string
  * @return result code and kinit log, 0 if successful, -1 on failure
  */
 std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket(
-    std::string domain_name, const std::string& gmsa_account_name, const std::string& krb_cc_name,
-    std::string distinguished_name, CF_logger& cf_logger )
+    std::string domain_name, krb_ticket_info_t* krb_ticket, const std::string& krb_cc_name,
+    CF_logger& cf_logger )
 {
     std::vector<std::string> results;
+    std::string gmsa_account_name = "";
+    std::string distinguished_name = "";
+
+    if ( krb_ticket != NULL )
+    {
+        gmsa_account_name = krb_ticket->service_account_name;
+        distinguished_name = krb_ticket->distinguished_name;
+    }
 
     if ( domain_name.empty() || gmsa_account_name.empty() )
     {
@@ -119,52 +127,58 @@ std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket(
         return std::make_pair( -1, err_msg );
     }
 
-    if ( distinguished_name.empty() )
+    std::pair<int, std::string> ldap_search_result;
+    std::string base_dn = "";
+
+    std::pair<int, std::string> base_dn_result = Util::get_base_dn( domain_name );
+    if ( base_dn_result.first == 0 && !base_dn_result.second.empty() )
     {
-        if ( getenv( ENV_CF_GMSA_OU ) == NULL )
-        {
-        /**
-         * ldapsearch -H ldap://<fqdn> -b 'CN=webapp01,CN=Managed Service
-         *   Accounts,DC=contoso,DC=com' -s sub  "(objectClass=msDs-GroupManagedServiceAccount)"
-         *   msDS-ManagedPassword
-         */
-            results = Util::split_string( domain_name, '.' );
-            std::string base_dn;
-            for ( auto& result : results )
-            {
-                 base_dn += "DC=" + result + ",";
-            }
-            base_dn.pop_back(); // Remove last comma
-            distinguished_name = std::string( "CN=Managed Service Accounts," ); //default value
-            //  The environment variable CF_GMSA_OU default value is "CN=Managed Service Accounts"
-            distinguished_name = "CN=" + gmsa_account_name + "," + distinguished_name + base_dn;
-        }
-        else
-        {
-            distinguished_name = std::string( getenv( ENV_CF_GMSA_OU ) );
-        }
+        base_dn = base_dn_result.second;
     }
 
-    std::pair<int, std::string> ldap_search_result;
+    if ( distinguished_name.empty() && getenv( ENV_CF_GMSA_OU ) != NULL )
+    {
+        distinguished_name = std::string( getenv( ENV_CF_GMSA_OU ) );
+    }
 
     std::vector<std::string> fqdn_list_result = Util::get_FQDN_list( domain_name );
     for ( auto fqdn : fqdn_list_result )
     {
+        if ( distinguished_name.empty() )
+        {
+            std::pair<int, std::string> distinguished_name_result =
+                Util::find_dn( gmsa_account_name, base_dn, fqdn );
+            if ( distinguished_name_result.first == 0 && !distinguished_name_result.second.empty() )
+            {
+                distinguished_name = distinguished_name_result.second;
+            }
+            std::string log_str = "Found dn = " + distinguished_name + "\n";
+            cf_logger.logger( LOG_INFO, log_str.c_str() );
+        }
+
+        krb_ticket->distinguished_name = distinguished_name;
+        // Then find the password
+        std::string search_string = std::string(
+            " -s sub  '(objectClass=msDs-GroupManagedServiceAccount)' msDS-ManagedPassword" );
         ldap_search_result =
-            Util::execute_ldapsearch( gmsa_account_name, distinguished_name, fqdn );
+            Util::execute_ldapsearch( gmsa_account_name, distinguished_name, fqdn, search_string );
         if ( ldap_search_result.first == 0 )
         {
-            std::size_t pos = ldap_search_result.second.find( "msDS-ManagedPassword" );
-            std::string log_str = ldap_search_result.second.substr( 0, pos );
-            log_str = "ldapsearch successful with FQDN = " + fqdn + ", cmd = " + log_str + "\n";
-            std::cerr << log_str << std::endl;
-            cf_logger.logger( LOG_INFO, log_str.c_str() );
+            std::size_t pos = ldap_search_result.second.find( "msDS-ManagedPassword:" );
+            if ( pos != std::string::npos )
+            {
+                std::string log_str = ldap_search_result.second.substr( 0, pos );
+                log_str = "ldapsearch successful with FQDN = " + fqdn + ", cmd = " + log_str + "," +
+                          "search_string = " + search_string + "\n";
+                std::cerr << log_str << std::endl;
+                cf_logger.logger( LOG_INFO, log_str.c_str() );
+            }
             break;
         }
         else
         {
-            std::string log_str =
-                "ldapsearch failed with FQDN = " + fqdn + ldap_search_result.second.c_str();
+            std::string log_str = "ldapsearch failed with FQDN = " + fqdn + " " +
+                                  ldap_search_result.second.c_str() + " " + search_string;
             std::cerr << log_str << std::endl;
             cf_logger.logger( LOG_INFO, log_str.c_str() );
         }
@@ -491,8 +505,7 @@ std::string renew_gmsa_ticket( krb_ticket_info_t* krb_ticket, std::string domain
     for ( int i = 0; i < num_retries; i++ )
     {
         gmsa_ticket_result = fetch_gmsa_password_and_create_krb_ticket(
-            krb_ticket->domain_name, krb_ticket->service_account_name, krb_cc_name,
-            krb_ticket->distinguished_name, cf_logger );
+            krb_ticket->domain_name, krb_ticket, krb_cc_name, cf_logger );
         if ( gmsa_ticket_result.first != 0 )
         {
             if ( i == 0 )

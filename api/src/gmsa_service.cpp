@@ -636,9 +636,8 @@ class CredentialsFetcherImpl final
                         }
 
                         std::pair<int, std::string> gmsa_ticket_result =
-                            fetch_gmsa_password_and_create_krb_ticket(
-                                domain, krb_ticket->service_account_name, krb_ccname_str,
-                                distinguished_name, cf_logger );
+                            fetch_gmsa_password_and_create_krb_ticket( domain, krb_ticket,
+                                                                       krb_ccname_str, cf_logger );
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: " + std::to_string( status.first ) +
@@ -1228,8 +1227,7 @@ class CredentialsFetcherImpl final
 
                         std::pair<int, std::string> gmsa_ticket_result =
                             fetch_gmsa_password_and_create_krb_ticket(
-                                krb_ticket->domain_name, krb_ticket->service_account_name,
-                                krb_ccname_str, krb_ticket->distinguished_name, cf_logger );
+                                krb_ticket->domain_name, krb_ticket, krb_ccname_str, cf_logger );
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg = "ERROR: Cannot get gMSA krb ticket";
@@ -1551,15 +1549,7 @@ class CredentialsFetcherImpl final
                             // Read value from secrets manager
                             std::pair<int, std::string> v =
                                 Util::get_base_dn_from_secret( krb_ticket->credential_arn );
-                            if ( v.first != 0 )
-                            {
-                                err_msg =
-                                    "ERROR: Cannot read secret from " + krb_ticket->credential_arn;
-                                std::cerr << Util::getCurrentTime() << '\t' << err_msg << std::endl;
-                                cf_logger.logger( LOG_ERR, err_msg.c_str(), v.second );
-                                break;
-                            }
-                            else
+                            if ( v.first == 0 )
                             {
                                 distinguished_name = v.second;
                             }
@@ -1567,9 +1557,8 @@ class CredentialsFetcherImpl final
                         krb_ticket->distinguished_name = distinguished_name;
 
                         std::pair<int, std::string> gmsa_ticket_result =
-                            fetch_gmsa_password_and_create_krb_ticket(
-                                domain, krb_ticket->service_account_name, krb_ccname_str,
-                                distinguished_name, cf_logger );
+                            fetch_gmsa_password_and_create_krb_ticket( domain, krb_ticket,
+                                                                       krb_ccname_str, cf_logger );
                         if ( gmsa_ticket_result.first != 0 )
                         {
                             err_msg =
@@ -2476,8 +2465,7 @@ int ProcessCredSpecFile( std::string krb_files_dir, std::string credspec_filepat
         }
 
         std::pair<int, std::string> gmsa_ticket_result = fetch_gmsa_password_and_create_krb_ticket(
-            krb_ticket_info->domain_name, krb_ticket_info->service_account_name, krb_ccname_str, "",
-            cf_logger ); // TBD:: add distinguished name
+            krb_ticket_info->domain_name, krb_ticket_info, krb_ccname_str, cf_logger );
         if ( gmsa_ticket_result.first != 0 )
         {
             err_msg = "ERROR: Cannot get gMSA krb ticket";

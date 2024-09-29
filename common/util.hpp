@@ -264,7 +264,7 @@ class Util
             }
 
             if ( key.compare( ENV_CF_DISTINGUISHED_NAME ) == 0 &&
-                ecs_variable_name.compare( key ) == 0 )
+                 ecs_variable_name.compare( key ) == 0 )
             {
                 return value;
             }
@@ -296,7 +296,7 @@ class Util
         return root;
     }
 
-    static std::pair<int, std::string> get_base_dn_from_secret(std::string secret_name)
+    static std::pair<int, std::string> get_base_dn_from_secret( std::string secret_name )
     {
         std::pair<int, std::string> result = std::make_pair( -1, "" );
         std::string distinguished_name;
@@ -306,7 +306,7 @@ class Util
             distinguished_name = root["distinguishedName"].asString();
             if ( distinguished_name.empty() )
             {
-               distinguished_name = root["distinguishedNameOfgMSA"].asString();
+                distinguished_name = root["distinguishedNameOfgMSA"].asString();
             }
             if ( !distinguished_name.empty() )
             {
@@ -500,6 +500,66 @@ class Util
         return (uint8_t*)secure_mem;
     }
 
+    static std::pair<int, std::string> get_base_dn( std::string domain_name )
+    {
+        if ( !domain_name.empty() )
+        {
+            // DC=Contoso,DC=com
+            std::string base_dn = "";
+            auto results = Util::split_string( domain_name, '.' );
+            for ( auto& result : results )
+            {
+                base_dn += "DC=" + result + ",";
+            }
+            base_dn.pop_back(); // Remove last comma
+            return std::make_pair( 0, base_dn );
+        }
+        return std::make_pair( -1, "" );
+    }
+
+    static std::pair<int, std::string> find_dn( std::string gmsa_account_name, std::string base_dn,
+                                                std::string fqdn )
+    {
+        /**
+         *  ldapsearch  -H ldap://ip-xxxxxxxx.activedirectory1.com
+         *    -b 'DC=ActiveDirectory1,DC=com' -s sub '(CN=WebApp01)'  distinguishedName | grep
+         * "distinguishedName:"
+         */
+        std::string distinguished_name;
+        std::string search_string = " -s sub '(CN=" + gmsa_account_name + ")' distinguishedName";
+        std::pair<int, std::string> ldap_search_result =
+            Util::execute_ldapsearch( gmsa_account_name, base_dn, fqdn, search_string );
+        if ( ldap_search_result.first == 0 && !ldap_search_result.second.empty() )
+        {
+            std::size_t start_pos = ldap_search_result.second.find( "distinguishedName:" );
+            if ( start_pos != std::string::npos )
+            {
+                // distinguishedName:
+                // CN=WebApp01,OU=MYOU,OU=Users,OU=ActiveDirectory,DC=ActiveDirectory1,DC=com
+                distinguished_name = "distinguishedName: ";
+                start_pos += distinguished_name.length();
+
+                distinguished_name = ldap_search_result.second.substr( start_pos );
+                std::size_t end_pos = distinguished_name.find_first_of( "\n" );
+                if ( end_pos != std::string::npos )
+                {
+                    distinguished_name = distinguished_name.substr( 0, end_pos );
+                }
+                else
+                {
+                    distinguished_name = "";
+                    return std::make_pair( -1, distinguished_name );
+                }
+            }
+        }
+        else
+        {
+            distinguished_name = "";
+            return std::make_pair( -1, distinguished_name );
+        }
+        return std::make_pair( 0, distinguished_name );
+    }
+
     static std::pair<size_t, void*> find_password( std::string ldap_search_result )
     {
         size_t base64_decode_len = 0;
@@ -538,15 +598,14 @@ class Util
 
     static std::pair<int, std::string> execute_ldapsearch( std::string gmsa_account_name,
                                                            std::string distinguished_name,
-                                                           std::string fqdn )
+                                                           std::string fqdn,
+                                                           std::string search_string )
     {
         std::string cmd;
         std::pair<int, std::string> ldap_search_result;
 
-        cmd = std::string( "ldapsearch -LLL -Y GSSAPI -H ldap://" ) + fqdn;
-        cmd += std::string( " -b '" ) + distinguished_name + std::string("'") +
-                       std::string( " -s sub  '(objectClass=msDs-GroupManagedServiceAccount)' "
-                                " msDS-ManagedPassword" );
+        cmd = std::string( "ldapsearch -o ldif_wrap=no -LLL -Y GSSAPI -H ldap://" ) + fqdn;
+        cmd += std::string( " -b '" ) + distinguished_name + std::string( "' " ) + search_string;
 
         std::cerr << Util::getCurrentTime() << '\t' << "INFO: " << cmd << std::endl;
         std::cerr << cmd << std::endl;
