@@ -246,7 +246,7 @@ class Util
             Util::rtrim( key );
             Util::ltrim( value );
 
-            if ( key.compare( ENV_CF_GMSA_BASE_DN ) == 0 && ecs_variable_name.compare( key ) == 0 )
+            if ( key.compare( ENV_CF_GMSA_OU ) == 0 && ecs_variable_name.compare( key ) == 0 )
             {
                 return value;
             }
@@ -258,6 +258,12 @@ class Util
             }
 
             if ( key.compare( ENV_CF_DOMAIN_CONTROLLER ) == 0 &&
+                 ecs_variable_name.compare( key ) == 0 )
+            {
+                return value;
+            }
+
+            if ( key.compare( ENV_CF_DISTINGUISHED_NAME ) == 0 &&
                  ecs_variable_name.compare( key ) == 0 )
             {
                 return value;
@@ -290,15 +296,18 @@ class Util
         return root;
     }
 
-    static std::pair<int, std::string> get_base_dn_from_secret()
+    static std::pair<int, std::string> get_base_dn_from_secret( std::string secret_name )
     {
         std::pair<int, std::string> result = std::make_pair( -1, "" );
         std::string distinguished_name;
-        std::string secret_name = retrieve_variable_from_ecs_config( ENV_CF_GMSA_SECRET_NAME );
         if ( !secret_name.empty() )
         {
             Json::Value root = get_secret_from_secrets_manager( secret_name );
             distinguished_name = root["distinguishedName"].asString();
+            if ( distinguished_name.empty() )
+            {
+                distinguished_name = root["distinguishedNameOfgMSA"].asString();
+            }
             if ( !distinguished_name.empty() )
             {
                 result.first = 0;
@@ -491,6 +500,66 @@ class Util
         return (uint8_t*)secure_mem;
     }
 
+    static std::pair<int, std::string> get_base_dn( std::string domain_name )
+    {
+        if ( !domain_name.empty() )
+        {
+            // DC=Contoso,DC=com
+            std::string base_dn = "";
+            auto results = Util::split_string( domain_name, '.' );
+            for ( auto& result : results )
+            {
+                base_dn += "DC=" + result + ",";
+            }
+            base_dn.pop_back(); // Remove last comma
+            return std::make_pair( 0, base_dn );
+        }
+        return std::make_pair( -1, "" );
+    }
+
+    static std::pair<int, std::string> find_dn( std::string gmsa_account_name, std::string base_dn,
+                                                std::string fqdn )
+    {
+        /**
+         *  ldapsearch  -H ldap://ip-xxxxxxxx.activedirectory1.com
+         *    -b 'DC=ActiveDirectory1,DC=com' -s sub '(CN=WebApp01)'  distinguishedName | grep
+         * "distinguishedName:"
+         */
+        std::string distinguished_name;
+        std::string search_string = " -s sub '(CN=" + gmsa_account_name + ")' distinguishedName";
+        std::pair<int, std::string> ldap_search_result =
+            Util::execute_ldapsearch( gmsa_account_name, base_dn, fqdn, search_string );
+        if ( ldap_search_result.first == 0 && !ldap_search_result.second.empty() )
+        {
+            std::size_t start_pos = ldap_search_result.second.find( "distinguishedName:" );
+            if ( start_pos != std::string::npos )
+            {
+                // distinguishedName:
+                // CN=WebApp01,OU=MYOU,OU=Users,OU=ActiveDirectory,DC=ActiveDirectory1,DC=com
+                distinguished_name = "distinguishedName: ";
+                start_pos += distinguished_name.length();
+
+                distinguished_name = ldap_search_result.second.substr( start_pos );
+                std::size_t end_pos = distinguished_name.find_first_of( "\n" );
+                if ( end_pos != std::string::npos )
+                {
+                    distinguished_name = distinguished_name.substr( 0, end_pos );
+                }
+                else
+                {
+                    distinguished_name = "";
+                    return std::make_pair( -1, distinguished_name );
+                }
+            }
+        }
+        else
+        {
+            distinguished_name = "";
+            return std::make_pair( -1, distinguished_name );
+        }
+        return std::make_pair( 0, distinguished_name );
+    }
+
     static std::pair<size_t, void*> find_password( std::string ldap_search_result )
     {
         size_t base64_decode_len = 0;
@@ -528,26 +597,15 @@ class Util
     }
 
     static std::pair<int, std::string> execute_ldapsearch( std::string gmsa_account_name,
-                                                           std::string env_base_dn,
-                                                           std::string default_base_dn,
-                                                           std::string gmsa_ou, std::string fqdn )
+                                                           std::string distinguished_name,
+                                                           std::string fqdn,
+                                                           std::string search_string )
     {
         std::string cmd;
         std::pair<int, std::string> ldap_search_result;
 
-        if ( !env_base_dn.empty() )
-        {
-            cmd = std::string( "ldapsearch -LLL -Y GSSAPI -H ldap://" ) + fqdn;
-            cmd += std::string( " -b " ) + env_base_dn + std::string( " msds-ManagedPassword" );
-        }
-        else
-        {
-            cmd = std::string( "ldapsearch -H ldap://" ) + fqdn;
-            cmd += std::string( " -b 'CN=" ) + gmsa_account_name + gmsa_ou + default_base_dn +
-                   std::string( "'" ) +
-                   std::string( " -s sub  '(objectClass=msDs-GroupManagedServiceAccount)' "
-                                " msDS-ManagedPassword" );
-        }
+        cmd = std::string( "ldapsearch -o ldif_wrap=no -LLL -Y GSSAPI -H ldap://" ) + fqdn;
+        cmd += std::string( " -b '" ) + distinguished_name + std::string( "' " ) + search_string;
 
         std::cerr << Util::getCurrentTime() << '\t' << "INFO: " << cmd << std::endl;
         std::cerr << cmd << std::endl;
@@ -762,10 +820,21 @@ class Util
         std::string distinguished_name = "";
         if ( root != Json::nullValue )
         {
-            // Read other
-            distinguished_name = root["distinguishedName"].asString();
             username = root["username"].asString();
+            if ( username.empty() )
+            {
+                username = root["usernameOfStandardUserAccount"].asString();
+            }
             password = root["password"].asString();
+            if ( password.empty() )
+            {
+                password = root["passwordOfStandardUserAccount"].asString();
+            }
+            distinguished_name = root["distinguishedName"].asString();
+            if ( distinguished_name.empty() )
+            {
+                distinguished_name = root["distinguishedNameOfgMSA"].asString();
+            }
         }
         else
         {
@@ -774,7 +843,9 @@ class Util
 
         if ( !distinguished_name.empty() )
         {
-            std::cerr << "[Optional] DN from Secrets Manager = " << distinguished_name << std::endl;
+            std::string err_msg = "[Optional] DN from Secrets Manager = " + distinguished_name;
+            std::cerr << err_msg << std::endl;
+            cf_logger.logger( LOG_ERR, err_msg.c_str() );
         }
 
         std::transform( domain_name.begin(), domain_name.end(), domain_name.begin(),

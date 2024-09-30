@@ -2,6 +2,7 @@ from aws_cdk import (
     # Duration,
     Stack,
     # aws_sqs as sqs,
+    aws_rds as rds
 )
 from constructs import Construct
 import aws_cdk.aws_directoryservice as directoryservice
@@ -90,7 +91,7 @@ class CdkStack(Stack):
     def init_route53_endpoint(self, domain_name, vpc):
 
         # create route53 endpoint
-        endpoint = route53resolver.CfnResolverEndpoint(self, "ResolverEndpoint",
+        endpoint = route53resolver.CfnResolverEndpoint(self, "CredentialsFetcherResolverEndpoint",
                                             direction="OUTBOUND",
                                             name="resolver",
                                             ip_addresses=[
@@ -103,7 +104,7 @@ class CdkStack(Stack):
                                         )
 
         # Create resolver forwarding rule
-        resolver_rule = route53resolver.CfnResolverRule(self, "ResolverRule",
+        resolver_rule = route53resolver.CfnResolverRule(self, "CredentialsFetcherResolverRule",
                                                         domain_name=domain_name,
                                                         rule_type="FORWARD",
                                                         resolver_endpoint_id=endpoint.attr_resolver_endpoint_id,
@@ -119,7 +120,7 @@ class CdkStack(Stack):
          # Associate the Resolver Rule with the VPC
         route53resolver.CfnResolverRuleAssociation(
             self,
-            "ResolverRuleAssociation",
+            "CredentialsFetcherResolverRuleAssociation",
             resolver_rule_id=resolver_rule.ref,
             vpc_id=vpc.vpc_id,
         )
@@ -127,8 +128,8 @@ class CdkStack(Stack):
         resolver_rule.node.add_dependency(vpc)
         resolver_rule.node.add_dependency(self.cfn_microsoft_AD)
 
-    def init_DirectoryService(self, directory_name:str, ad_password: str):
-        self.password = ad_password
+    def init_DirectoryService(self, directory_name:str, domain_admin_password: str):
+        self.password = domain_admin_password
 
         # Get subnet_ids from vpc.public_subnets
         subnet_ids = [self.subnet_1.subnet_id, self.subnet_2.subnet_id]
@@ -136,7 +137,7 @@ class CdkStack(Stack):
                                     self,
                                     directory_name,
                                     name=directory_name,
-                                    password=ad_password,
+                                    password=domain_admin_password,
                                     vpc_settings=directoryservice.CfnMicrosoftAD.VpcSettingsProperty(
                                         subnet_ids=subnet_ids,
                                         vpc_id=self.vpc.vpc_id
@@ -204,8 +205,8 @@ class CdkStack(Stack):
         instance = ec2.CfnInstance(
                     self,
                     "MyCfnInstance",
-                    instance_type=ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.XLARGE).to_string(),
-                    image_id=ec2.WindowsImage(version=ec2.WindowsVersion.WINDOWS_SERVER_2022_ENGLISH_FULL_BASE).get_image(self).image_id,
+                    instance_type=ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.XLARGE).to_string(),
+                    image_id=ec2.WindowsImage(version=ec2.WindowsVersion.WINDOWS_SERVER_2022_ENGLISH_FULL_SQL_2022_ENTERPRISE).get_image(self).image_id,
                     user_data=user_data,
                     security_group_ids=[self.security_group.security_group_id],
                     subnet_id=self.subnet_1.subnet_id,
@@ -370,8 +371,8 @@ class CdkStack(Stack):
         # Create task definition
         task_definition = ecs.TaskDefinition(self, task_definition_template_name,
                                             compatibility=ecs.Compatibility.EC2_AND_FARGATE,
-                                            cpu="2048",
-                                            memory_mib="4096",
+                                            cpu="1024",
+                                            memory_mib="2048",
                                             task_role=role,
                                             execution_role=role
                                             )

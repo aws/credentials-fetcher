@@ -77,6 +77,10 @@ std::list<krb_ticket_info_t *> read_meta_data_json( std::string file_path )
                         krb_info["service_account_name"].asString();
                     krb_ticket_info->domain_name = krb_info["domain_name"].asString();
                     krb_ticket_info->domainless_user = krb_info["domainless_user"].asString();
+                    if(krb_info.isMember("distinguished_name"))
+                    {
+                        krb_ticket_info->distinguished_name = krb_info["distinguished_name"].asString();
+                    }
 
                     if(krb_info.isMember("credspec_info"))
                     {
@@ -109,7 +113,8 @@ std::list<krb_ticket_info_t *> read_meta_data_json( std::string file_path )
 "\/usr\/share\/credentials-fetcher\/krbdir\/3e1ff0bb9f966192c440\/ccname_WebApp01_OPMsbZ",
             "service_account_name": "WebApp01",
             "domain_name": "contoso.com",
-            "domainless_user": "user1"
+            "domainless_user": "user1",
+            "distinguished_name": "CN=webapp01,CN=Managed Service Accounts,DC=contoso,DC=com"
         }
     ]
 }
@@ -159,6 +164,7 @@ int write_meta_data_json( std::list<krb_ticket_info_t*> krb_ticket_info_list,
             ticket_info["domain_name"] = krb_ticket_info->domain_name;
             ticket_info["domainless_user"] = krb_ticket_info->domainless_user;
             ticket_info["credspec_info"] = krb_ticket_info->credspec_info;
+            ticket_info["distinguished_name"] = krb_ticket_info->distinguished_name;
 
             krb_ticket_info_parent.append( ticket_info );
         }
