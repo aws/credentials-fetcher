@@ -9,16 +9,41 @@ This daemon works in a similar way as ccg.exe and the gMSA plugin in Windows as 
 
 ### How to install and run
 
-On [Fedora 36](_https://alt.fedoraproject.org/cloud/_) and similar distributions, the binary RPM can be installed as
+- To use the custom credentials-fetcher rpm in ECS domainless mode, modify the user data script as follows
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html#linux-gmsa-setup
+
+```
+#!/usr/bin/env bash
+set -euxo pipefail
+
+# prerequisites
+timeout 30 dnf install -y dotnet realmd oddjob oddjob-mkhomedir sssd adcli krb5-workstation samba-common-tools
+
+# install from branch - https://github.com/aws/credentials-fetcher/tree/fixes_for_DNS_and_distinguishedName gMSA credentials management for containers
+
+curl -L -O https://github.com/aws/credentials-fetcher/raw/refs/heads/fixes_for_DNS_and_distinguishedName/rpm/credentials-fetcher-1.3.61-0.amzn2023.x86_64.rpm
+dnf install -y ./credentials-fetcher-1.3.61-0.amzn2023.x86_64.rpm
+
+# start credentials-fetcher
+systemctl start credentials-fetcher
+systemctl is-active credentials-fetch && systemctl enable credentials-fetcher
+
+cat <<'EOF' >> /etc/ecs/ecs.config
+ECS_CLUSTER=MyCluster
+ECS_GMSA_SUPPORTED=true
+EOF
+```
+
+- On [Fedora 36](_https://alt.fedoraproject.org/cloud/_) and similar distributions, the binary RPM can be installed as
 `sudo dnf install credentials-fetcher`.
 You can also use yum if dnf is not present.
 The daemon can be started using `sudo systemctl start credentials-fetcher`.
 
-On Enterprise Linux 9 ( RHEL | CentOS | AlmaLinux ), the binary can be installed from EPEL. To add EPEL, see the [EPEL Quickstart](_https://docs.fedoraproject.org/en-US/epel/#_quickstart_).
+- On Enterprise Linux 9 ( RHEL | CentOS | AlmaLinux ), the binary can be installed from EPEL. To add EPEL, see the [EPEL Quickstart](_https://docs.fedoraproject.org/en-US/epel/#_quickstart_).
 Once EPEL is enabled, install credentials-fetcher with
 `sudo dnf install credentials-fetcher`.
 
-For other linux distributions, the daemon binary needs to be built from source code.
+- For other linux distributions, the daemon binary needs to be built from source code.
 
 ## Development
 
