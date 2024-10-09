@@ -12,27 +12,34 @@ This daemon works in a similar way as ccg.exe and the gMSA plugin in Windows as 
 - To use the custom credentials-fetcher rpm in ECS domainless mode, modify the user data script as follows
 https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html#linux-gmsa-setup
 
-```
-#!/usr/bin/env bash
-set -euxo pipefail
+    ```
+    #!/usr/bin/env bash
+    set -euxo pipefail
 
-# prerequisites
-timeout 30 dnf install -y dotnet realmd oddjob oddjob-mkhomedir sssd adcli krb5-workstation samba-common-tools
+    # prerequisites
+    timeout 30 dnf install -y dotnet realmd oddjob oddjob-mkhomedir sssd adcli krb5-workstation samba-common-tools
 
-# install from branch - https://github.com/aws/credentials-fetcher/tree/fixes_for_DNS_and_distinguishedName gMSA credentials management for containers
+    # install from branch - https://github.com/aws/credentials-fetcher/tree/fixes_for_DNS_and_distinguishedName gMSA credentials management for containers
 
-curl -L -O https://github.com/aws/credentials-fetcher/raw/refs/heads/fixes_for_DNS_and_distinguishedName/rpm/credentials-fetcher-1.3.61-0.amzn2023.x86_64.rpm
-dnf install -y ./credentials-fetcher-1.3.61-0.amzn2023.x86_64.rpm
+    curl -L -O https://github.com/aws/credentials-fetcher/raw/refs/heads/fixes_for_DNS_and_distinguishedName/rpm/credentials-fetcher-1.3.61-0.amzn2023.x86_64.rpm
+    dnf install -y ./credentials-fetcher-1.3.61-0.amzn2023.x86_64.rpm
 
-# start credentials-fetcher
-systemctl start credentials-fetcher
-systemctl is-active credentials-fetch && systemctl enable credentials-fetcher
+    # start credentials-fetcher
+    systemctl start credentials-fetcher
+    systemctl is-active credentials-fetch && systemctl enable credentials-fetcher
 
-cat <<'EOF' >> /etc/ecs/ecs.config
-ECS_CLUSTER=MyCluster
-ECS_GMSA_SUPPORTED=true
-EOF
-```
+    cat <<'EOF' >> /etc/ecs/ecs.config
+    ECS_CLUSTER=MyCluster
+    ECS_GMSA_SUPPORTED=true
+    EOF
+    ```
+
+
+    Add an additional optional field in the secret in AWS Secrets Manager along with the standard user's username, password, and the domain. Enter the service account's Distinguished Name (DN) into JSON key-value pairs called `distinguishedName`
+
+    ```
+    {"username":"username","password":"passw0rd", "domainName":"example.com", "distinguishedName":"CN=WebApp01,OU=DemoOU,OU=Users,OU=example,DC=example,DC=com"}
+    ```
 
 - On [Fedora 36](_https://alt.fedoraproject.org/cloud/_) and similar distributions, the binary RPM can be installed as
 `sudo dnf install credentials-fetcher`.
