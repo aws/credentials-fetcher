@@ -26,7 +26,7 @@ https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html#linu
 
     # start credentials-fetcher
     systemctl start credentials-fetcher
-    systemctl is-active credentials-fetch && systemctl enable credentials-fetcher
+    systemctl is-active credentials-fetcher && systemctl enable credentials-fetcher
 
     cat <<'EOF' >> /etc/ecs/ecs.config
     ECS_CLUSTER=MyCluster
