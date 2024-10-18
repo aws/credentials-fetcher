@@ -13,25 +13,28 @@ This daemon works in a similar way as ccg.exe and the gMSA plugin in Windows as 
 https://docs.aws.amazon.com/AmazonECS/latest/developerguide/linux-gmsa.html#linux-gmsa-setup
 
     ```
-    #!/usr/bin/env bash
-    set -euxo pipefail
+    #!/bin/bash
 
     # prerequisites
-    timeout 30 dnf install -y dotnet realmd oddjob oddjob-mkhomedir sssd adcli krb5-workstation samba-common-tools
+    dnf install -y dotnet
+    dnf install -y realmd
+    dnf install -y oddjob
+    dnf install -y oddjob-mkhomedir
+    dnf install -y sssd
+    dnf install -y adcli
+    dnf install -y krb5-workstation
+    dnf install -y samba-common-tools
 
-    # install from branch - https://github.com/aws/credentials-fetcher/tree/fixes_for_DNS_and_distinguishedName gMSA credentials management for containers
-
+    # install custom credentials-fetcher rpm from branch - https://github.com/aws/credentials-fetcher/tree/fixes_for_DNS_and_distinguishedName gMSA credentials management for containers
     curl -L -O https://github.com/aws/credentials-fetcher/raw/refs/heads/fixes_for_DNS_and_distinguishedName/rpm/credentials-fetcher-1.3.61-0.amzn2023.x86_64.rpm
     dnf install -y ./credentials-fetcher-1.3.61-0.amzn2023.x86_64.rpm
 
     # start credentials-fetcher
+    systemctl enable credentials-fetcher
     systemctl start credentials-fetcher
-    systemctl is-active credentials-fetcher && systemctl enable credentials-fetcher
 
-    cat <<'EOF' >> /etc/ecs/ecs.config
-    ECS_CLUSTER=MyCluster
-    ECS_GMSA_SUPPORTED=true
-    EOF
+    echo "ECS_GMSA_SUPPORTED=true" >> /etc/ecs/ecs.config       
+    echo ECS_CLUSTER=MyCluster >> /etc/ecs/ecs.config
     ```
 
 
