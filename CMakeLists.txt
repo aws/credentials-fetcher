@@ -238,3 +238,20 @@ add_test(NAME check_help COMMAND ${CMAKE_BINARY_DIR}/credentials-fetcherd "--hel
 add_test(NAME run_self_test COMMAND ${CMAKE_BINARY_DIR}/credentials-fetcherd "--self_test")
 set_tests_properties(check_help PROPERTIES WILL_FAIL TRUE)
 set_tests_properties(run_self_test PROPERTIES WILL_FAIL FALSE)
+
+
+find_package(GTest CONFIG REQUIRED)
+set(TEST_FILES test/tester.cpp)
+add_executable(credentials-fetcher-test ${metadata} ${TEST_FILES} common)
+target_include_directories(credentials-fetcher-test
+        PUBLIC
+        common
+        ${GLIB_INCLUDE_DIR}
+        ${GLIB_CONFIG_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(credentials-fetcher-test gtest gtest_main
+        systemd
+        glib-2.0
+        jsoncpp ssl crypto
+        krb5 kadm5srv_mit kdb5 gssrpc gssapi_krb5 gssrpc k5crypto
+        com_err krb5support resolv)
