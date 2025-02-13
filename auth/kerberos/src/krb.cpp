@@ -181,7 +181,7 @@ int get_machine_krb_ticket( std::string domain_name, creds_fetcher::CF_logger& c
         cf_logger.logger( LOG_ERR, "ERROR: %s:%d invalid machine principal", __func__, __LINE__ );
         return result.first;
     }
-    
+
     // kinit -kt /etc/krb5.keytab  'EC2AMAZ-GG97ZL$'@CONTOSO.COM
     std::transform( result.second.begin(), result.second.end(), result.second.begin(),
                     []( unsigned char c ) { return std::toupper( c ); } );
@@ -708,6 +708,10 @@ std::pair<int, std::string> get_gmsa_krb_ticket( std::string domain_name,
     fwrite( blob_password, 1, GMSA_PASSWORD_SIZE, fp );
     int error_code = pclose( fp );
 
+    if (error_code == 0) {
+        chmod(krb_cc_name.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    }
+
     // kinit output
     std::cout << "kinit return value = " << error_code << std::endl;
 
@@ -758,7 +762,7 @@ bool is_ticket_ready_for_renewal( creds_fetcher::krb_ticket_info* krb_ticket_inf
     results = split_string(krb_ticket_info_result.second, '#');
     std::string renew_until = "renew until";
     bool is_ready_for_renewal = false;
-    
+
     for ( auto& result : results )
     {
         auto found = result.find( renew_until );
@@ -999,7 +1003,7 @@ std::string retrieve_secret_from_ecs_config(std::string ecs_variable_name)
 
 /**
  * Given an input string split based on provided delimiter and return the split strings as vector
- * 
+ *
  * @param input_string - input string to split
  * @param delimiter - char to split the input string on
  * @return results - results to store vector of strings after `input_string` is split
