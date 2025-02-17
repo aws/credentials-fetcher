@@ -4,7 +4,11 @@
  
 # For handling bump release by rpmdev-bumpspec and mass rebuild
 %global baserelease 0
- 
+
+# By default, RPM tries to create debug packages when building RPMs (https://superuser.com/questions/1091529/rpm-build-error-empty-files-file-debugfiles-list)
+%global debug_package %{nil}
+
+
 Name:           credentials-fetcher
 Version:        %{major_version}.%{minor_version}.%{patch_version}
 Release:        %{baserelease}%{?dist}
