@@ -1,6 +1,9 @@
 /build/
 **/obj/Debug/
-**/bin/Debug/
+**/bin/
 **/obj/
 /.vscode/
 /auth/**/*.exe
+credentials-fetcherd
+credentials_fetcher_utf16_private.exe
+credentials_fetcher_utf16_private.runtimeconfig.json

@@ -64,11 +64,30 @@ namespace creds_fetcher
             log_level = _log_level;
         }
 
+        // Helper to convert or forward an argument for safe vararg usage
+        template <typename T>
+        auto to_c_arg(T&& arg) -> decltype(auto)
+        {
+            // If it's exactly std::string (or can be improved to handle other strings)
+            if constexpr (std::is_same_v<std::decay_t<T>, std::string>)
+            {
+                // convert to const char*
+                return arg.c_str();
+            }
+            else
+            {
+                // pass trivially if it's already POD or a pointer, etc.
+                return std::forward<T>(arg);
+            }
+        }
+
         template <typename... Logs> void logger( const int level, const char* fmt, Logs... logs )
         {
             if ( level >= log_level )
             {
-                sd_journal_print( level, fmt, logs... );
+                //sd_journal_print( level, fmt, logs... );
+                // Convert each argument to a C-friendly type, then pass them along
+                sd_journal_print(level, fmt, to_c_arg(std::forward<Logs>(logs))...);
             }
         }
     };
