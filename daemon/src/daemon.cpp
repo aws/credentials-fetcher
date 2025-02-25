@@ -5,6 +5,7 @@
 #include <libgen.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 Daemon cf_daemon;
 
@@ -70,6 +71,34 @@ void* refresh_krb_tickets_thread_start( void* arg )
 
     // ticket refresh
     krb_ticket_renew_handler( cf_daemon );
+
+    return tinfo->argv_string;
+}
+
+/**
+ * watchdog_thraed - used in pthread_create
+ * @param arg - thread info
+ * @return pthread name
+ */
+void* watchdog_thread( void* arg )
+{
+    struct thread_info* tinfo = (struct thread_info*)arg;
+
+    printf( "Start watchdog thread");
+
+    int i = 0;
+    while ( !cf_daemon.got_systemd_shutdown_signal )
+    {
+        usleep( cf_daemon.watchdog_interval_usecs / 8 ); /* TBD: Replace this later */
+        /* Tells the service manager to update the watchdog timestamp */
+        sd_notify( 0, "WATCHDOG=1" );
+
+        /* sd_notifyf() is similar to sd_notify() but takes a printf()-like format string plus
+         * arguments. */
+        sd_notifyf( 0, "STATUS=Watchdog notify count = %d",
+                    i ); // TBD: Remove later, visible in systemctl status
+        ++i;
+    }
 
     return tinfo->argv_string;
 }
@@ -354,18 +383,18 @@ int main( int argc, const char* argv[] )
 
     /* Tells the service manager that service startup is finished */
     sd_notify( 0, "READY=1" );
-    int i = 0;
+    pthread_status =
+        create_pthread( watchdog_thread, "watchdog_thread", -1 );
+    if ( pthread_status.first < 0 )
+    {
+        log_message =
+            "Error " + std::to_string( pthread_status.first ) + ": Cannot create pthreads";
+        cf_daemon.cf_logger.logger( LOG_ERR, log_message.c_str() );
+        exit( EXIT_FAILURE );
+    }
+
     while ( !cf_daemon.got_systemd_shutdown_signal )
     {
-        usleep( cf_daemon.watchdog_interval_usecs / 2 ); /* TBD: Replace this later */
-        /* Tells the service manager to update the watchdog timestamp */
-        sd_notify( 0, "WATCHDOG=1" );
-
-        /* sd_notifyf() is similar to sd_notify() but takes a printf()-like format string plus
-         * arguments. */
-        sd_notifyf( 0, "STATUS=Watchdog notify count = %d",
-                    i ); // TBD: Remove later, visible in systemctl status
-        ++i;
 #ifdef EXIT_USING_FILE
         struct stat st;
         if ( lstat( "/tmp/credentials_fetcher_exit.txt", &st ) != -1 )
@@ -376,6 +405,7 @@ int main( int argc, const char* argv[] )
             }
         }
 #endif
+        sleep(1);
     }
 
     return EXIT_SUCCESS;
