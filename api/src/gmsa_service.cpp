@@ -2156,7 +2156,7 @@ int RunGrpcServer( std::string unix_socket_dir, std::string krb_files_dir, CF_lo
     while ( *shutdown_signal == 0 )
     {
        creds_fetcher_grpc = new CredentialsFetcherImpl();   
-       creds_fetcher_grpc.RunServer( unix_socket_dir, krb_files_dir, cf_logger, aws_sm_secret_name );
+       creds_fetcher_grpc->RunServer( unix_socket_dir, krb_files_dir, cf_logger, aws_sm_secret_name );
        delete creds_fetcher_grpc;
     }
         
