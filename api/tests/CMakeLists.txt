@@ -20,20 +20,24 @@ add_executable(gmsa_test_client "gmsa_test_client.cpp")
 target_link_libraries(gmsa_test_client
             cf_gmsa_service_private ${_PROTOBUF_LIBPROTOBUF})
 
-add_executable(gmsa_api_integration_test "gmsa_api_integration_test.cpp")
-target_link_libraries(gmsa_api_integration_test
-            cf_gmsa_service_private
-            ${_PROTOBUF_LIBPROTOBUF}
-            jsoncpp
-            gtest
-            gtest_main)
+if(BUILD_INTEGRATION_TESTS)
+    add_executable(gmsa_api_integration_test "gmsa_api_integration_test.cpp")
+    target_link_libraries(gmsa_api_integration_test
+                cf_gmsa_service_private
+                ${_PROTOBUF_LIBPROTOBUF}
+                jsoncpp
+                gtest
+                gtest_main)
+    if (CMAKE_C_LINK_PIE_SUPPORTED)
+        set_property(TARGET gmsa_api_integration_test
+                    PROPERTY POSITION_INDEPENDENT_CODE TRUE)
+    endif ()
+endif ()
 
 cmake_policy(SET CMP0083 NEW)
 include(CheckPIESupported)
 check_pie_supported()
 if (CMAKE_C_LINK_PIE_SUPPORTED)
     set_property(TARGET gmsa_test_client
-                PROPERTY POSITION_INDEPENDENT_CODE TRUE)
-    set_property(TARGET gmsa_api_integration_test
                 PROPERTY POSITION_INDEPENDENT_CODE TRUE)
 endif ()

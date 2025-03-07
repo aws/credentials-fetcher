@@ -33,13 +33,6 @@
 // https://devblogs.microsoft.com/oldnewthing/20120412-00/?p=7873
 #define DOMAIN_LENGTH 253
 
-// invalid character in username/account name
-// https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/bb726984
-//          (v=technet.10)
-static const std::vector<char> invalid_characters_ad_name = { '&', ':',  ']',  '[', '+', '|', ';',
-                                                              '$', '*',  '?',  '<', '>', '!', ' ',
-                                                              '/', '\\', '\'', '`', '~' };
-
 std::string dummy_credspec =
     "{\"CmsPlugins\":[\"ActiveDirectory\"],\"DomainJoinConfig\":{\"Sid\":\"S-1-5-21-4066351383-"
     "705263209-1606769140\",\"MachineAccountName\":\"webapp01\",\"Guid\":\"ac822f13-583e-49f7-aa7b-"
@@ -99,27 +92,6 @@ bool contains_invalid_characters_in_credentials( const std::string& value )
     bool result = false;
     // Iterate over all characters in invalid_path_characters vector
     for ( const char& ch : invalid_characters )
-    {
-        // Check if character exist in string
-        if ( value.find( ch ) != std::string::npos )
-        {
-            result = true;
-            break;
-        }
-    }
-    return result;
-}
-
-/**
- *
- * @param value - string input that has to be validated
- * @return true or false if string contains or not contains invalid characters
- */
-bool contains_invalid_characters_in_ad_account_name( const std::string& value )
-{
-    bool result = false;
-    // Iterate over all characters in invalid_path_characters vector
-    for ( const char& ch : invalid_characters_ad_name )
     {
         // Check if character exist in string
         if ( value.find( ch ) != std::string::npos )
@@ -518,7 +490,7 @@ class CredentialsFetcherImpl final
                                 distinguished_name = std::get<3>( userCreds );
 
                                 if ( isValidDomain( domain ) &&
-                                     !contains_invalid_characters_in_ad_account_name( username ) )
+                                     !Util::contains_invalid_characters_in_ad_account_name( username ) )
                                 {
                                     if ( !username.empty() && !password.empty() &&
                                          !domain.empty() &&
@@ -932,7 +904,7 @@ class CredentialsFetcherImpl final
                                     // std::string distinguished_name = std::get<3>( userCreds );
 
                                     if ( isValidDomain( domain ) &&
-                                         !contains_invalid_characters_in_ad_account_name(
+                                         !Util::contains_invalid_characters_in_ad_account_name(
                                              username ) )
                                     {
                                         if ( !username.empty() && !password.empty() &&
@@ -1432,7 +1404,7 @@ class CredentialsFetcherImpl final
                 std::string err_msg;
                 std::string log_message;
                 if ( isValidDomain( domain ) &&
-                     !contains_invalid_characters_in_ad_account_name( username ) )
+                     !Util::contains_invalid_characters_in_ad_account_name( username ) )
                 {
                     if ( !username.empty() && !password.empty() && !domain.empty() &&
                          username.length() < INPUT_CREDENTIALS_LENGTH &&
@@ -1766,7 +1738,7 @@ class CredentialsFetcherImpl final
 
                 std::string err_msg;
                 if ( isValidDomain( domain ) &&
-                     !contains_invalid_characters_in_ad_account_name( username ) )
+                     !Util::contains_invalid_characters_in_ad_account_name( username ) )
                 {
                     if ( !username.empty() && !password.empty() && !domain.empty() &&
                          username.length() < INPUT_CREDENTIALS_LENGTH &&
@@ -2271,7 +2243,7 @@ int parse_cred_spec( std::string credspec_data, krb_ticket_info_t* krb_ticket_in
             return -1;
 
         if ( !isValidDomain( domain_name ) ||
-             contains_invalid_characters_in_ad_account_name( service_account_name ) )
+             Util::contains_invalid_characters_in_ad_account_name( service_account_name ) )
         {
             std::cerr << Util::getCurrentTime() << '\t'
                       << "ERROR: credentialspec file is not formatted"
@@ -2342,7 +2314,7 @@ int parse_cred_spec_domainless( std::string credspec_data, krb_ticket_info_t* kr
             return -1;
 
         if ( !isValidDomain( domain_name ) ||
-             contains_invalid_characters_in_ad_account_name( service_account_name ) )
+             Util::contains_invalid_characters_in_ad_account_name( service_account_name ) )
         {
             std::cerr << Util::getCurrentTime() << '\t'
                       << "ERROR: credentialspec file is not formatted"

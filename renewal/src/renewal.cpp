@@ -99,11 +99,13 @@ int krb_ticket_renew_handler( Daemon cf_daemon )
                             }
                         }
                     }
+                    /* 
                     else
                     {
                         log_message = "gMSA ticket is at " + krb_cc_name;
                         cf_logger.logger( LOG_INFO, log_message.c_str() );
                     }
+                    */
                 }
             }
         }

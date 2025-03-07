@@ -147,10 +147,12 @@ export CF_TEST_DOMAIN=XXXX
 ``` 
 
 #### Build && Test
-Follow the instructions from [Standalone mode](#standalone-mode) sections to build the code, generate binaries and start the server. Once the server has started, run integration tests by running
+Follow the instructions from [Standalone mode](#standalone-mode) sections to build the code with the integration test flag enabled, generate binaries and start the server. Once the server has started, run integration tests
 
 ```
 cd credentials-fetcher/build/
+cmake -DBUILD_INTEGRATION_TESTS=ON .. && make -j
+# Start the server from another terminal and run `sudo ./credentials-fetcherd`
 sudo -E api/tests/gmsa_api_integration_test 
 ```
 
