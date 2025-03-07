@@ -126,7 +126,10 @@ class CredentialsFetcherImpl final
     {
         server_->Shutdown();
         // Always shutdown the completion queue after the server.
-        cq_->Shutdown();
+         cq_->Shutdown();
+        void* ignored_tag;
+        bool ignored_ok;
+        while (cq_->Next(&ignored_tag, &ignored_ok)) { }
     }
 
     /**
@@ -2083,8 +2086,10 @@ class CredentialsFetcherImpl final
             // The return value of Next should always be checked. This return value
             // tells us whether there is any kind of event or cq_ is shutting down.
             GPR_ASSERT( cq_->Next( &got_tag, &ok ) );
-            GPR_ASSERT( ok );
-
+            if ( !ok )
+            {
+               return;
+            }
             static_cast<CallDataCreateKerberosLease*>( got_tag )->Proceed( krb_files_dir, cf_logger,
                                                                            aws_sm_secret_name );
             static_cast<CallDataAddNonDomainJoinedKerberosLease*>( got_tag )->Proceed(
@@ -2119,12 +2124,17 @@ class CredentialsFetcherImpl final
 int RunGrpcServer( std::string unix_socket_dir, std::string krb_files_dir, CF_logger& cf_logger,
                    volatile sig_atomic_t* shutdown_signal, std::string aws_sm_secret_name )
 {
-    CredentialsFetcherImpl creds_fetcher_grpc;
+    CredentialsFetcherImpl *creds_fetcher_grpc = nullptr;
 
     pthread_shutdown_signal = shutdown_signal;
 
-    creds_fetcher_grpc.RunServer( unix_socket_dir, krb_files_dir, cf_logger, aws_sm_secret_name );
-
+    while ( *shutdown_signal == 0 )
+    {
+       creds_fetcher_grpc = new CredentialsFetcherImpl();   
+       creds_fetcher_grpc->RunServer( unix_socket_dir, krb_files_dir, cf_logger, aws_sm_secret_name );
+       delete creds_fetcher_grpc;
+    }
+        
     // TBD:: Add return status for errors
     return 0;
 }

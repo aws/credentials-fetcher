@@ -86,7 +86,7 @@ void* watchdog_thread( void* arg )
 
     CF_logger cf_logger = cf_daemon.cf_logger;
     cf_logger.logger( LOG_INFO, "Start watchdog thread" );
-
+  
     int i = 0;
     while ( !cf_daemon.got_systemd_shutdown_signal )
     {
@@ -407,6 +407,7 @@ int main( int argc, const char* argv[] )
         }
 #endif
         sleep(1); // Main thread waits for shutdown
+
     }
 
     return EXIT_SUCCESS;
