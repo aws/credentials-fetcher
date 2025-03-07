@@ -154,6 +154,9 @@ class CredentialsFetcherImpl final
     {
         server_->Shutdown();
         // Always shutdown the completion queue after the server.
+        void* ignored_tag;
+        bool ignored_ok;
+        while (cq_->Next(&ignored_tag, &ignored_ok)) { }
         cq_->Shutdown();
     }
 
