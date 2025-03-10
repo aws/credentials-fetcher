@@ -4,7 +4,11 @@
  
 # For handling bump release by rpmdev-bumpspec and mass rebuild
 %global baserelease 0
- 
+
+# By default, RPM tries to create debug packages when building RPMs (https://superuser.com/questions/1091529/rpm-build-error-empty-files-file-debugfiles-list)
+%global debug_package %{nil}
+
+
 Name:           credentials-fetcher
 Version:        %{major_version}.%{minor_version}.%{patch_version}
 Release:        %{baserelease}%{?dist}
@@ -73,9 +77,10 @@ ctest3
 
 %changelog
 
-* Wed Feb 12 2025 Anushka Srinivasa <as14692@nyu.edu> - 1.3.8
+* Mon Mar 10 2025 Anushka Srinivasa <as14692@nyu.edu> - 1.3.8
+- Fix for intermittent grpc server shutdown issue
+- Moving watchdog heartbeats into its own pthread
 - Conditionally add build dependency awscli
-- Update project version in CMake
 
 * Fri Jan 17 2025 Samiullah Mohammed <samiull@amazon.com> - 1.3.7
 - DNS and associated retries
