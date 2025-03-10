@@ -982,4 +982,36 @@ class Util
 
         return result;
     }
+
+    /**
+    * Checks if a string contains any invalid characters for Active Directory account names
+    * 
+    * @param value The string to validate against invalid AD account name characters
+    * @return true if string contains invalid characters, false otherwise
+    *
+    * This function checks if the input string contains any of the following invalid characters
+    * for Active Directory account names:
+    * & : ] [ + | ; $ * ? < > ! space / \ ' ` ~
+    *
+    * These characters are defined in the invalid_characters_ad_name vector according to
+    * Microsoft documentation:
+    * https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/bb726984(v=technet.10)
+     */
+    static bool contains_invalid_characters_in_ad_account_name( const std::string& value )
+    {
+        std::vector<char> invalid_characters_ad_name = { '&', ':',  ']',  '[', '+', '|', ';', 
+                            '$', '*',  '?',  '<', '>', '!', ' ', '/', '\\', '\'', '`', '~' };
+        bool result = false;
+        // Iterate over all characters in invalid_path_characters vector
+        for ( const char& ch : invalid_characters_ad_name )
+        {
+            // Check if character exist in string
+            if ( value.find( ch ) != std::string::npos )
+            {
+                result = true;
+                break;
+            }
+        }
+        return result;
+    }
 };
