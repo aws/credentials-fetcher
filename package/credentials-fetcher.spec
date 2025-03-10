@@ -77,10 +77,10 @@ ctest3
 
 %changelog
 
-* Wed Feb 12 2025 Anushka Srinivasa <as14692@nyu.edu> - 1.3.8
+* Mon Mar 10 2025 Anushka Srinivasa <as14692@nyu.edu> - 1.3.8
+- Fix for intermittent grpc server shutdown issue
+- Moving watchdog heartbeats into its own pthread
 - Conditionally add build dependency awscli
-- Update project version in CMake
-- Clean up socket during install/upgrade
 
 * Fri Jan 17 2025 Samiullah Mohammed <samiull@amazon.com> - 1.3.7
 - DNS and associated retries
