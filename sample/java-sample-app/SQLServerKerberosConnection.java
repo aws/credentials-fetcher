@@ -1,18 +1,16 @@
 import java.sql.*;
 
-// Replace user, domain name, and server name before compiling
-
 public class SQLServerKerberosConnection {
     public static void main(String[] args) {
 
-        System.setProperty("java.security.krb5.principal", "<user>@<domain_name>");
+        System.setProperty("java.security.krb5.principal", args[2] + "@" + args[1]);
 
-        String connectionUrl = "jdbc:sqlserver://<server_name>:1433;"
+        String connectionUrl = "jdbc:sqlserver://" + args[0] + ":1433;"
                 + "databaseName=EmployeesDB;"
                 + "integratedSecurity=true;"
                 + "authenticationScheme=JavaKerberos;"
-                + "userName=<user>@<DOMAIN_NAME>;"
-                + "serverSpn=MSSQLSvc/<server_name>:1433;"
+                + "userName=" + args[2] + "@" + args[1] + ";"
+                + "serverSpn=MSSQLSvc/" + args[0] + ":1433;"
                 + "trustServerCertificate=true";
 
         try {

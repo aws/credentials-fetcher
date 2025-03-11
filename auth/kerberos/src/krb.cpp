@@ -569,15 +569,40 @@ std::string renew_gmsa_ticket( krb_ticket_info_t* krb_ticket, std::string domain
 std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::string lease_id )
 {
     std::vector<std::string> delete_krb_ticket_paths;
-    if ( lease_id.empty() || krb_files_dir.empty() )
+    if ( lease_id.empty() || krb_files_dir.empty() ) {
         return delete_krb_ticket_paths;
+    }
 
-    std::string krb_tickets_path = krb_files_dir + "/" + lease_id;
+    // Normalize paths using std::filesystem
+    std::filesystem::path base_dir = std::filesystem::absolute(krb_files_dir);
+    std::filesystem::path target_path = base_dir / lease_id;
 
-    DIR* curr_dir;
+    try {
+        // Convert to canonical form (resolves ".." and symlinks)
+        std::filesystem::path canonical_base = std::filesystem::canonical(base_dir);
+
+        // Check if target path exists before canonicalization
+        if (std::filesystem::exists(target_path)) {
+            std::filesystem::path canonical_target = std::filesystem::canonical(target_path);
+
+            // Verify target path is under base directory
+            std::string base_str = canonical_base.string();
+            std::string target_str = canonical_target.string();
+
+            if (target_str.compare(0, base_str.length(), base_str) != 0) {
+                std::cerr << Util::getCurrentTime() << '\t'
+                         << "ERROR: Invalid path - attempted directory traversal"
+                         << std::endl;
+                return delete_krb_ticket_paths;
+            }
+        }
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << Util::getCurrentTime() << '\t' << "ERROR: Path validation failed: " << e.what() << std::endl;
+        return delete_krb_ticket_paths;
+    }
+
+    DIR* curr_dir = opendir(target_path.c_str());
     struct dirent* file;
-    // open the directory
-    curr_dir = opendir( krb_tickets_path.c_str() );
     try
     {
         if ( curr_dir )
@@ -587,7 +612,7 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
                 std::string filename = file->d_name;
                 if ( !filename.empty() && filename.find( "_metadata" ) != std::string::npos )
                 {
-                    std::string file_path = krb_tickets_path + "/" + filename;
+                    std::string file_path = (target_path / filename).string();
                     std::list<krb_ticket_info_t*> krb_ticket_info_list =
                         read_meta_data_json( file_path );
 
@@ -618,7 +643,7 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
             closedir( curr_dir );
 
             // finally delete lease file and directory
-            std::filesystem::remove_all( krb_tickets_path );
+            std::filesystem::remove_all(target_path);
         }
     }
     catch ( ... )

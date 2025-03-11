@@ -73,8 +73,15 @@ std::list<krb_ticket_info_t *> read_meta_data_json( std::string file_path )
                 if ( std::filesystem::exists( krb_file_path ) )
                 {
                     krb_ticket_info->krb_file_path = krb_file_path;
-                    krb_ticket_info->service_account_name =
-                        krb_info["service_account_name"].asString();
+                    
+                    std::string service_account = krb_info["service_account_name"].asString();
+                    if (Util::contains_invalid_characters_in_ad_account_name(service_account)) {
+                        std::cout << Util::getCurrentTime() << '\t' << "ERROR: service account name contains invalid characters" << std::endl;
+                        delete krb_ticket_info;
+                        break;
+                    }
+                    krb_ticket_info->service_account_name = service_account;
+
                     krb_ticket_info->domain_name = krb_info["domain_name"].asString();
                     krb_ticket_info->domainless_user = krb_info["domainless_user"].asString();
                     if(krb_info.isMember("distinguished_name"))

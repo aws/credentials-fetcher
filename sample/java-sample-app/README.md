@@ -4,7 +4,6 @@ A simple Java application that connects to Microsoft SQL Server using Kerberos a
 
 ## Prerequisites
 
-- Java 11 or higher
 - Microsoft JDBC Driver for SQL Server (JDBC driver used to create this app is ```mssql-jdbc-12.8.1.jre8.jar```)
 - Valid Kerberos ticket (can be verified using `klist`)
 - SQL Server configured for Kerberos authentication
@@ -13,6 +12,7 @@ A simple Java application that connects to Microsoft SQL Server using Kerberos a
 
 1. `SQLServerKerberosConnection.class` - The compiled Java class file
 2. `mssql-jdbc-12.8.1.jre8.jar` - Microsoft JDBC driver for SQL Server
+3. `Dockerfile ` - The Dockerfile in this directory
 
 ## Environment Setup
 
@@ -21,20 +21,32 @@ A simple Java application that connects to Microsoft SQL Server using Kerberos a
 klist
 ```
 
-2. set the ```KRB5CCNAME``` in the environment to the krb5cc directory of a ticket. For example:
+2. Build the dockerfile 
 ```
-export KRB5CCNAME=/var/credentials-fetcher/krbdir/<lease_id>/WebApp01/krb5cc
+docker build -t myjava .
 ```
-Verify that the variable has been set correctly using ```echo $KRB5CCNAME```
 
-3. Compile and run the Java file like so
+3. Run the docker container
 ```
-javac --release 11 -cp .:mssql-jdbc-12.8.1.jre8.jar SQLServerKerberosConnection.java
-java -cp .:mssql-jdbc-12.8.1.jre8.jar SQLServerKerberosConnection
+docker run -it \
+    -e LEASE_ID=<lease_id> \
+    -e SERVER_NAME=<server_name> (example: EC2AMAZ-938NTBH.contoso.com) \
+    -e DOMAIN_NAME=<domain_name> (example: CONTOSO.COM) \
+    -e USER_NAME=<user_name> (example: standarduser01) \
+    -v /var/credentials-fetcher/krbdir:/var/credentials-fetcher/krbdir \
+    -v /etc/krb5.conf:/etc/krb5.conf:ro \
+    myjava
 ```
 
 4. You should see the following output
 ```
+Using KRB5CCNAME: /var/credentials-fetcher/krbdir/49ccb67e16ba17c4f14f/WebApp01/krb5cc
+Ticket cache: FILE:/var/credentials-fetcher/krbdir/49ccb67e16ba17c4f14f/WebApp01/krb5cc
+Default principal: WebApp01$@CONTOSO.COM
+
+Valid starting     Expires            Service principal
+02/07/25 22:36:38  02/08/25 08:36:38  krbtgt/CONTOSO.COM@CONTOSO.COM
+        renew until 02/14/25 22:36:37
 Connected successfully using Kerberos authentication.
 +---------------------------+---------------------------+---------------------------+---------------------------+---------------------------+
 | EmpID                     | EmpName                   | Designation               | Department                | JoiningDate               |

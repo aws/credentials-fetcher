@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(credentials-fetcher VERSION 1.3.6)
+project(credentials-fetcher VERSION 1.3.8)
 
 include(GNUInstallDirs)
 
@@ -12,7 +12,7 @@ set(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS} -z noexecstack -z relro -z now")
 set(CMAKE_SHARED_LINKER_FLAGS "${LDFLAGS} -z noexecstack -z relro -z now")
 
 # cmake ../ -DENABLE_DEBUGGING=ON
-option(ENABLE_DEBUGGING "Enable debugging" ON)
+option(ENABLE_DEBUGGING "Enable debugging" OFF)
 if(ENABLE_DEBUGGING)
     message("Enable debugging")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
@@ -31,6 +31,9 @@ if(CODE_COVERAGE)
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -fprofile-arcs -ftest-coverage -lgcov ")
     endif()
 endif()
+
+# cmake -DBUILD_INTEGRATION_TESTS=ON
+option(BUILD_INTEGRATION_TESTS "Build integration tests" OFF)
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf CONFIG)
@@ -112,7 +115,7 @@ if(${DISTRO_ID} MATCHES "amzn")
             "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
             "Type=notify\n"
             "NotifyAccess=main\n"
-            "WatchdogSec=5s\n"
+            "WatchdogSec=120s\n"
             "Restart=on-failure\n\n"
             "[Install]\n"
             "WantedBy=multi-user.target\n"
@@ -136,7 +139,7 @@ elseif (${DISTRO_ID} MATCHES "ubuntu")
             "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"\n"
             "Type=notify\n"
             "NotifyAccess=main\n"
-            "WatchdogSec=5s\n"
+            "WatchdogSec=120s\n"
             "Restart=on-failure\n\n"
             "[Install]\n"
             "WantedBy=multi-user.target\n"
@@ -155,7 +158,7 @@ else()
             "Environment=\"CF_CRED_SPEC_FILE=/var/credentials-fetcher/credspec.json\"\n"
             "Type=notify\n"
             "NotifyAccess=main\n"
-            "WatchdogSec=5s\n"
+            "WatchdogSec=120s\n"
             "Restart=on-failure\n\n"
             "[Install]\n"
             "WantedBy=multi-user.target\n"
