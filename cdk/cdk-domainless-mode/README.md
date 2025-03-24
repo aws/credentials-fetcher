@@ -1,12 +1,12 @@
 What this CDK does:
-CDK automation to run Linux gMSA in ECS with EC2 instance in domainless mode . This CDK can be used to test RPMs for AL2023.
+CDK automation to run Linux gMSA in ECS with EC2 instance in domainless mode.
 
 This CDK does the following:
 Creates directory in Directory Service (Active Directory)
 Launch Windows instance, domain-join with Active Directory and create gMSA accounts
 Create ECS cluster
 Launch ECS-optimized Linux instance and attaches to ECS cluster
-Runs a couple of tasks in the ECS-optimized Linux instance using gMSA in domainless mode.
+Runs ECS tasks in the ECS-optimized Linux instances using gMSA in domainless mode.
 
 Disclaimer
 This CDK and scripts are only for test, please modify as needed.
@@ -60,7 +60,8 @@ Steps to run tasks in ECS with Credentials-fetcher.
         $ brew install aws-cdk
         ```
 
-5) Run start_stack.sh (this is a bash script) to create a CloudFormation stack
+5) Run start_stack.sh (this is a bash script) to create a CloudFormation stack.
+   
    2.1) Update start_stack.sh with your aws account number
 
    2.2) This creates Managed Active Directory, launches Windows instance and domain-joins it and creates the gMSA accounts, launches an ECS-optimized Linux instance, creates a new ECS cluster and attaches it to ECS cluster.
@@ -71,11 +72,11 @@ Steps to run tasks in ECS with Credentials-fetcher.
         _: [ 'bootstrap' ],
     ```
    
-6) Run End-To-End SQL test with Credentials Fetcher ECS Domainless Setup
+7) Run End-To-End SQL test with Credentials Fetcher ECS Domainless Setup
    ```aiignore
       (.venv) tests % python3 run_e2e_test.py
    ```
-7) Done: If everything worked as expected, you should see an output like this in the console:
+8) Done: If everything worked as expected, you should see an output like this in the console:
     ```
             EmpID EmpName Designation DepartmentJoiningDate
     ----------- -------------------------------------------------- -------------------------------------------------- -------------------------------------------------------------------------
