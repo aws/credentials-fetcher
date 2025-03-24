@@ -56,7 +56,7 @@ $ brew install aws-cdk
 
    4.2 This creates Managed Active Directory, launches Windows instance and domain-joins it and creates the gMSA accounts, launches an ECS-optimized Linux instance, creates a new ECS cluster and attaches it to ECS cluster.
     ```
-    $ cd tests
+    (.venv) cd tests/
     (.venv) tests % ./start_stack.sh
         [10:29:46] CDK toolkit version: 2.156.0 (build 2966832)
         [10:29:46] Command line arguments: {
