@@ -72,11 +72,11 @@ Steps to run tasks in ECS with Credentials-fetcher.
         _: [ 'bootstrap' ],
     ```
    
-7) Run End-To-End SQL test with Credentials Fetcher ECS Domainless Setup
+6) Run End-To-End SQL test with Credentials Fetcher ECS Domainless Setup
    ```aiignore
       (.venv) tests % python3 run_e2e_test.py
    ```
-8) Done: If everything worked as expected, you should see an output like this in the console:
+7) Done: If everything worked as expected, you should see an output like this in the console:
     ```
             EmpID EmpName Designation DepartmentJoiningDate
     ----------- -------------------------------------------------- -------------------------------------------------- -------------------------------------------------------------------------
