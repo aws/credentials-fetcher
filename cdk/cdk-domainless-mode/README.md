@@ -1,15 +1,16 @@
-What this CDK does:
-CDK automation to run Linux gMSA in ECS with EC2 instance in domainless mode.
+## Overview
+CDK automation to run Linux gMSA in ECS with EC2 instance in non domain-joined mode.
 
-This CDK does the following:
-Creates directory in Directory Service (Active Directory)
-Launch Windows instance, domain-join with Active Directory and create gMSA accounts
-Create ECS cluster
-Launch ECS-optimized Linux instance and attaches to ECS cluster
-Runs ECS tasks in the ECS-optimized Linux instances using gMSA in domainless mode.
+#### This CDK does the following:
+- Create directory in Directory Service (Active Directory)
+- Launch Windows instance, domain-join it with Active Directory and create gMSA accounts
+- Create ECS cluster
+- Launch ECS-optimized Linux instance and attach to ECS cluster
+- Run ECS tasks in the ECS-optimized Linux instances using gMSA in non domain-joined mode.
 
-Disclaimer
-This CDK and scripts are only for test, please modify as needed.
+##### Disclaimer: This CDK and scripts are only for test, please modify as needed.
+
+### Setup
 
 Create the following environment variables: 
 1. AWS_REGION
@@ -17,66 +18,56 @@ Create the following environment variables:
 3. KEY_PAIR_NAME
 4. PREFIX_LIST
 
-Pre-requisites
-Please take a look at data.json for default values.
-If you're testing a new RPM, upload it in the S3 bucket.
-Ensure you have docker running in the background.
+- Please take a look at data.json for default values.
+- If you're testing a new RPM, upload it in the S3 bucket.
+- Ensure you have docker running in the background.
 
 1. Update data.json, and make sure there are no values with "xxxxxxxx"
 
-2) 'default' AWS profile with administrator access is needed, a separate/burner AWS account would suffice.
+2. `default` AWS profile with administrator access is needed, a separate/burner AWS account would suffice.
 
-Steps to run tasks in ECS with Credentials-fetcher.
+3. Create a virtual environment 
+```
+# Go to cdk directory
 
-3) Create a virtual env
-        Go to cdk directory
+$ cd cdk/
 
-        ```
-        $ cd cdk/
-        ```
-        To manually create a virtualenv on MacOS and Linux:
+# To manually create a virtualenv on MacOS and Linux:
 
-        ```
-        $ python3 -m venv .venv
-        ```
+$ python3 -m venv .venv
 
-        After the init process completes and the virtualenv is created, you can use the following
-        step to activate your virtualenv.
+# After the init process completes and the virtualenv is created, you can use the following step to activate your virtualenv.
 
-        ```
-        $ source .venv/bin/activate
-        ```
+$ source .venv/bin/activate
 
-        Once the virtualenv is activated, you can install the required dependencies.
+Once the virtualenv is activated, you can install the required dependencies.
 
-        ```
-        $ cd cdk/cdk-domainless-mode
-        $ pip install -r requirements.txt
-        ```
+$ cd cdk-domainless-mode
+$ pip install -r requirements.txt
 
-        Install AWS cdk
+Install AWS cdk
 
-        ```
-        $ brew install aws-cdk
-        ```
+$ brew install aws-cdk
+```
 
-5) Run start_stack.sh (this is a bash script) to create a CloudFormation stack.
+4. Run start_stack.sh (this is a bash script) to create a CloudFormation stack.
    
-   2.1) Update start_stack.sh with your aws account number
+   4.1 Update start_stack.sh with your aws account number
 
-   2.2) This creates Managed Active Directory, launches Windows instance and domain-joins it and creates the gMSA accounts, launches an ECS-optimized Linux instance, creates a new ECS cluster and attaches it to ECS cluster.
+   4.2 This creates Managed Active Directory, launches Windows instance and domain-joins it and creates the gMSA accounts, launches an ECS-optimized Linux instance, creates a new ECS cluster and attaches it to ECS cluster.
     ```
-    (.venv) cdk % ./start_stack.sh
+    $ cd tests
+    (.venv) tests % ./start_stack.sh
         [10:29:46] CDK toolkit version: 2.156.0 (build 2966832)
         [10:29:46] Command line arguments: {
         _: [ 'bootstrap' ],
     ```
    
-6) Run End-To-End SQL test with Credentials Fetcher ECS Domainless Setup
-   ```aiignore
+5. Run End-To-End SQL test with Credentials Fetcher ECS Domainless Setup
+   ```
       (.venv) tests % python3 run_e2e_test.py
    ```
-7) Done: If everything worked as expected, you should see an output like this in the console:
+6. Done! If everything worked as expected, you should see an output like this in the terminal:
     ```
             EmpID EmpName Designation DepartmentJoiningDate
     ----------- -------------------------------------------------- -------------------------------------------------- -------------------------------------------------------------------------
