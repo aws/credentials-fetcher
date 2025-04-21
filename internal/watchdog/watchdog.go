@@ -3,7 +3,6 @@ package watchdog
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
@@ -17,14 +16,13 @@ const (
 )
 
 type Watchdog struct {
-	log                      logger.Logger
 	watchdogInterval         time.Duration
 	totalNotifications       int
 	notificationsPerInterval int // Number of times to notify within each interval
 }
 
 // New creates a new Watchdog instance
-func New(log logger.Logger) (*Watchdog, error) {
+func New() (*Watchdog, error) {
 	interval, err := daemon.SdWatchdogEnabled(false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get watchdog interval: %w", err)
@@ -35,7 +33,6 @@ func New(log logger.Logger) (*Watchdog, error) {
 	}
 
 	return &Watchdog{
-		log:                      log,
 		watchdogInterval:         interval,
 		notificationsPerInterval: defaultNotificationsPerInterval,
 	}, nil
@@ -52,10 +49,12 @@ func IsSystemdEnabled() bool {
 
 // Start begins the watchdog process
 func (w *Watchdog) Start(ctx context.Context) error {
-	w.log.Log(slog.LevelInfo, "Starting watchdog",
+	log := logger.New()
+	log.Info("Starting watchdog",
 		"interval", w.watchdogInterval.String(),
 		"notifications_per_interval", w.notificationsPerInterval)
 
+	// Calculate tick interval to achieve desired number of notifications per interval
 	notificationInterval := w.watchdogInterval / time.Duration(w.notificationsPerInterval)
 	ticker := time.NewTicker(notificationInterval)
 	defer ticker.Stop()
@@ -63,11 +62,11 @@ func (w *Watchdog) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			w.log.Log(slog.LevelInfo, "Stopping watchdog", "total_notifications", w.totalNotifications)
+			log.Info("Stopping watchdog", "total_notifications", w.totalNotifications)
 			return nil
 		case <-ticker.C:
 			if err := w.notify(); err != nil {
-				w.log.Log(slog.LevelError, "Failed to notify watchdog", "error", err)
+				log.Error("Failed to notify watchdog", "error", err)
 			}
 		}
 	}
@@ -78,7 +77,8 @@ func (w *Watchdog) notify() error {
 	if ok, err := daemon.SdNotify(false, daemon.SdNotifyWatchdog); !ok || err != nil {
 		return fmt.Errorf("failed to notify systemd watchdog: %v", err)
 	}
+	log := logger.New()
 	w.totalNotifications++
-	w.log.Log(slog.LevelDebug, "Watchdog notified", "total_notifications", w.totalNotifications)
+	log.Debug("Watchdog notified", "total_notifications", w.totalNotifications)
 	return nil
 }

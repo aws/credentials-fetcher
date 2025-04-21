@@ -5,40 +5,41 @@ import (
 	"os"
 )
 
-// Logger defines the interface for logging operations
+// Logger is a simple interface for logging operations
 type Logger interface {
-	Log(level slog.Level, message string, fields ...any)
+	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
 }
 
-// CFLogger implements the Logger interface
-type CFLogger struct {
-	logger   *slog.Logger
-	logLevel slog.Level
+// logger implements the Logger interface
+type logger struct {
+	*slog.Logger
 }
 
-func NewCFLogger() *CFLogger {
+// New creates a new logger instance
+func New() Logger {
 	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})
-	logger := slog.New(handler)
-
-	return &CFLogger{
-		logger:   logger,
-		logLevel: slog.LevelInfo,
+	return &logger{
+		Logger: slog.New(handler),
 	}
 }
 
-func (l *CFLogger) Log(level slog.Level, message string, fields ...any) {
-	if level >= l.logLevel {
-		switch level {
-		case slog.LevelDebug:
-			l.logger.Debug(message, fields...)
-		case slog.LevelInfo:
-			l.logger.Info(message, fields...)
-		case slog.LevelWarn:
-			l.logger.Warn(message, fields...)
-		case slog.LevelError:
-			l.logger.Error(message, fields...)
-		}
-	}
+func (l *logger) Debug(msg string, args ...any) {
+	l.Logger.Debug(msg, args...)
+}
+
+func (l *logger) Info(msg string, args ...any) {
+	l.Logger.Info(msg, args...)
+}
+
+func (l *logger) Warn(msg string, args ...any) {
+	l.Logger.Warn(msg, args...)
+}
+
+func (l *logger) Error(msg string, args ...any) {
+	l.Logger.Error(msg, args...)
 }

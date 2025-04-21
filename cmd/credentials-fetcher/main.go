@@ -1,9 +1,10 @@
 package main
 
 import (
-	"fmt"
+	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 )
 
 func main() {
-	fmt.Println("Hello Credentials-Fetcher 2.0")
+	log := logger.New()
+	log.Info("Hello Credentials Fetcher 2.0")
 }

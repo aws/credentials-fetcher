@@ -5,7 +5,6 @@ go 1.21
 require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/stretchr/testify v1.8.4
-	go.uber.org/zap v1.27.0
 )
 
 require (

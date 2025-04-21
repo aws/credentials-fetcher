@@ -2,100 +2,78 @@ package logger
 
 import (
 	"bytes"
-	"fmt"
 	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
-type MockCFLogger struct {
-	mock.Mock
+type testHandler struct {
+	*slog.TextHandler
+	buf *bytes.Buffer
 }
 
-func (m *MockCFLogger) Log(level slog.Level, message string, fields ...any) {
-	args := []interface{}{level, message}
-	args = append(args, fields...)
-	m.Called(args...)
-}
-
-func TestNewCFLogger(t *testing.T) {
-	logger := NewCFLogger()
-	assert.NotNil(t, logger, "NewCFLogger() should not return nil")
-}
-
-func setupTestLogger() (*CFLogger, *bytes.Buffer) {
+func newTestLogger() (Logger, *bytes.Buffer) {
 	buf := &bytes.Buffer{}
 	handler := slog.NewTextHandler(buf, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	})
-	logger := slog.New(handler)
-
-	return &CFLogger{
-		logger:   logger,
-		logLevel: slog.LevelDebug,
-	}, buf
+	return &logger{Logger: slog.New(handler)}, buf
 }
 
-func TestLog(t *testing.T) {
+func TestLogger(t *testing.T) {
 	tests := []struct {
 		name    string
-		level   slog.Level
+		logFn   func(Logger, string, ...any)
+		level   string
 		message string
-		fields  []any
+		args    []any
 	}{
 		{
-			name:    "Info level",
-			level:   slog.LevelInfo,
-			message: "info message",
-		},
-		{
 			name:    "Debug level",
-			level:   slog.LevelDebug,
+			logFn:   Logger.Debug,
+			level:   "DEBUG",
 			message: "debug message",
+			args:    []any{"key", "value"},
 		},
 		{
-			name:    "Error with fields",
-			level:   slog.LevelError,
-			message: "error occurred",
-			fields:  []any{"error", "test error", "code", 500},
+			name:    "Info level",
+			logFn:   Logger.Info,
+			level:   "INFO",
+			message: "info message",
+			args:    []any{"key", "value"},
+		},
+		{
+			name:    "Warn level",
+			logFn:   Logger.Warn,
+			level:   "WARN",
+			message: "warn message",
+			args:    []any{"key", "value"},
+		},
+		{
+			name:    "Error level",
+			logFn:   Logger.Error,
+			level:   "ERROR",
+			message: "error message",
+			args:    []any{"key", "value"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger, buf := setupTestLogger()
-
-			logger.Log(tt.level, tt.message, tt.fields...)
+			logger, buf := newTestLogger()
+			tt.logFn(logger, tt.message, tt.args...)
 
 			output := buf.String()
-			assert.Contains(t, output, tt.level.String())
-			assert.Contains(t, output, tt.message)
-
-			// Check fields if present
-			if len(tt.fields) > 0 {
-				for i := 0; i < len(tt.fields); i += 2 {
-					if i+1 < len(tt.fields) {
-						key := tt.fields[i].(string)
-						value := tt.fields[i+1]
-						assert.Contains(t, output, key)
-						assert.Contains(t, output, stringifyValue(value))
-					}
-				}
-			}
+			assert.Contains(t, output, tt.level, "output should contain correct level")
+			assert.Contains(t, output, tt.message, "output should contain message")
+			assert.Contains(t, output, tt.args[0].(string), "output should contain first arg")
+			assert.Contains(t, output, tt.args[1].(string), "output should contain second arg")
 		})
 	}
 }
 
-// Helper function to convert values to string representation
-func stringifyValue(v interface{}) string {
-	switch val := v.(type) {
-	case string:
-		return val
-	case int:
-		return fmt.Sprintf("%d", val)
-	default:
-		return fmt.Sprintf("%v", val)
-	}
+func TestNew(t *testing.T) {
+	logger := New()
+	assert.NotNil(t, logger, "New() should not return nil")
 }
