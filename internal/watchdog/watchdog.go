@@ -3,6 +3,7 @@ package watchdog
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
@@ -34,7 +35,7 @@ func New(log logger.Logger) (*Watchdog, error) {
 	}
 
 	return &Watchdog{
-		log:                      log.With("component", "watchdog"),
+		log:                      log,
 		watchdogInterval:         interval,
 		notificationsPerInterval: defaultNotificationsPerInterval,
 	}, nil
@@ -51,11 +52,10 @@ func IsSystemdEnabled() bool {
 
 // Start begins the watchdog process
 func (w *Watchdog) Start(ctx context.Context) error {
-	w.log.Info("Starting watchdog",
+	w.log.Log(slog.LevelInfo, "Starting watchdog",
 		"interval", w.watchdogInterval.String(),
 		"notifications_per_interval", w.notificationsPerInterval)
 
-	// Calculate tick interval to achieve desired number of notifications per interval
 	notificationInterval := w.watchdogInterval / time.Duration(w.notificationsPerInterval)
 	ticker := time.NewTicker(notificationInterval)
 	defer ticker.Stop()
@@ -63,11 +63,11 @@ func (w *Watchdog) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			w.log.Info("Stopping watchdog", "total_notifications", w.totalNotifications)
+			w.log.Log(slog.LevelInfo, "Stopping watchdog", "total_notifications", w.totalNotifications)
 			return nil
 		case <-ticker.C:
 			if err := w.notify(); err != nil {
-				w.log.Error("Failed to notify watchdog", "error", err)
+				w.log.Log(slog.LevelError, "Failed to notify watchdog", "error", err)
 			}
 		}
 	}
@@ -79,6 +79,6 @@ func (w *Watchdog) notify() error {
 		return fmt.Errorf("failed to notify systemd watchdog: %v", err)
 	}
 	w.totalNotifications++
-	w.log.Debug("Watchdog notified", "total_notifications", w.totalNotifications)
+	w.log.Log(slog.LevelDebug, "Watchdog notified", "total_notifications", w.totalNotifications)
 	return nil
 }

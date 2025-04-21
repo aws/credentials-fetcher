@@ -2,122 +2,59 @@ package watchdog
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
+	"github.com/stretchr/testify/mock"
 )
 
+// mockLogger implements logger.Logger
 type mockLogger struct {
-	logger.Logger
-	debugCalled bool
-	infoCalled  bool
-	errorCalled bool
+	mock.Mock
 }
 
-func (m *mockLogger) Debug(msg string, keysAndValues ...interface{}) {
-	m.debugCalled = true
+func (m *mockLogger) Log(level slog.Level, message string, fields ...any) {
+	args := []interface{}{level, message}
+	args = append(args, fields...)
+	m.Called(args...)
 }
 
-func (m *mockLogger) Info(msg string, keysAndValues ...interface{}) {
-	m.infoCalled = true
+func TestNew(t *testing.T) {
+	mockLog := &mockLogger{}
+	watchdog, err := New(mockLog)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, watchdog)
+	assert.Equal(t, mockLog, watchdog.log)
 }
 
-func (m *mockLogger) Error(msg string, keysAndValues ...interface{}) {
-	m.errorCalled = true
-}
+func TestStart(t *testing.T) {
+	mockLog := &mockLogger{}
+	watchdog, _ := New(mockLog)
 
-func (m *mockLogger) With(keysAndValues ...interface{}) logger.Logger {
-	return m
-}
+	// Set a short interval for testing
+	watchdog.watchdogInterval = 100 * time.Millisecond
+	watchdog.notificationsPerInterval = 1
 
-func TestWatchdog_New(t *testing.T) {
-	tests := []struct {
-		name        string
-		mockLogger  logger.Logger
-		expectError bool
-	}{
-		{
-			name:        "successful creation",
-			mockLogger:  &mockLogger{},
-			expectError: false,
-		},
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w, err := New(tt.mockLogger)
-			if tt.expectError {
-				assert.Error(t, err)
-				assert.Nil(t, w)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, w)
-				assert.Equal(t, defaultNotificationsPerInterval, w.notificationsPerInterval)
-				assert.NotZero(t, w.watchdogInterval)
-			}
-		})
-	}
+	mockLog.On("Log", slog.LevelInfo, "Starting watchdog", "interval", "100ms", "notifications_per_interval", 1).Once()
+	mockLog.On("Log", slog.LevelError, "Failed to notify watchdog", "error", mock.MatchedBy(func(err error) bool {
+		return err.Error() == "failed to notify systemd watchdog: <nil>"
+	})).Times(2)
+	mockLog.On("Log", slog.LevelInfo, "Stopping watchdog", "total_notifications", 0).Once()
+
+	err := watchdog.Start(ctx)
+
+	assert.NoError(t, err)
+	mockLog.AssertExpectations(t)
 }
 
 func TestIsSystemdEnabled(t *testing.T) {
-	result := IsSystemdEnabled()
-	// We can't assert specific value as it depends on the environment
-	// Just ensure the function runs without panicking
-	t.Logf("SystemdEnabled: %v", result)
-}
-
-func TestWatchdog_Start(t *testing.T) {
-	tests := []struct {
-		name           string
-		contextTimeout time.Duration
-		expectedError  bool
-	}{
-		{
-			name:           "normal operation with cancellation",
-			contextTimeout: 100 * time.Millisecond,
-			expectedError:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockLog := &mockLogger{}
-			w, err := New(mockLog)
-			require.NoError(t, err)
-
-			// Set a shorter interval for testing
-			w.watchdogInterval = 50 * time.Millisecond
-			w.notificationsPerInterval = 2
-
-			ctx, cancel := context.WithTimeout(context.Background(), tt.contextTimeout)
-			defer cancel()
-
-			err = w.Start(ctx)
-			if tt.expectedError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-
-			assert.True(t, mockLog.infoCalled, "Info should have been called")
-		})
-	}
-}
-
-func TestWatchdog_notify(t *testing.T) {
-	mockLog := &mockLogger{}
-	w, err := New(mockLog)
-	require.NoError(t, err)
-
-	initialCount := w.totalNotifications
-
-	// Manually increment the counter and log (simulating what notify would do)
-	w.totalNotifications++
-	w.log.Debug("Watchdog notified", "total_notifications", w.totalNotifications)
-
-	assert.True(t, mockLog.debugCalled, "Debug should have been called")
-	assert.Equal(t, initialCount+1, w.totalNotifications, "Total notifications should be incremented")
+	// Since we can't easily mock the systemd functions, we just verify it returns false
+	// when not running under systemd
+	assert.False(t, IsSystemdEnabled())
 }
