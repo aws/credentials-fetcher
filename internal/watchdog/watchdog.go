@@ -15,6 +15,8 @@ const (
 	defaultNotificationsPerInterval = 8
 )
 
+var log = logger.New()
+
 type Watchdog struct {
 	watchdogInterval         time.Duration
 	totalNotifications       int
@@ -49,7 +51,6 @@ func IsSystemdEnabled() bool {
 
 // Start begins the watchdog process
 func (w *Watchdog) Start(ctx context.Context) error {
-	log := logger.New()
 	log.Info("Starting watchdog",
 		"interval", w.watchdogInterval.String(),
 		"notifications_per_interval", w.notificationsPerInterval)
@@ -77,7 +78,6 @@ func (w *Watchdog) notify() error {
 	if ok, err := daemon.SdNotify(false, daemon.SdNotifyWatchdog); !ok || err != nil {
 		return fmt.Errorf("failed to notify systemd watchdog: %v", err)
 	}
-	log := logger.New()
 	w.totalNotifications++
 	log.Debug("Watchdog notified", "total_notifications", w.totalNotifications)
 	return nil

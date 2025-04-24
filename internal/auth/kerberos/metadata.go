@@ -3,7 +3,6 @@ package kerberos
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +31,7 @@ func GetMetadataFilePaths(krbDir string) ([]string, error) {
 
 // ReadMetadataJSON reads and parses a metadata JSON file
 func ReadMetadataJSON(filePath string) ([]*TicketInfo, error) {
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read metadata file: %w", err)
 	}

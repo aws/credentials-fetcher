@@ -85,7 +85,7 @@ func (c *Client) GetTicketFromCache(path string) (*Ticket, error) {
 		if strings.Contains(line, "Valid starting") {
 			fields := strings.Fields(line)
 			if len(fields) >= 4 {
-				startTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3])
+				startTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3]) // Go's reference time, just to specify format - not a hardcoded time
 				if err != nil {
 					log.Warn("Failed to parse start time", "value", fields[2]+" "+fields[3], "error", err)
 				} else {

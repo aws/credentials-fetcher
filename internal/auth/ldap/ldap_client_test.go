@@ -8,12 +8,12 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	client := NewClient(nil)
+	client := NewClient()
 	assert.NotNil(t, client)
 }
 
 func TestGetBaseDN(t *testing.T) {
-	client := NewClient(nil)
+	client := NewClient()
 	tests := []struct {
 		name     string
 		domain   string
@@ -51,7 +51,7 @@ func TestGetBaseDN(t *testing.T) {
 
 func TestFindServiceAccountDN(t *testing.T) {
 
-	client := NewClient(nil)
+	client := NewClient()
 	ctx := context.Background()
 
 	tests := []struct {
@@ -99,7 +99,7 @@ func TestFindServiceAccountDN(t *testing.T) {
 }
 
 func TestSearchGMSAPassword(t *testing.T) {
-	client := NewClient(nil)
+	client := NewClient()
 	ctx := context.Background()
 
 	tests := []struct {

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"golang.a2z.com/CredentialsFetcherV2/constants"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 )
 
@@ -15,7 +16,7 @@ var log = logger.New()
 type Client struct{}
 
 // NewClient creates a new LDAP client
-func NewClient(logger logger.Logger) *Client {
+func NewClient() *Client {
 	log.Info("Creating new LDAP client")
 	return &Client{}
 }
@@ -26,7 +27,7 @@ func (c *Client) SearchGMSAPassword(ctx context.Context, dn, fqdn string) ([]byt
 		"dn", dn,
 		"fqdn", fqdn)
 
-	searchFilter := fmt.Sprintf("(&(objectClass=msDS-GroupManagedServiceAccount)(distinguishedName=%s))", dn)
+	searchFilter := fmt.Sprintf("(&%s(distinguishedName=%s))", constants.LDAPSearchFilterString, dn)
 	log.Debug("LDAP search filter", "filter", searchFilter)
 
 	cmd := exec.CommandContext(ctx, "ldapsearch",
@@ -34,7 +35,7 @@ func (c *Client) SearchGMSAPassword(ctx context.Context, dn, fqdn string) ([]byt
 		"-H", "ldap://"+fqdn,
 		"-b", dn,
 		"-s", "base",
-		searchFilter,
+		searchFilter, "-N",
 		"msDS-ManagedPassword")
 
 	log.Debug("Executing ldapsearch command",
