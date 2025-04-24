@@ -35,6 +35,8 @@ RUN cd /root && git clone https://github.com/fordth/credentials-fetcher \
     && cd credentials-fetcher && cd build \
     && cmake ../ && make -j4 && make install
 
+RUN apt update && apt upgrade -y
+
 WORKDIR /root/credentials-fetcher/build
 
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib

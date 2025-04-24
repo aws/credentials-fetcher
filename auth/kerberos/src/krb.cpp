@@ -89,7 +89,7 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
     }
 
     std::pair<int, std::string> realm_name_result =
-        exec_shell_cmd( "realm list | grep  'realm-name' | cut -f2 -d: | tr -d ' ' | tr -d '\n'" );
+        exec_shell_cmd( "realm list | grep  'realm-name' | head -n 1 | cut -f2 -d: | tr -d ' ' | tr -d '\n'" );
     if ( realm_name_result.first != 0 )
     {
         result.first = realm_name_result.first;
@@ -103,7 +103,7 @@ static std::pair<int, std::string> get_machine_principal( std::string domain_nam
     }
 
     std::pair<int, std::string> domain_name_result =
-        exec_shell_cmd( "realm list | grep  'domain-name' | cut -f2 -d: | tr -d ' ' | tr -d '\n'" );
+        exec_shell_cmd( "realm list | grep  'domain-name' | head -n 1 | cut -f2 -d: | tr -d ' ' | tr -d '\n'" );
     if ( domain_name_result.first != 0 ||
          ( not std::equal( domain_name_result.second.begin(), domain_name_result.second.end(),
                            domain_name.begin() ) ) )

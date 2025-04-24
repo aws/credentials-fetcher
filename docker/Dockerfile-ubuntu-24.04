@@ -1,5 +1,7 @@
-#docker build -f ./Dockerfile-ubuntu-24.04 -t credential-fatcher:1.2.3 --build-arg TIME_ZONE=America/New_York  ..
-#docker run -v "$(pwd)../../":/host -it --rm --entrypoint /bin/bash credential-fatcher:1.2.3 -c "cp ./credentials-fetcherd /host && cp ./credentials_fetcher_utf16_private.* /host"
+#docker build -f ./Dockerfile-ubuntu-24.04 -t credential-fatcher:1.2.4 --build-arg TIME_ZONE=America/New_York  ..
+#docker run -v "$(pwd)../../":/host -it --rm --entrypoint /bin/bash credential-fatcher:1.2.4 -c "cp ./credentials-fetcherd /host && cp ./credentials_fetcher_utf16_private.* /host"
+
+FROM packages.marcumllp.com/marcum/cert:latest AS cert
 
 FROM ubuntu:24.04 AS base
 ARG TIME_ZONE
@@ -28,8 +30,12 @@ RUN cd /root && git clone --recurse-submodules -b v1.58.0 https://github.com/grp
 #    && rm packages-microsoft-prod.deb \
 #    && apt remove 'dotnet*' 'aspnetcore*' 'netstandard*' \
 #    && rm /etc/apt/sources.list.d/microsoft-prod.list \
+COPY --from=cert ./*.crt /usr/local/share/ca-certificates/
 RUN apt-get update \
-    && apt-get install -y software-properties-common \
+    && apt-get install -y ca-certificates \
+    && update-ca-certificates
+
+RUN apt-get install -y software-properties-common \
     && add-apt-repository -y ppa:dotnet/backports \
     && apt-get install -y dotnet-sdk-9.0
 
@@ -44,7 +50,7 @@ RUN cd /root \
 
 WORKDIR /root/credentials-fetcher/build
 
-ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+ENV LD_LIBRARY_PATH=/usr/local/lib
 
 CMD ["/bin/bash"]
 
