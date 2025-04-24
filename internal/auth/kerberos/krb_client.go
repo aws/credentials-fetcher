@@ -1,11 +1,9 @@
 package kerberos
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,112 +14,302 @@ var (
 	log = logger.New()
 )
 
-// Client handles Kerberos ticket operations
+var (
+	readMetadataJSONFunc     = ReadMetadataJSON
+	getMetadataFilePathsFunc = GetMetadataFilePaths
+)
+
 type Client struct{}
 
-// NewClient creates a new Kerberos client
 func NewClient() *Client {
 	return &Client{}
 }
 
-// GetTicketInfo retrieves information about a Kerberos ticket from a file
-func (c *Client) GetTicketInfo(path string) (*TicketInfo, error) {
-	if !filepath.IsAbs(path) {
-		log.Error("Invalid path", "path", path)
-		return nil, fmt.Errorf("path must be absolute: %s", path)
-	}
-
-	if _, err := os.Stat(path); err != nil {
-		log.Error("Failed to stat file", "path", path, "error", err)
-		return nil, fmt.Errorf("failed to stat file: %w", err)
-	}
-
-	log.Debug("Reading ticket info", "path", path)
-	cmd := exec.Command(InstallPathForDecodeExe, path)
-	output, err := cmd.Output()
-	if err != nil {
-		log.Error("Failed to execute decode command", "error", err)
-		return nil, fmt.Errorf("failed to execute decode command: %w", err)
-	}
-
-	var ticketInfo TicketInfo
-	if err := json.Unmarshal(output, &ticketInfo); err != nil {
-		log.Error("Failed to parse ticket info", "error", err)
-		return nil, fmt.Errorf("failed to parse ticket info: %w", err)
-	}
-
-	log.Info("Successfully retrieved ticket info",
-		"path", path,
-		"service_account", ticketInfo.ServiceAccountName,
-		"domain", ticketInfo.DomainName)
-
-	return &ticketInfo, nil
+type KlistExecutor interface {
+	executeKlist(path string) (string, error)
 }
 
-// GetTicket retrieves a Kerberos ticket from a file
-func (c *Client) GetTicketFromCache(path string) (*Ticket, error) {
-	ticketInfo, err := c.GetTicketInfo(path)
-	if err != nil {
-		return nil, err
-	}
+type DefaultKlistExecutor struct{}
 
-	// Get ticket details using klist
-	cmd := exec.Command("klist", "f", path)
+var defaultExecutor KlistExecutor = &DefaultKlistExecutor{}
+
+// executeKlist runs the klist command on the specified ticket file and returns the output
+func (e *DefaultKlistExecutor) executeKlist(path string) (string, error) {
+	cmd := exec.Command("klist", "-c", path)
 	output, err := cmd.Output()
 	if err != nil {
-		log.Error("Failed to execute klist command", "error", err)
-		return nil, fmt.Errorf("failed to execute klist command: %w", err)
+		return "", fmt.Errorf("failed to execute klist command: %w", err)
+	}
+	return string(output), nil
+}
+
+// parseKlistOutput parses the output of klist command to populate both Ticket and TicketInfo structs
+func parseKlistOutput(output string, path string) (*Ticket, *TicketInfo, error) {
+	lines := strings.Split(output, "\n")
+
+	ticketInfo := &TicketInfo{
+		KrbFilePath: path,
 	}
 
-	// Parse klist output
-	lines := strings.Split(string(output), "\n")
 	ticket := &Ticket{
-		Path:      path,
-		Principal: ticketInfo.ServiceAccountName,
-		Domain:    ticketInfo.DomainName,
+		Path: path,
 	}
 
+	if err := parsePrincipalInfo(lines, ticket, ticketInfo); err != nil {
+		return nil, nil, err
+	}
+
+	parseTicketDates(lines, ticket)
+
+	if err := validateTicket(ticket, path); err != nil {
+		return nil, nil, err
+	}
+
+	return ticket, ticketInfo, nil
+}
+
+// parsePrincipalInfo extracts principal and domain information from klist output
+func parsePrincipalInfo(lines []string, ticket *Ticket, ticketInfo *TicketInfo) error {
 	for _, line := range lines {
-		if strings.Contains(line, "Valid starting") {
-			fields := strings.Fields(line)
-			if len(fields) >= 4 {
-				startTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3]) // Go's reference time, just to specify format - not a hardcoded time
-				if err != nil {
-					log.Warn("Failed to parse start time", "value", fields[2]+" "+fields[3], "error", err)
-				} else {
-					ticket.CreationTime = startTime
+		if strings.Contains(line, "Default principal:") {
+			// Format is typically: "Default principal: username@DOMAIN.COM"
+			parts := strings.Fields(line)
+			if len(parts) >= 3 {
+				principal := parts[2]
+				principalParts := strings.Split(principal, "@")
+				if len(principalParts) == 2 {
+
+					serviceAccount := principalParts[0]
+
+					serviceAccount = strings.Trim(serviceAccount, "'")
+
+					ticketInfo.ServiceAccountName = serviceAccount
+					ticketInfo.DomainName = principalParts[1]
+
+					if strings.HasSuffix(serviceAccount, "$") {
+						ticketInfo.DomainlessUser = serviceAccount[:len(serviceAccount)-1]
+					} else {
+						ticketInfo.DomainlessUser = serviceAccount
+					}
+
+					domainParts := strings.Split(ticketInfo.DomainName, ".")
+					var dnParts []string
+					for _, part := range domainParts {
+						dnParts = append(dnParts, "DC="+part)
+					}
+					ticketInfo.DistinguishedName = "CN=" + serviceAccount + "," + strings.Join(dnParts, ",")
+
+					ticket.Principal = serviceAccount
+					ticket.Domain = ticketInfo.DomainName
+
+					return nil
 				}
 			}
-		} else if strings.Contains(line, "Expires") {
-			fields := strings.Fields(line)
-			if len(fields) >= 4 {
-				expiryTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3])
-				if err != nil {
-					log.Warn("Failed to parse expiry time", "value", fields[2]+" "+fields[3], "error", err)
-				} else {
-					ticket.ExpirationTime = expiryTime
-				}
-			}
-		} else if strings.Contains(line, "Renew until") {
-			fields := strings.Fields(line)
-			if len(fields) >= 4 {
-				renewTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3])
-				if err != nil {
-					log.Warn("Failed to parse renew time", "value", fields[2]+" "+fields[3], "error", err)
-				} else {
-					ticket.RenewUntil = renewTime
-				}
-			}
-		} else if strings.Contains(line, "Flags:") {
-			flags := strings.TrimPrefix(line, "Flags: ")
-			ticket.Flags = strings.Fields(flags)
 		}
 	}
 
-	// Validate required fields
+	return fmt.Errorf("could not find principal information in klist output")
+}
+
+func parseTicketDates(lines []string, ticket *Ticket) {
+	inTicketSection := false
+	var ticketLine string
+	dateStartRegex := regexp.MustCompile(`^\s*(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])`)
+
+	// Check both one-line and multi-line formats
+	for i, line := range lines {
+		if strings.Contains(line, "Valid starting") {
+			inTicketSection = true
+			// Try to find the whole ticket line (compact format)
+			if i+1 < len(lines) && len(strings.TrimSpace(lines[i+1])) > 0 &&
+				!strings.Contains(lines[i+1], "Renew until") {
+				ticketLine = lines[i+1]
+				parseTicketLine(ticketLine, ticket)
+			}
+			continue
+		}
+
+		// For multi-line format
+		if inTicketSection {
+			// Check if line starts with a date
+			if dateStartRegex.MatchString(line) {
+				parseStartTime(line, ticket)
+			} else if strings.Contains(line, "renew until") {
+				parseRenewTime(line, ticket)
+			} else if ticket.CreationTime.IsZero() && !ticket.ExpirationTime.IsZero() {
+				// If we have expiry but no creation time, this might be a multi-line format
+				// with creation time missing, use a reasonable default
+				ticket.CreationTime = time.Now()
+			} else if !strings.Contains(line, "Valid starting") &&
+				!strings.Contains(line, "Service principal") &&
+				len(strings.TrimSpace(line)) > 0 {
+				parseExpiryTime(line, ticket)
+			}
+		}
+	}
+
+	// Last resort if we still don't have both times
+	if ticket.ExpirationTime.IsZero() && !ticket.CreationTime.IsZero() {
+		// Default expiry to 24h after creation as a fallback
+		ticket.ExpirationTime = ticket.CreationTime.Add(24 * time.Hour)
+		log.Warn("Could not parse expiry time, setting default 24h expiry",
+			"creation", ticket.CreationTime)
+	}
+}
+
+// parseTicketLine handles the case where all ticket info is on one line
+func parseTicketLine(line string, ticket *Ticket) {
+	fields := strings.Fields(line)
+	if len(fields) >= 4 {
+		// First date (fields 0-1) is start time
+		startTime, err := time.Parse("01/02/2006 15:04:05", fields[0]+" "+fields[1])
+		if err != nil {
+			log.Warn("Failed to parse start time from ticket line",
+				"value", fields[0]+" "+fields[1], "error", err)
+		} else {
+			ticket.CreationTime = startTime
+		}
+
+		// Second date (fields 2-3) is expiry time
+		expiryTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3])
+		if err != nil {
+			log.Warn("Failed to parse expiry time from ticket line",
+				"value", fields[2]+" "+fields[3], "error", err)
+		} else {
+			ticket.ExpirationTime = expiryTime
+		}
+	}
+}
+
+// parseStartTime extracts and sets the ticket creation time
+func parseStartTime(line string, ticket *Ticket) {
+	trimmed := strings.TrimSpace(line)
+	fields := strings.Fields(trimmed)
+
+	// Find date in the format MM/DD/YYYY
+	for i, field := range fields {
+		if i+1 < len(fields) && isDateFormat(field) {
+			dateStr := field + " " + fields[i+1]
+			startTime, err := time.Parse("01/02/2006 15:04:05", dateStr)
+			if err != nil {
+				log.Warn("Failed to parse start time", "value", dateStr, "error", err)
+			} else {
+				ticket.CreationTime = startTime
+				return
+			}
+		}
+	}
+
+	// If we get here, try brute force as fallback
+	if len(fields) >= 4 && isDateFormat(fields[2]) {
+		startTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3])
+		if err != nil {
+			log.Warn("Failed to parse start time with fallback",
+				"value", fields[2]+" "+fields[3], "error", err)
+		} else {
+			ticket.CreationTime = startTime
+		}
+	}
+}
+
+// parseExpiryTime extracts and sets the ticket expiration time
+func parseExpiryTime(line string, ticket *Ticket) {
+	trimmed := strings.TrimSpace(line)
+	fields := strings.Fields(trimmed)
+
+	// Find date in the format MM/DD/YYYY
+	for i, field := range fields {
+		if i+1 < len(fields) && isDateFormat(field) {
+			dateStr := field + " " + fields[i+1]
+			expiryTime, err := time.Parse("01/02/2006 15:04:05", dateStr)
+			if err != nil {
+				log.Warn("Failed to parse expiry time", "value", dateStr, "error", err)
+			} else {
+				ticket.ExpirationTime = expiryTime
+				return
+			}
+		}
+	}
+
+	// If we get here, try brute force as fallback
+	if len(fields) >= 4 && isDateFormat(fields[2]) {
+		expiryTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3])
+		if err != nil {
+			log.Warn("Failed to parse expiry time with fallback",
+				"value", fields[2]+" "+fields[3], "error", err)
+		} else {
+			ticket.ExpirationTime = expiryTime
+		}
+	}
+}
+
+// parseRenewTime extracts and sets the ticket renewal time
+func parseRenewTime(line string, ticket *Ticket) {
+	trimmed := strings.TrimSpace(line)
+	fields := strings.Fields(trimmed)
+
+	// Find date in the format MM/DD/YYYY
+	for i, field := range fields {
+		if i+1 < len(fields) && isDateFormat(field) {
+			dateStr := field + " " + fields[i+1]
+			renewTime, err := time.Parse("01/02/2006 15:04:05", dateStr)
+			if err != nil {
+				log.Warn("Failed to parse renew time", "value", dateStr, "error", err)
+			} else {
+				ticket.RenewUntil = renewTime
+				return
+			}
+		}
+	}
+
+	// If we get here, try brute force as fallback
+	if len(fields) >= 4 && isDateFormat(fields[2]) {
+		renewTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3])
+		if err != nil {
+			log.Warn("Failed to parse renew time with fallback",
+				"value", fields[2]+" "+fields[3], "error", err)
+		} else {
+			ticket.RenewUntil = renewTime
+		}
+	}
+}
+
+// Helper function to check if a string is in date format MM/DD/YYYY
+func isDateFormat(str string) bool {
+	return len(str) == 10 &&
+		str[2] == '/' &&
+		str[5] == '/' &&
+		(str[0] >= '0' && str[0] <= '1') &&
+		(str[3] >= '0' && str[3] <= '3')
+}
+
+// validateTicket ensures the ticket has all required fields
+func validateTicket(ticket *Ticket, path string) error {
+	if ticket.Principal == "" || ticket.Domain == "" {
+		return fmt.Errorf("could not find principal information in klist output")
+	}
+
 	if ticket.ExpirationTime.IsZero() {
-		log.Error("Failed to parse expiry time from klist output", "path", path)
-		return nil, fmt.Errorf("failed to parse expiry time from klist output for %s", path)
+		return fmt.Errorf("failed to parse expiry time from klist output for %s", path)
+	}
+
+	return nil
+}
+
+// GetTicket retrieves comprehensive information about a Kerberos ticket from a file
+func (c *Client) GetTicket(path string, executor KlistExecutor) (*Ticket, *TicketInfo, error) {
+	log.Debug("Reading ticket info using klist", "path", path)
+
+	output, err := executor.executeKlist(path)
+	if err != nil {
+		log.Error("Failed to execute klist command", "error", err)
+		return nil, nil, fmt.Errorf("failed to execute klist command: %w", err)
+	}
+
+	ticket, ticketInfo, err := parseKlistOutput(output, path)
+	if err != nil {
+		log.Error("Failed to parse klist output", "error", err)
+		return nil, nil, fmt.Errorf("failed to parse klist output: %w", err)
 	}
 
 	log.Info("Successfully retrieved ticket",
@@ -129,5 +317,75 @@ func (c *Client) GetTicketFromCache(path string) (*Ticket, error) {
 		"principal", ticket.Principal,
 		"expires", ticket.ExpirationTime.Format(time.RFC3339))
 
-	return ticket, nil
+	return ticket, ticketInfo, nil
+}
+
+// GetTicketsFromMetadata retrieves all ticket information from a metadata file
+func (c *Client) GetTicketsFromMetadata(metadataPath string) ([]*Ticket, []*TicketInfo, error) {
+
+	ticketInfoList, err := readMetadataJSONFunc(metadataPath)
+	if err != nil {
+		log.Error("Failed to read metadata file", "path", metadataPath, "error", err)
+		return nil, nil, fmt.Errorf("failed to read metadata file: %w", err)
+	}
+
+	if len(ticketInfoList) == 0 {
+		log.Error("No ticket information found in metadata file", "path", metadataPath)
+		return nil, nil, fmt.Errorf("no ticket information found in metadata file: %s", metadataPath)
+	}
+
+	var tickets []*Ticket
+	var validTicketInfos []*TicketInfo
+
+	for _, ticketInfo := range ticketInfoList {
+		ticket, _, err := c.GetTicket(ticketInfo.KrbFilePath, defaultExecutor)
+		if err != nil {
+			log.Warn("Failed to get ticket referenced in metadata",
+				"metadata_path", metadataPath,
+				"ticket_path", ticketInfo.KrbFilePath,
+				"error", err)
+			continue // Skip this ticket and try the next one
+		}
+
+		tickets = append(tickets, ticket)
+		validTicketInfos = append(validTicketInfos, ticketInfo)
+	}
+
+	if len(tickets) == 0 {
+		log.Error("No valid tickets found in metadata file", "path", metadataPath)
+		return nil, nil, fmt.Errorf("no valid tickets found in metadata file: %s", metadataPath)
+	}
+
+	return tickets, validTicketInfos, nil
+}
+
+// GetAllTicketsFromDirectory retrieves all tickets from metadata files in a directory
+func (c *Client) GetAllTicketsFromDirectory(directory string) ([]*Ticket, []*TicketInfo, error) {
+
+	metadataFiles, err := getMetadataFilePathsFunc(directory)
+	if err != nil {
+		log.Error("Failed to get metadata files", "directory", directory, "error", err)
+		return nil, nil, fmt.Errorf("failed to get metadata files: %w", err)
+	}
+
+	var allTickets []*Ticket
+	var allTicketInfos []*TicketInfo
+
+	for _, metadataPath := range metadataFiles {
+		tickets, ticketInfos, err := c.GetTicketsFromMetadata(metadataPath)
+		if err != nil {
+			log.Warn("Failed to get tickets from metadata", "path", metadataPath, "error", err)
+			continue // Skip this file and continue with others
+		}
+
+		allTickets = append(allTickets, tickets...)
+		allTicketInfos = append(allTicketInfos, ticketInfos...)
+	}
+
+	if len(allTickets) == 0 {
+		log.Error("No valid tickets found in directory", "directory", directory)
+		return nil, nil, fmt.Errorf("no valid tickets found in directory: %s", directory)
+	}
+
+	return allTickets, allTicketInfos, nil
 }
