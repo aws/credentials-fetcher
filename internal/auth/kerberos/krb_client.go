@@ -1,13 +1,14 @@
 package kerberos
 
 import (
+	"context"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
+	"golang.a2z.com/CredentialsFetcherV2/internal/shell"
 )
 
 var (
@@ -29,17 +30,35 @@ type KlistExecutor interface {
 	executeKlist(path string) (string, error)
 }
 
-type DefaultKlistExecutor struct{}
+type DefaultKlistExecutor struct {
+	shellExecutor shell.Executor
+}
 
-var defaultExecutor KlistExecutor = &DefaultKlistExecutor{}
+func NewDefaultKlistExecutor() *DefaultKlistExecutor {
+	return &DefaultKlistExecutor{
+		shellExecutor: shell.NewExecutor(),
+	}
+}
+
+var defaultExecutor KlistExecutor = NewDefaultKlistExecutor()
 
 // executeKlist runs the klist command on the specified ticket file and returns the output
 func (e *DefaultKlistExecutor) executeKlist(path string) (string, error) {
-	cmd := exec.Command("klist", "-c", path)
-	output, err := cmd.Output()
+	ctx := context.Background()
+
+	cmdString := e.shellExecutor.BuildCommand("klist", "-c", path)
+	log.Debug("Executing klist command", "command", cmdString)
+
+	output, err := e.shellExecutor.Execute(ctx, cmdString)
 	if err != nil {
+		log.Error("Klist command failed",
+			"error", err,
+			"output", string(output),
+			"path", path)
 		return "", fmt.Errorf("failed to execute klist command: %w", err)
 	}
+	log.Debug("Klist command completed successfully", "output_size", len(output))
+
 	return string(output), nil
 }
 
@@ -181,96 +200,58 @@ func parseTicketLine(line string, ticket *Ticket) {
 	}
 }
 
-// parseStartTime extracts and sets the ticket creation time
-func parseStartTime(line string, ticket *Ticket) {
-	trimmed := strings.TrimSpace(line)
-	fields := strings.Fields(trimmed)
-
-	// Find date in the format MM/DD/YYYY
+// parseDateFromFields is a helper function to parse dates from fields with appropriate logging
+func parseDateFromFields(fields []string, logPrefix string) (time.Time, error) {
+	// Try to find date in the format MM/DD/YYYY
 	for i, field := range fields {
 		if i+1 < len(fields) && isDateFormat(field) {
 			dateStr := field + " " + fields[i+1]
-			startTime, err := time.Parse("01/02/2006 15:04:05", dateStr)
+			parsedTime, err := time.Parse("01/02/2006 15:04:05", dateStr)
 			if err != nil {
-				log.Warn("Failed to parse start time", "value", dateStr, "error", err)
-			} else {
-				ticket.CreationTime = startTime
-				return
+				log.Warn(fmt.Sprintf("Failed to parse %s time", logPrefix),
+					"value", dateStr, "error", err)
+				continue
 			}
+			return parsedTime, nil
 		}
 	}
 
-	// If we get here, try brute force as fallback
+	// Fallback: try brute force approach
 	if len(fields) >= 4 && isDateFormat(fields[2]) {
-		startTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3])
+		dateStr := fields[2] + " " + fields[3]
+		parsedTime, err := time.Parse("01/02/2006 15:04:05", dateStr)
 		if err != nil {
-			log.Warn("Failed to parse start time with fallback",
-				"value", fields[2]+" "+fields[3], "error", err)
-		} else {
-			ticket.CreationTime = startTime
+			log.Warn(fmt.Sprintf("Failed to parse %s time with fallback", logPrefix),
+				"value", dateStr, "error", err)
+			return time.Time{}, err
 		}
+		return parsedTime, nil
+	}
+
+	return time.Time{}, fmt.Errorf("could not parse date")
+}
+
+// parseStartTime extracts and sets the ticket creation time
+func parseStartTime(line string, ticket *Ticket) {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if parsedTime, err := parseDateFromFields(fields, "start"); err == nil {
+		ticket.CreationTime = parsedTime
 	}
 }
 
 // parseExpiryTime extracts and sets the ticket expiration time
 func parseExpiryTime(line string, ticket *Ticket) {
-	trimmed := strings.TrimSpace(line)
-	fields := strings.Fields(trimmed)
-
-	// Find date in the format MM/DD/YYYY
-	for i, field := range fields {
-		if i+1 < len(fields) && isDateFormat(field) {
-			dateStr := field + " " + fields[i+1]
-			expiryTime, err := time.Parse("01/02/2006 15:04:05", dateStr)
-			if err != nil {
-				log.Warn("Failed to parse expiry time", "value", dateStr, "error", err)
-			} else {
-				ticket.ExpirationTime = expiryTime
-				return
-			}
-		}
-	}
-
-	// If we get here, try brute force as fallback
-	if len(fields) >= 4 && isDateFormat(fields[2]) {
-		expiryTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3])
-		if err != nil {
-			log.Warn("Failed to parse expiry time with fallback",
-				"value", fields[2]+" "+fields[3], "error", err)
-		} else {
-			ticket.ExpirationTime = expiryTime
-		}
+	fields := strings.Fields(strings.TrimSpace(line))
+	if parsedTime, err := parseDateFromFields(fields, "expiry"); err == nil {
+		ticket.ExpirationTime = parsedTime
 	}
 }
 
 // parseRenewTime extracts and sets the ticket renewal time
 func parseRenewTime(line string, ticket *Ticket) {
-	trimmed := strings.TrimSpace(line)
-	fields := strings.Fields(trimmed)
-
-	// Find date in the format MM/DD/YYYY
-	for i, field := range fields {
-		if i+1 < len(fields) && isDateFormat(field) {
-			dateStr := field + " " + fields[i+1]
-			renewTime, err := time.Parse("01/02/2006 15:04:05", dateStr)
-			if err != nil {
-				log.Warn("Failed to parse renew time", "value", dateStr, "error", err)
-			} else {
-				ticket.RenewUntil = renewTime
-				return
-			}
-		}
-	}
-
-	// If we get here, try brute force as fallback
-	if len(fields) >= 4 && isDateFormat(fields[2]) {
-		renewTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3])
-		if err != nil {
-			log.Warn("Failed to parse renew time with fallback",
-				"value", fields[2]+" "+fields[3], "error", err)
-		} else {
-			ticket.RenewUntil = renewTime
-		}
+	fields := strings.Fields(strings.TrimSpace(line))
+	if parsedTime, err := parseDateFromFields(fields, "renew"); err == nil {
+		ticket.RenewUntil = parsedTime
 	}
 }
 
@@ -299,6 +280,11 @@ func validateTicket(ticket *Ticket, path string) error {
 // GetTicket retrieves comprehensive information about a Kerberos ticket from a file
 func (c *Client) GetTicket(path string, executor KlistExecutor) (*Ticket, *TicketInfo, error) {
 	log.Debug("Reading ticket info using klist", "path", path)
+
+	// If no executor is provided, use the default one
+	if executor == nil {
+		executor = defaultExecutor
+	}
 
 	output, err := executor.executeKlist(path)
 	if err != nil {

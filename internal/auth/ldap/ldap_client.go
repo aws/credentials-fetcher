@@ -3,10 +3,10 @@ package ldap
 import (
 	"context"
 	"fmt"
-	"os/exec"
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
+	"golang.a2z.com/CredentialsFetcherV2/internal/shell"
 )
 
 var log = logger.New()
@@ -20,29 +20,48 @@ func NewClient() *Client {
 
 type LdapsearchExecutor interface {
 	executeLdapsearch(ctx context.Context, dn, fqdn string) ([]byte, error)
+	buildLdapsearchCommand(dn, fqdn string) (string, []string)
 }
 
-type DefaultLdapsearchExecutor struct{}
+type DefaultLdapsearchExecutor struct {
+	shellExecutor shell.Executor
+}
 
-func (e *DefaultLdapsearchExecutor) executeLdapsearch(ctx context.Context, dn, fqdn string) ([]byte, error) {
+func NewDefaultLdapsearchExecutor() *DefaultLdapsearchExecutor {
+	return &DefaultLdapsearchExecutor{
+		shellExecutor: shell.NewExecutor(),
+	}
+}
+
+// buildLdapsearchCommand creates the ldapsearch command and arguments
+func (e *DefaultLdapsearchExecutor) buildLdapsearchCommand(dn, fqdn string) (string, []string) {
 	searchFilter := fmt.Sprintf("(&%s(distinguishedName=%s))", constants.LDAPSearchFilterString, dn)
 	log.Debug("LDAP search filter", "filter", searchFilter)
 
-	cmd := exec.CommandContext(ctx, constants.LDAPSearchBase+fqdn,
+	command := constants.LDAPSearchBase + fqdn
+	args := []string{
 		"-b", dn,
 		"-s", "sub",
 		searchFilter,
-		"msDS-ManagedPassword", "-N")
+		"msDS-ManagedPassword", "-N",
+	}
 
-	log.Debug("Executing ldapsearch command",
-		"command", cmd.String(),
-		"args", cmd.Args)
+	return command, args
+}
+
+func (e *DefaultLdapsearchExecutor) executeLdapsearch(ctx context.Context, dn, fqdn string) ([]byte, error) {
+
+	command, args := e.buildLdapsearchCommand(dn, fqdn)
+
+	cmdString := e.shellExecutor.BuildCommand(command, args...)
+	log.Debug("Executing ldapsearch command", "command", cmdString)
 
 	// ldapsearch command should look like :
 	// ldapsearch -o ldif_wrap=no -LLL -Y GSSAPI -H ldap://ip-c613012f.contoso.com -b 'CN=WebApp01,OU=MYOU,OU=Users,OU=contoso,DC=contoso,DC=com'
 	// -s sub  '(objectClass=msDs-GroupManagedServiceAccount)' msDS-ManagedPassword -N
 
-	output, err := cmd.CombinedOutput()
+	// Execute the command
+	output, err := e.shellExecutor.Execute(ctx, cmdString)
 	if err != nil {
 		log.Error("ldapsearch failed",
 			"error", err,
@@ -53,7 +72,7 @@ func (e *DefaultLdapsearchExecutor) executeLdapsearch(ctx context.Context, dn, f
 	}
 	log.Debug("ldapsearch completed successfully", "output_size", len(output))
 
-	return []byte(output), nil
+	return output, nil
 }
 
 // SearchGMSAPassword searches for a gMSA account's password
@@ -62,10 +81,15 @@ func (c *Client) SearchGMSAPassword(ctx context.Context, dn, fqdn string, execut
 		"dn", dn,
 		"fqdn", fqdn)
 
+	// If no executor is provided, create a default one
+	if executor == nil {
+		executor = NewDefaultLdapsearchExecutor()
+	}
+
 	output, err := executor.executeLdapsearch(ctx, dn, fqdn)
 	if err != nil {
 		log.Error("Failed to execute ldapsearch command", "error", err)
-		return nil, fmt.Errorf("failed to execute klist command: %w", err)
+		return nil, fmt.Errorf("failed to execute ldapsearch command: %w", err)
 	}
 
 	password, err := extractManagedPassword(output)
