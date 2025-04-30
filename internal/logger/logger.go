@@ -20,8 +20,25 @@ type logger struct {
 
 // New creates a new logger instance
 func New() Logger {
+	// Determine log level from environment variable
+	logLevel := slog.LevelInfo
+
+	// Check for LOG_LEVEL environment variable
+	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
+		switch envLevel {
+		case "debug":
+			logLevel = slog.LevelDebug
+		case "info":
+			logLevel = slog.LevelInfo
+		case "warn":
+			logLevel = slog.LevelWarn
+		case "error":
+			logLevel = slog.LevelError
+		}
+	}
+
 	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: logLevel,
 	})
 	return &logger{
 		Logger: slog.New(handler),
