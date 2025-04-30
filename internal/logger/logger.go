@@ -3,6 +3,7 @@ package logger
 import (
 	"log/slog"
 	"os"
+	"sync"
 )
 
 // Logger is a simple interface for logging operations
@@ -18,8 +19,21 @@ type logger struct {
 	*slog.Logger
 }
 
-// New creates a new logger instance
-func New() Logger {
+var (
+	instance Logger
+	once     sync.Once
+)
+
+// GetInstance returns the singleton logger instance
+func GetInstance() Logger {
+	once.Do(func() {
+		instance = newLogger()
+	})
+	return instance
+}
+
+// newLogger creates a new logger instance (internal use)
+func newLogger() Logger {
 	// Determine log level from environment variable
 	logLevel := slog.LevelInfo
 

@@ -10,13 +10,12 @@ import (
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap"
+	"golang.a2z.com/CredentialsFetcherV2/internal/cmdexec"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
-	"golang.a2z.com/CredentialsFetcherV2/internal/shell"
 	"google.golang.org/grpc"
 )
 
-// Create a package-level logger instance
-var log = logger.New()
+var log = logger.GetInstance()
 
 // CredentialsFetcherServer implements the CredentialsFetcherService gRPC service
 type CredentialsFetcherServer struct {
@@ -27,7 +26,7 @@ type CredentialsFetcherServer struct {
 	shutdownCh      chan struct{}
 	krbClient       *kerberos.Client
 	ldapClient      *ldap.Client
-	shellExecutor   shell.Executor
+	shellExecutor   cmdexec.Executor
 }
 
 // NewCredentialsFetcherServer creates a new instance of CredentialsFetcherServer
@@ -36,7 +35,7 @@ func NewCredentialsFetcherServer() *CredentialsFetcherServer {
 		shutdownCh:    make(chan struct{}),
 		krbClient:     kerberos.NewClient(),
 		ldapClient:    ldap.NewClient(),
-		shellExecutor: shell.NewExecutor(),
+		shellExecutor: cmdexec.NewExecutor(),
 	}
 }
 

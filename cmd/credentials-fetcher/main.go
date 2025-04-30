@@ -14,7 +14,7 @@ import (
 	"golang.a2z.com/CredentialsFetcherV2/internal/watchdog"
 )
 
-var log = logger.New()
+var log = logger.GetInstance()
 
 func main() {
 	log.Info("Starting Credentials Fetcher service")
@@ -41,7 +41,7 @@ func main() {
 	}
 
 	// Create the watchdog
-	wd, err := watchdog.New()
+	wd, err := watchdog.GetInstance()
 	if err != nil {
 		log.Error("Failed to create watchdog", "error", err)
 		os.Exit(1)
@@ -53,7 +53,7 @@ func main() {
 	server := grpc.NewCredentialsFetcherServer()
 
 	var wg sync.WaitGroup
-	wg.Add(2) // One for watchdog, one for gRPC server
+	wg.Add(constants.NumberofWaitGroups)
 
 	// Start the watchdog in its own goroutine
 	go func() {

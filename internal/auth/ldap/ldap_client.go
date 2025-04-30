@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
+	"golang.a2z.com/CredentialsFetcherV2/internal/cmdexec"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
-	"golang.a2z.com/CredentialsFetcherV2/internal/shell"
 )
 
-var log = logger.New()
+var log = logger.GetInstance()
 
 type Client struct{}
 
@@ -24,12 +24,12 @@ type LdapsearchExecutor interface {
 }
 
 type DefaultLdapsearchExecutor struct {
-	shellExecutor shell.Executor
+	shellExecutor cmdexec.Executor
 }
 
 func NewDefaultLdapsearchExecutor() *DefaultLdapsearchExecutor {
 	return &DefaultLdapsearchExecutor{
-		shellExecutor: shell.NewExecutor(),
+		shellExecutor: cmdexec.NewExecutor(),
 	}
 }
 

@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"golang.a2z.com/CredentialsFetcherV2/constants"
+	"golang.a2z.com/CredentialsFetcherV2/internal/cmdexec"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
-	"golang.a2z.com/CredentialsFetcherV2/internal/shell"
 )
 
 var (
-	log = logger.New()
+	log = logger.GetInstance()
 )
 
 var (
@@ -31,12 +32,12 @@ type KlistExecutor interface {
 }
 
 type DefaultKlistExecutor struct {
-	shellExecutor shell.Executor
+	shellExecutor cmdexec.Executor
 }
 
 func NewDefaultKlistExecutor() *DefaultKlistExecutor {
 	return &DefaultKlistExecutor{
-		shellExecutor: shell.NewExecutor(),
+		shellExecutor: cmdexec.NewExecutor(),
 	}
 }
 
@@ -181,7 +182,7 @@ func parseTicketLine(line string, ticket *Ticket) {
 	fields := strings.Fields(line)
 	if len(fields) >= 4 {
 		// First date (fields 0-1) is start time
-		startTime, err := time.Parse("01/02/2006 15:04:05", fields[0]+" "+fields[1])
+		startTime, err := time.Parse(constants.KlistDateTimeFormat, fields[0]+" "+fields[1])
 		if err != nil {
 			log.Warn("Failed to parse start time from ticket line",
 				"value", fields[0]+" "+fields[1], "error", err)
@@ -190,7 +191,7 @@ func parseTicketLine(line string, ticket *Ticket) {
 		}
 
 		// Second date (fields 2-3) is expiry time
-		expiryTime, err := time.Parse("01/02/2006 15:04:05", fields[2]+" "+fields[3])
+		expiryTime, err := time.Parse(constants.KlistDateTimeFormat, fields[2]+" "+fields[3])
 		if err != nil {
 			log.Warn("Failed to parse expiry time from ticket line",
 				"value", fields[2]+" "+fields[3], "error", err)
@@ -206,7 +207,7 @@ func parseDateFromFields(fields []string, logPrefix string) (time.Time, error) {
 	for i, field := range fields {
 		if i+1 < len(fields) && isDateFormat(field) {
 			dateStr := field + " " + fields[i+1]
-			parsedTime, err := time.Parse("01/02/2006 15:04:05", dateStr)
+			parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
 			if err != nil {
 				log.Warn(fmt.Sprintf("Failed to parse %s time", logPrefix),
 					"value", dateStr, "error", err)
@@ -219,7 +220,7 @@ func parseDateFromFields(fields []string, logPrefix string) (time.Time, error) {
 	// Fallback: try brute force approach
 	if len(fields) >= 4 && isDateFormat(fields[2]) {
 		dateStr := fields[2] + " " + fields[3]
-		parsedTime, err := time.Parse("01/02/2006 15:04:05", dateStr)
+		parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
 		if err != nil {
 			log.Warn(fmt.Sprintf("Failed to parse %s time with fallback", logPrefix),
 				"value", dateStr, "error", err)

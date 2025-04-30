@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"log/slog"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,6 +14,12 @@ import (
 type testHandler struct {
 	*slog.TextHandler
 	buf *bytes.Buffer
+}
+
+// Reset the singleton instance for testing
+func resetSingleton() {
+	instance = nil
+	once = sync.Once{}
 }
 
 func newTestLogger() (Logger, *bytes.Buffer) {
@@ -75,9 +82,14 @@ func TestLogger(t *testing.T) {
 	}
 }
 
-func TestNew(t *testing.T) {
-	logger := New()
-	assert.NotNil(t, logger, "New() should not return nil")
+func TestGetInstance(t *testing.T) {
+	resetSingleton()
+	logger := GetInstance()
+	assert.NotNil(t, logger, "GetInstance() should not return nil")
+
+	// Test that we get the same instance on subsequent calls
+	logger2 := GetInstance()
+	assert.Equal(t, logger, logger2, "GetInstance() should return the same instance")
 }
 
 func TestLogLevelFromEnvironment(t *testing.T) {
@@ -131,6 +143,9 @@ func TestLogLevelFromEnvironment(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Reset singleton for each test case
+			resetSingleton()
+
 			// Set environment variable for this test case
 			os.Setenv("LOG_LEVEL", tc.envLevel)
 
@@ -140,7 +155,7 @@ func TestLogLevelFromEnvironment(t *testing.T) {
 			os.Stdout = w
 
 			// Create logger and log a message
-			log := New()
+			log := GetInstance()
 
 			// Log at all levels to test filtering
 			log.Debug("debug " + tc.testMessage)

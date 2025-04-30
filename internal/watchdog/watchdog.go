@@ -3,6 +3,7 @@ package watchdog
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
@@ -15,7 +16,14 @@ const (
 	defaultNotificationsPerInterval = 8
 )
 
-var log = logger.New()
+var (
+	log = logger.GetInstance()
+
+	// Singleton instance
+	instance     *Watchdog
+	instanceErr  error
+	instanceOnce sync.Once
+)
 
 type Watchdog struct {
 	watchdogInterval         time.Duration
@@ -23,8 +31,16 @@ type Watchdog struct {
 	notificationsPerInterval int // Number of times to notify within each interval
 }
 
-// New creates a new Watchdog instance
-func New() (*Watchdog, error) {
+// GetInstance returns the singleton Watchdog instance
+func GetInstance() (*Watchdog, error) {
+	instanceOnce.Do(func() {
+		instance, instanceErr = newWatchdog()
+	})
+	return instance, instanceErr
+}
+
+// newWatchdog creates a new Watchdog instance (internal use)
+func newWatchdog() (*Watchdog, error) {
 	interval, err := daemon.SdWatchdogEnabled(false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get watchdog interval: %w", err)

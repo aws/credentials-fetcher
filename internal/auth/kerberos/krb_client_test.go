@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"golang.a2z.com/CredentialsFetcherV2/constants"
 )
 
 // MockKlistExecutor mocks the KlistExecutor interface for testing
@@ -434,8 +435,8 @@ func TestDateParsing(t *testing.T) {
 	ticket := &Ticket{}
 	t.Run("parseTicketLine", func(t *testing.T) {
 		parseTicketLine("05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM", ticket)
-		expectedCreation, _ := time.Parse("01/02/2006 15:04:05", "05/15/2023 10:00:00")
-		expectedExpiry, _ := time.Parse("01/02/2006 15:04:05", "05/16/2023 10:00:00")
+		expectedCreation, _ := time.Parse(constants.KlistDateTimeFormat, "05/15/2023 10:00:00")
+		expectedExpiry, _ := time.Parse(constants.KlistDateTimeFormat, "05/16/2023 10:00:00")
 
 		assert.Equal(t, expectedCreation, ticket.CreationTime, "Creation time doesn't match expected")
 		assert.Equal(t, expectedExpiry, ticket.ExpirationTime, "Expiration time doesn't match expected")
@@ -443,14 +444,14 @@ func TestDateParsing(t *testing.T) {
 	t.Run("parseStartTime", func(t *testing.T) {
 		ticket = &Ticket{} // Reset ticket
 		parseStartTime("05/15/2023 10:00:00", ticket)
-		expected, _ := time.Parse("01/02/2006 15:04:05", "05/15/2023 10:00:00")
+		expected, _ := time.Parse(constants.KlistDateTimeFormat, "05/15/2023 10:00:00")
 
 		assert.Equal(t, expected, ticket.CreationTime, "Creation time doesn't match expected")
 	})
 	t.Run("parseExpiryTime", func(t *testing.T) {
 		ticket = &Ticket{} // Reset ticket
 		parseExpiryTime("05/16/2023 10:00:00", ticket)
-		expected, _ := time.Parse("01/02/2006 15:04:05", "05/16/2023 10:00:00")
+		expected, _ := time.Parse(constants.KlistDateTimeFormat, "05/16/2023 10:00:00")
 
 		assert.Equal(t, expected, ticket.ExpirationTime, "Expiration time doesn't match expected")
 	})
@@ -458,7 +459,7 @@ func TestDateParsing(t *testing.T) {
 	t.Run("parseRenewTime", func(t *testing.T) {
 		ticket = &Ticket{} // Reset ticket
 		parseRenewTime("renew until 05/22/2023 10:00:00", ticket)
-		expected, _ := time.Parse("01/02/2006 15:04:05", "05/22/2023 10:00:00")
+		expected, _ := time.Parse(constants.KlistDateTimeFormat, "05/22/2023 10:00:00")
 
 		assert.Equal(t, expected, ticket.RenewUntil, "Renew time doesn't match expected")
 	})

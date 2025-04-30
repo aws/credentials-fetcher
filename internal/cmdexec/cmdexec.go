@@ -1,4 +1,4 @@
-package shell
+package cmdexec
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 )
 
-var log = logger.New()
+var log = logger.GetInstance()
 
 type Executor interface {
 	Execute(ctx context.Context, commandString string) ([]byte, error)
