@@ -3,9 +3,11 @@ package logger
 import (
 	"bytes"
 	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type testHandler struct {
@@ -76,4 +78,115 @@ func TestLogger(t *testing.T) {
 func TestNew(t *testing.T) {
 	logger := New()
 	assert.NotNil(t, logger, "New() should not return nil")
+}
+
+func TestLogLevelFromEnvironment(t *testing.T) {
+	// Save original environment and restore it after the test
+	originalLogLevel := os.Getenv("LOG_LEVEL")
+	defer os.Setenv("LOG_LEVEL", originalLogLevel)
+
+	testCases := []struct {
+		name          string
+		envLevel      string
+		expectedLevel string
+		testMessage   string
+	}{
+		{
+			name:          "Debug level",
+			envLevel:      "debug",
+			expectedLevel: "DEBUG",
+			testMessage:   "debug test message",
+		},
+		{
+			name:          "Info level",
+			envLevel:      "info",
+			expectedLevel: "INFO",
+			testMessage:   "info test message",
+		},
+		{
+			name:          "Warn level",
+			envLevel:      "warn",
+			expectedLevel: "WARN",
+			testMessage:   "warn test message",
+		},
+		{
+			name:          "Error level",
+			envLevel:      "error",
+			expectedLevel: "ERROR",
+			testMessage:   "error test message",
+		},
+		{
+			name:          "Invalid level defaults to Info",
+			envLevel:      "invalid",
+			expectedLevel: "INFO",
+			testMessage:   "default test message",
+		},
+		{
+			name:          "Empty level defaults to Info",
+			envLevel:      "",
+			expectedLevel: "INFO",
+			testMessage:   "empty level test message",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set environment variable for this test case
+			os.Setenv("LOG_LEVEL", tc.envLevel)
+
+			// Capture stdout
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			// Create logger and log a message
+			log := New()
+
+			// Log at all levels to test filtering
+			log.Debug("debug " + tc.testMessage)
+			log.Info("info " + tc.testMessage)
+			log.Warn("warn " + tc.testMessage)
+			log.Error("error " + tc.testMessage)
+
+			// Restore stdout
+			w.Close()
+			os.Stdout = oldStdout
+
+			// Read captured output
+			var buf bytes.Buffer
+			_, err := buf.ReadFrom(r)
+			require.NoError(t, err)
+			output := buf.String()
+
+			// Verify expected behavior based on log level
+			switch tc.envLevel {
+			case "debug":
+				assert.Contains(t, output, "DEBUG", "Debug messages should be logged")
+				assert.Contains(t, output, "INFO", "Info messages should be logged")
+				assert.Contains(t, output, "WARN", "Warn messages should be logged")
+				assert.Contains(t, output, "ERROR", "Error messages should be logged")
+			case "info":
+				assert.NotContains(t, output, "DEBUG", "Debug messages should not be logged")
+				assert.Contains(t, output, "INFO", "Info messages should be logged")
+				assert.Contains(t, output, "WARN", "Warn messages should be logged")
+				assert.Contains(t, output, "ERROR", "Error messages should be logged")
+			case "warn":
+				assert.NotContains(t, output, "DEBUG", "Debug messages should not be logged")
+				assert.NotContains(t, output, "INFO", "Info messages should not be logged")
+				assert.Contains(t, output, "WARN", "Warn messages should be logged")
+				assert.Contains(t, output, "ERROR", "Error messages should be logged")
+			case "error":
+				assert.NotContains(t, output, "DEBUG", "Debug messages should not be logged")
+				assert.NotContains(t, output, "INFO", "Info messages should not be logged")
+				assert.NotContains(t, output, "WARN", "Warn messages should not be logged")
+				assert.Contains(t, output, "ERROR", "Error messages should be logged")
+			default:
+				// Default is INFO level
+				assert.NotContains(t, output, "DEBUG", "Debug messages should not be logged")
+				assert.Contains(t, output, "INFO", "Info messages should be logged")
+				assert.Contains(t, output, "WARN", "Warn messages should be logged")
+				assert.Contains(t, output, "ERROR", "Error messages should be logged")
+			}
+		})
+	}
 }

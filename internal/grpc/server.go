@@ -44,45 +44,40 @@ func NewCredentialsFetcherServer() *CredentialsFetcherServer {
 func (s *CredentialsFetcherServer) AddKerberosLease(ctx context.Context, req *CreateKerberosLeaseRequest) (*CreateKerberosLeaseResponse, error) {
 	log.Info("Received AddKerberosLease request")
 	return &CreateKerberosLeaseResponse{
-		LeaseId:                  nil,
-		CreatedKerberosFilePaths: nil,
+		LeaseId:                  "",
+		CreatedKerberosFilePaths: []string{},
 	}, nil
-
 }
 
 // AddNonDomainJoinedKerberosLease implements the AddNonDomainJoinedKerberosLease RPC method
 func (s *CredentialsFetcherServer) AddNonDomainJoinedKerberosLease(ctx context.Context, req *CreateNonDomainJoinedKerberosLeaseRequest) (*CreateNonDomainJoinedKerberosLeaseResponse, error) {
 	log.Info("Received AddNonDomainJoinedKerberosLease request")
 	return &CreateNonDomainJoinedKerberosLeaseResponse{
-		LeaseId:                  nil,
-		CreatedKerberosFilePaths: nil,
+		LeaseId:                  "",
+		CreatedKerberosFilePaths: []string{},
 	}, nil
-
 }
 
 // RenewNonDomainJoinedKerberosLease implements the RenewNonDomainJoinedKerberosLease RPC method
 func (s *CredentialsFetcherServer) RenewNonDomainJoinedKerberosLease(ctx context.Context, req *RenewNonDomainJoinedKerberosLeaseRequest) (*RenewNonDomainJoinedKerberosLeaseResponse, error) {
 	log.Info("Received RenewNonDomainJoinedKerberosLease request")
 	return &RenewNonDomainJoinedKerberosLeaseResponse{
-		RenewedKerberosFilePaths: nil,
+		RenewedKerberosFilePaths: []string{},
 	}, nil
-
 }
 
 // DeleteKerberosLease implements the DeleteKerberosLease RPC method
 func (s *CredentialsFetcherServer) DeleteKerberosLease(ctx context.Context, req *DeleteKerberosLeaseRequest) (*DeleteKerberosLeaseResponse, error) {
 	log.Info("Received DeleteKerberosLease request")
 	return &DeleteKerberosLeaseResponse{
-		LeaseId:                  nil,
-		DeletedKerberosFilePaths: nil,
+		LeaseId:                  "",
+		DeletedKerberosFilePaths: []string{},
 	}, nil
-
 }
 
 // HealthCheck implements the HealthCheck RPC method
 func (s *CredentialsFetcherServer) HealthCheck(ctx context.Context, req *HealthCheckRequest) (*HealthCheckResponse, error) {
 	log.Info("Received HealthCheck request", "service", req.Service)
-
 	return &HealthCheckResponse{Status: "OK"}, nil
 }
 
@@ -90,8 +85,8 @@ func (s *CredentialsFetcherServer) HealthCheck(ctx context.Context, req *HealthC
 func (s *CredentialsFetcherServer) AddKerberosArnLease(ctx context.Context, req *KerberosArnLeaseRequest) (*CreateKerberosArnLeaseResponse, error) {
 	log.Info("Received AddKerberosArnLease request")
 	return &CreateKerberosArnLeaseResponse{
-		LeaseId:              nil,
-		KrbTicketResponseMap: nil,
+		LeaseId:              "",
+		KrbTicketResponseMap: []*KerberosTicketArnResponse{},
 	}, nil
 }
 
