@@ -43,24 +43,39 @@ func NewCredentialsFetcherServer() *CredentialsFetcherServer {
 // AddKerberosLease implements the AddKerberosLease RPC method
 func (s *CredentialsFetcherServer) AddKerberosLease(ctx context.Context, req *CreateKerberosLeaseRequest) (*CreateKerberosLeaseResponse, error) {
 	log.Info("Received AddKerberosLease request")
+	return &CreateKerberosLeaseResponse{
+		LeaseId:                  nil,
+		CreatedKerberosFilePaths: nil,
+	}, nil
 
 }
 
 // AddNonDomainJoinedKerberosLease implements the AddNonDomainJoinedKerberosLease RPC method
 func (s *CredentialsFetcherServer) AddNonDomainJoinedKerberosLease(ctx context.Context, req *CreateNonDomainJoinedKerberosLeaseRequest) (*CreateNonDomainJoinedKerberosLeaseResponse, error) {
 	log.Info("Received AddNonDomainJoinedKerberosLease request")
+	return &CreateNonDomainJoinedKerberosLeaseResponse{
+		LeaseId:                  nil,
+		CreatedKerberosFilePaths: nil,
+	}, nil
 
 }
 
 // RenewNonDomainJoinedKerberosLease implements the RenewNonDomainJoinedKerberosLease RPC method
 func (s *CredentialsFetcherServer) RenewNonDomainJoinedKerberosLease(ctx context.Context, req *RenewNonDomainJoinedKerberosLeaseRequest) (*RenewNonDomainJoinedKerberosLeaseResponse, error) {
 	log.Info("Received RenewNonDomainJoinedKerberosLease request")
+	return &RenewNonDomainJoinedKerberosLeaseResponse{
+		RenewedKerberosFilePaths: nil,
+	}, nil
 
 }
 
 // DeleteKerberosLease implements the DeleteKerberosLease RPC method
 func (s *CredentialsFetcherServer) DeleteKerberosLease(ctx context.Context, req *DeleteKerberosLeaseRequest) (*DeleteKerberosLeaseResponse, error) {
 	log.Info("Received DeleteKerberosLease request")
+	return &DeleteKerberosLeaseResponse{
+		LeaseId:                  nil,
+		DeletedKerberosFilePaths: nil,
+	}, nil
 
 }
 
@@ -68,18 +83,24 @@ func (s *CredentialsFetcherServer) DeleteKerberosLease(ctx context.Context, req 
 func (s *CredentialsFetcherServer) HealthCheck(ctx context.Context, req *HealthCheckRequest) (*HealthCheckResponse, error) {
 	log.Info("Received HealthCheck request", "service", req.Service)
 
+	return &HealthCheckResponse{Status: "OK"}, nil
 }
 
 // AddKerberosArnLease implements the AddKerberosArnLease RPC method
 func (s *CredentialsFetcherServer) AddKerberosArnLease(ctx context.Context, req *KerberosArnLeaseRequest) (*CreateKerberosArnLeaseResponse, error) {
 	log.Info("Received AddKerberosArnLease request")
-
+	return &CreateKerberosArnLeaseResponse{
+		LeaseId:              nil,
+		KrbTicketResponseMap: nil,
+	}, nil
 }
 
 // RenewKerberosArnLease implements the RenewKerberosArnLease RPC method
 func (s *CredentialsFetcherServer) RenewKerberosArnLease(ctx context.Context, req *RenewKerberosArnLeaseRequest) (*RenewKerberosArnLeaseResponse, error) {
 	log.Info("Received RenewKerberosArnLease request")
-
+	return &RenewKerberosArnLeaseResponse{
+		Status: "OK",
+	}, nil
 }
 
 // RunServer starts the gRPC server
