@@ -100,12 +100,7 @@ func (s *CredentialsFetcherServer) RenewKerberosArnLease(ctx context.Context, re
 
 // RunServer starts the gRPC server
 func (s *CredentialsFetcherServer) RunServer(unixSocketDir string) error {
-	// Create the socket directory if it doesn't exist
-	if err := os.MkdirAll(unixSocketDir, 0755); err != nil {
-		return fmt.Errorf("failed to create socket directory: %v", err)
-	}
 
-	// Create the socket path
 	socketPath := filepath.Join(unixSocketDir, "credentials_fetcher.sock")
 
 	// Remove existing socket file if it exists
@@ -115,18 +110,11 @@ func (s *CredentialsFetcherServer) RunServer(unixSocketDir string) error {
 		}
 	}
 
-	// Create the listener
 	lis, err := net.Listen("unix", socketPath)
 	if err != nil {
 		return fmt.Errorf("failed to listen on socket: %v", err)
 	}
 
-	// Set permissions on the socket file
-	if err := os.Chmod(socketPath, 0666); err != nil {
-		return fmt.Errorf("failed to set permissions on socket file: %v", err)
-	}
-
-	// Create the gRPC server
 	grpcServer := grpc.NewServer()
 	RegisterCredentialsFetcherServiceServer(grpcServer, s)
 

@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -212,7 +211,10 @@ func TestCredentialsFetcherServer_RenewKerberosArnLease(t *testing.T) {
 
 func TestCredentialsFetcherServer_RunServer(t *testing.T) {
 	// Create a temporary directory for the socket
-	tempDir, err := ioutil.TempDir("", "credentials-fetcher-test")
+	tempDir := t.TempDir()
+
+	// Create the socket directory
+	err := os.MkdirAll(tempDir, 0755)
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
@@ -278,19 +280,4 @@ func TestCredentialsFetcherServer_Shutdown(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("Shutdown did not close the channel")
 	}
-}
-
-func TestRunServerErrors(t *testing.T) {
-	// Test case: error creating directory
-	t.Run("Error creating directory", func(t *testing.T) {
-		// Create a file where the directory should be
-		tempFile, err := ioutil.TempFile("", "credentials-fetcher-test")
-		require.NoError(t, err)
-		defer os.Remove(tempFile.Name())
-
-		server := NewCredentialsFetcherServer()
-		err = server.RunServer(tempFile.Name())
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to create socket directory")
-	})
 }
