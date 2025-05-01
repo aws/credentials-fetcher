@@ -1,4 +1,4 @@
-package kerberos
+package metadata_utils
 
 import (
 	"encoding/json"
@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
 // GetMetadataFilePaths returns paths to all metadata files in the given directory
@@ -30,13 +32,13 @@ func GetMetadataFilePaths(krbDir string) ([]string, error) {
 }
 
 // ReadMetadataJSON reads and parses a metadata JSON file
-func ReadMetadataJSON(filePath string) ([]*TicketInfo, error) {
+func ReadMetadataJSON(filePath string) ([]*types.TicketInfo, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read metadata file: %w", err)
 	}
 
-	var tickets []*TicketInfo
+	var tickets []*types.TicketInfo
 	if err := json.Unmarshal(data, &tickets); err != nil {
 		return nil, fmt.Errorf("failed to parse metadata JSON: %w", err)
 	}

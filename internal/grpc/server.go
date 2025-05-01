@@ -10,8 +10,8 @@ import (
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap"
-	"golang.a2z.com/CredentialsFetcherV2/internal/cmdexec"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
 	"google.golang.org/grpc"
 )
 

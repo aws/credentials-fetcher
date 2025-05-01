@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
-	"golang.a2z.com/CredentialsFetcherV2/internal/cmdexec"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
 )
 
 var log = logger.GetInstance()

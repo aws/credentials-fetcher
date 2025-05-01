@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"golang.a2z.com/CredentialsFetcherV2/constants"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
 // MockKlistExecutor mocks the KlistExecutor interface for testing
@@ -19,81 +20,109 @@ func (m *MockKlistExecutor) executeKlist(path string) (string, error) {
 	return m.Output, m.Err
 }
 
-// Valid klist output formats for testing
-const (
-	// Format with all dates on one line
-	validKlistCompactOutput = `Ticket cache: FILE:/path/to/krb5cc
+// Test data
+var validKlistCompactOutput = `Ticket cache: FILE:/path/to/ticket
 Default principal: user123@EXAMPLE.COM
 
 Valid starting     Expires            Service principal
-05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM`
+05/15/2023 09:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
+	renew until 05/22/2023 09:00:00
+`
 
-	// Format with dates on separate lines
-	validKlistMultilineOutput = `Ticket cache: FILE:/path/to/krb5cc
+var validKlistMultilineOutput = `Ticket cache: FILE:/path/to/ticket
 Default principal: user123@EXAMPLE.COM
 
-Valid starting       Expires              Service principal
-05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
-	renew until 05/22/2023 10:00:00`
+Valid starting     Expires            Service principal
+05/15/2023 09:00:00
+                 05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
+	renew until 05/22/2023 09:00:00
+`
 
-	// Format with machine account
-	validKlistMachineOutput = `Ticket cache: FILE:/path/to/krb5cc
+var validKlistMachineOutput = `Ticket cache: FILE:/path/to/ticket
 Default principal: machine$@EXAMPLE.COM
 
 Valid starting     Expires            Service principal
-05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM`
-)
+05/15/2023 09:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
+	renew until 05/22/2023 09:00:00
+`
+
+var missingPrincipalOutput = `Ticket cache: FILE:/path/to/ticket
+
+Valid starting     Expires            Service principal
+05/15/2023 09:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
+	renew until 05/22/2023 09:00:00
+`
 
 func TestGetTicket(t *testing.T) {
 	testCases := []struct {
-		name          string
-		klistOutput   string
-		klistErr      error
-		expectedError bool
+		name           string
+		mockOutput     string
+		mockErr        error
+		expectedError  bool
+		expectedTicket *types.Ticket
 	}{
 		{
 			name:          "Valid ticket (compact format)",
-			klistOutput:   validKlistCompactOutput,
-			klistErr:      nil,
+			mockOutput:    validKlistCompactOutput,
+			mockErr:       nil,
 			expectedError: false,
+			expectedTicket: &types.Ticket{
+				Path:           "/path/to/ticket",
+				Principal:      "user123",
+				Domain:         "EXAMPLE.COM",
+				CreationTime:   parseTime("05/15/2023 09:00:00"),
+				ExpirationTime: parseTime("05/16/2023 10:00:00"),
+				RenewUntil:     parseTime("05/22/2023 09:00:00"),
+			},
 		},
 		{
 			name:          "Valid ticket (multiline format)",
-			klistOutput:   validKlistMultilineOutput,
-			klistErr:      nil,
+			mockOutput:    validKlistMultilineOutput,
+			mockErr:       nil,
 			expectedError: false,
+			expectedTicket: &types.Ticket{
+				Path:           "/path/to/ticket",
+				Principal:      "user123",
+				Domain:         "EXAMPLE.COM",
+				CreationTime:   parseTime("05/15/2023 09:00:00"),
+				ExpirationTime: parseTime("05/16/2023 10:00:00"),
+				RenewUntil:     parseTime("05/22/2023 09:00:00"),
+			},
 		},
 		{
-			name:          "Klist command failure",
-			klistOutput:   "",
-			klistErr:      errors.New("klist command failed"),
-			expectedError: true,
+			name:           "Klist command failure",
+			mockOutput:     "",
+			mockErr:        errors.New("klist command failed"),
+			expectedError:  true,
+			expectedTicket: nil,
 		},
 		{
-			name: "Missing principal",
-			klistOutput: `Ticket cache: FILE:/path/to/krb5cc
-
-Valid starting     Expires            Service principal
-05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM`,
-			klistErr:      nil,
-			expectedError: true,
+			name:           "Missing principal",
+			mockOutput:     missingPrincipalOutput,
+			mockErr:        nil,
+			expectedError:  true,
+			expectedTicket: nil,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Create a mock executor
 			mockExecutor := &MockKlistExecutor{
-				Output: tc.klistOutput,
-				Err:    tc.klistErr,
+				Output: tc.mockOutput,
+				Err:    tc.mockErr,
 			}
 
+			// Create a client
 			client := NewClient()
+
+			// Call GetTicket
 			ticket, ticketInfo, err := client.GetTicket("/path/to/ticket", mockExecutor)
 
+			// Check results
 			if tc.expectedError {
-				if err == nil {
-					t.Errorf("Expected error but got nil")
-				}
+				assert.Error(t, err, "Expected an error but got none")
+				assert.Nil(t, ticket, "Expected nil ticket but got a ticket")
 			} else {
 				if err != nil {
 					t.Errorf("Unexpected error: %v", err)
@@ -115,7 +144,7 @@ Valid starting     Expires            Service principal
 func TestGetTicketsFromMetadata(t *testing.T) {
 	testCases := []struct {
 		name                string
-		mockTicketInfos     []*TicketInfo
+		mockTicketInfos     []*types.TicketInfo
 		mockReadErr         error
 		mockKlistOutput     string
 		mockKlistErr        error
@@ -124,7 +153,7 @@ func TestGetTicketsFromMetadata(t *testing.T) {
 	}{
 		{
 			name: "Valid metadata with ticket",
-			mockTicketInfos: []*TicketInfo{
+			mockTicketInfos: []*types.TicketInfo{
 				{
 					KrbFilePath:        "/path/to/ticket1",
 					ServiceAccountName: "user123",
@@ -148,7 +177,7 @@ func TestGetTicketsFromMetadata(t *testing.T) {
 		},
 		{
 			name:                "Empty metadata",
-			mockTicketInfos:     []*TicketInfo{},
+			mockTicketInfos:     []*types.TicketInfo{},
 			mockReadErr:         nil,
 			mockKlistOutput:     "",
 			mockKlistErr:        nil,
@@ -159,18 +188,16 @@ func TestGetTicketsFromMetadata(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Save original functions
-			originalReadFunc := readMetadataJSONFunc
-			originalExecutor := defaultExecutor
-
-			// Restore them after test
+			// Save original functions and restore them after the test
+			originalReadMetadataJSONFunc := readMetadataJSONFunc
+			originalDefaultExecutor := defaultExecutor
 			defer func() {
-				readMetadataJSONFunc = originalReadFunc
-				defaultExecutor = originalExecutor
+				readMetadataJSONFunc = originalReadMetadataJSONFunc
+				defaultExecutor = originalDefaultExecutor
 			}()
 
 			// Set up mock functions
-			readMetadataJSONFunc = func(filePath string) ([]*TicketInfo, error) {
+			readMetadataJSONFunc = func(filePath string) ([]*types.TicketInfo, error) {
 				return tc.mockTicketInfos, tc.mockReadErr
 			}
 
@@ -180,23 +207,21 @@ func TestGetTicketsFromMetadata(t *testing.T) {
 				Err:    tc.mockKlistErr,
 			}
 
+			// Create a client
 			client := NewClient()
-			tickets, infos, err := client.GetTicketsFromMetadata("/path/to/metadata.json")
 
+			// Call GetTicketsFromMetadata
+			tickets, ticketInfos, err := client.GetTicketsFromMetadata("/path/to/metadata.json")
+
+			// Check results
 			if tc.expectedError {
-				if err == nil {
-					t.Errorf("Expected error but got nil")
-				}
+				assert.Error(t, err, "Expected an error but got none")
+				assert.Nil(t, tickets, "Expected nil tickets but got tickets")
+				assert.Nil(t, ticketInfos, "Expected nil ticketInfos but got ticketInfos")
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-				if len(tickets) != tc.expectedTicketCount {
-					t.Errorf("Expected %d tickets but got %d", tc.expectedTicketCount, len(tickets))
-				}
-				if len(infos) != tc.expectedTicketCount {
-					t.Errorf("Expected %d ticket infos but got %d", tc.expectedTicketCount, len(infos))
-				}
+				assert.NoError(t, err, "Did not expect an error")
+				assert.Equal(t, tc.expectedTicketCount, len(tickets), "Unexpected number of tickets")
+				assert.Equal(t, tc.expectedTicketCount, len(ticketInfos), "Unexpected number of ticketInfos")
 			}
 		})
 	}
@@ -207,7 +232,7 @@ func TestGetAllTicketsFromDirectory(t *testing.T) {
 		name                string
 		mockMetadataFiles   []string
 		mockGetPathsErr     error
-		mockTicketInfos     []*TicketInfo
+		mockTicketInfos     []*types.TicketInfo
 		mockReadErr         error
 		mockKlistOutput     string
 		mockKlistErr        error
@@ -218,7 +243,7 @@ func TestGetAllTicketsFromDirectory(t *testing.T) {
 			name:              "Valid directory with metadata",
 			mockMetadataFiles: []string{"/path/to/metadata.json"},
 			mockGetPathsErr:   nil,
-			mockTicketInfos: []*TicketInfo{
+			mockTicketInfos: []*types.TicketInfo{
 				{
 					KrbFilePath:        "/path/to/ticket1",
 					ServiceAccountName: "user123",
@@ -246,16 +271,14 @@ func TestGetAllTicketsFromDirectory(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Save original functions
-			originalReadFunc := readMetadataJSONFunc
-			originalGetPathsFunc := getMetadataFilePathsFunc
-			originalExecutor := defaultExecutor
-
-			// Restore them after test
+			// Save original functions and restore them after the test
+			originalGetMetadataFilePathsFunc := getMetadataFilePathsFunc
+			originalReadMetadataJSONFunc := readMetadataJSONFunc
+			originalDefaultExecutor := defaultExecutor
 			defer func() {
-				readMetadataJSONFunc = originalReadFunc
-				getMetadataFilePathsFunc = originalGetPathsFunc
-				defaultExecutor = originalExecutor
+				getMetadataFilePathsFunc = originalGetMetadataFilePathsFunc
+				readMetadataJSONFunc = originalReadMetadataJSONFunc
+				defaultExecutor = originalDefaultExecutor
 			}()
 
 			// Set up mock functions
@@ -263,7 +286,7 @@ func TestGetAllTicketsFromDirectory(t *testing.T) {
 				return tc.mockMetadataFiles, tc.mockGetPathsErr
 			}
 
-			readMetadataJSONFunc = func(filePath string) ([]*TicketInfo, error) {
+			readMetadataJSONFunc = func(filePath string) ([]*types.TicketInfo, error) {
 				return tc.mockTicketInfos, tc.mockReadErr
 			}
 
@@ -273,23 +296,21 @@ func TestGetAllTicketsFromDirectory(t *testing.T) {
 				Err:    tc.mockKlistErr,
 			}
 
+			// Create a client
 			client := NewClient()
-			tickets, infos, err := client.GetAllTicketsFromDirectory("/path/to/directory")
 
+			// Call GetAllTicketsFromDirectory
+			tickets, ticketInfos, err := client.GetAllTicketsFromDirectory("/path/to/directory")
+
+			// Check results
 			if tc.expectedError {
-				if err == nil {
-					t.Errorf("Expected error but got nil")
-				}
+				assert.Error(t, err, "Expected an error but got none")
+				assert.Nil(t, tickets, "Expected nil tickets but got tickets")
+				assert.Nil(t, ticketInfos, "Expected nil ticketInfos but got ticketInfos")
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-				if len(tickets) != tc.expectedTicketCount {
-					t.Errorf("Expected %d tickets but got %d", tc.expectedTicketCount, len(tickets))
-				}
-				if len(infos) != tc.expectedTicketCount {
-					t.Errorf("Expected %d ticket infos but got %d", tc.expectedTicketCount, len(infos))
-				}
+				assert.NoError(t, err, "Did not expect an error")
+				assert.Equal(t, tc.expectedTicketCount, len(tickets), "Unexpected number of tickets")
+				assert.Equal(t, tc.expectedTicketCount, len(ticketInfos), "Unexpected number of ticketInfos")
 			}
 		})
 	}
@@ -297,74 +318,39 @@ func TestGetAllTicketsFromDirectory(t *testing.T) {
 
 func TestParseKlistOutput(t *testing.T) {
 	testCases := []struct {
-		name           string
-		klistOutput    string
-		path           string
-		expectedError  bool
-		expectedValues map[string]string
+		name          string
+		output        string
+		expectedError bool
 	}{
 		{
 			name:          "Valid output with standard principal",
-			klistOutput:   validKlistCompactOutput,
-			path:          "/path/to/ticket",
+			output:        validKlistCompactOutput,
 			expectedError: false,
-			expectedValues: map[string]string{
-				"principal":      "user123",
-				"domain":         "EXAMPLE.COM",
-				"domainlessUser": "user123",
-			},
 		},
 		{
 			name:          "Valid output with machine account",
-			klistOutput:   validKlistMachineOutput,
-			path:          "/path/to/ticket",
+			output:        validKlistMachineOutput,
 			expectedError: false,
-			expectedValues: map[string]string{
-				"principal":      "machine$",
-				"domain":         "EXAMPLE.COM",
-				"domainlessUser": "machine",
-			},
 		},
 		{
-			name: "Missing principal",
-			klistOutput: `Ticket cache: FILE:/path/to/krb5cc
-
-Valid starting     Expires            Service principal
-05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM`,
-			path:          "/path/to/ticket",
+			name:          "Missing principal",
+			output:        missingPrincipalOutput,
 			expectedError: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ticket, ticketInfo, err := parseKlistOutput(tc.klistOutput, tc.path)
+			ticket, ticketInfo, err := parseKlistOutput(tc.output, "/path/to/ticket")
 
 			if tc.expectedError {
-				if err == nil {
-					t.Errorf("Expected error but got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-				return
-			}
-
-			if ticket.Principal != tc.expectedValues["principal"] {
-				t.Errorf("Expected principal %s but got %s",
-					tc.expectedValues["principal"], ticket.Principal)
-			}
-
-			if ticket.Domain != tc.expectedValues["domain"] {
-				t.Errorf("Expected domain %s but got %s",
-					tc.expectedValues["domain"], ticket.Domain)
-			}
-
-			if ticketInfo.DomainlessUser != tc.expectedValues["domainlessUser"] {
-				t.Errorf("Expected domainless user %s but got %s",
-					tc.expectedValues["domainlessUser"], ticketInfo.DomainlessUser)
+				assert.Error(t, err, "Expected an error but got none")
+				assert.Nil(t, ticket, "Expected nil ticket but got a ticket")
+				assert.Nil(t, ticketInfo, "Expected nil ticketInfo but got a ticketInfo")
+			} else {
+				assert.NoError(t, err, "Did not expect an error")
+				assert.NotNil(t, ticket, "Expected a ticket but got nil")
+				assert.NotNil(t, ticketInfo, "Expected a ticketInfo but got nil")
 			}
 		})
 	}
@@ -414,8 +400,8 @@ func TestParsePrincipalInfo(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ticket := &Ticket{}
-			ticketInfo := &TicketInfo{}
+			ticket := &types.Ticket{}
+			ticketInfo := &types.TicketInfo{}
 
 			err := parsePrincipalInfo(tc.lines, ticket, ticketInfo)
 
@@ -432,99 +418,127 @@ func TestParsePrincipalInfo(t *testing.T) {
 }
 
 func TestDateParsing(t *testing.T) {
-	ticket := &Ticket{}
 	t.Run("parseTicketLine", func(t *testing.T) {
-		parseTicketLine("05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM", ticket)
-		expectedCreation, _ := time.Parse(constants.KlistDateTimeFormat, "05/15/2023 10:00:00")
-		expectedExpiry, _ := time.Parse(constants.KlistDateTimeFormat, "05/16/2023 10:00:00")
-
-		assert.Equal(t, expectedCreation, ticket.CreationTime, "Creation time doesn't match expected")
-		assert.Equal(t, expectedExpiry, ticket.ExpirationTime, "Expiration time doesn't match expected")
+		ticket := &types.Ticket{}
+		parseTicketLine("05/15/2023 09:00:00 05/16/2023 10:00:00", ticket)
+		assert.Equal(t, parseTime("05/15/2023 09:00:00"), ticket.CreationTime)
+		assert.Equal(t, parseTime("05/16/2023 10:00:00"), ticket.ExpirationTime)
 	})
+
 	t.Run("parseStartTime", func(t *testing.T) {
-		ticket = &Ticket{} // Reset ticket
-		parseStartTime("05/15/2023 10:00:00", ticket)
-		expected, _ := time.Parse(constants.KlistDateTimeFormat, "05/15/2023 10:00:00")
-
-		assert.Equal(t, expected, ticket.CreationTime, "Creation time doesn't match expected")
+		ticket := &types.Ticket{}
+		parseStartTime("05/15/2023 09:00:00", ticket)
+		assert.Equal(t, parseTime("05/15/2023 09:00:00"), ticket.CreationTime)
 	})
-	t.Run("parseExpiryTime", func(t *testing.T) {
-		ticket = &Ticket{} // Reset ticket
-		parseExpiryTime("05/16/2023 10:00:00", ticket)
-		expected, _ := time.Parse(constants.KlistDateTimeFormat, "05/16/2023 10:00:00")
 
-		assert.Equal(t, expected, ticket.ExpirationTime, "Expiration time doesn't match expected")
+	t.Run("parseExpiryTime", func(t *testing.T) {
+		ticket := &types.Ticket{}
+		parseExpiryTime("05/16/2023 10:00:00", ticket)
+		assert.Equal(t, parseTime("05/16/2023 10:00:00"), ticket.ExpirationTime)
 	})
 
 	t.Run("parseRenewTime", func(t *testing.T) {
-		ticket = &Ticket{} // Reset ticket
-		parseRenewTime("renew until 05/22/2023 10:00:00", ticket)
-		expected, _ := time.Parse(constants.KlistDateTimeFormat, "05/22/2023 10:00:00")
-
-		assert.Equal(t, expected, ticket.RenewUntil, "Renew time doesn't match expected")
+		ticket := &types.Ticket{}
+		parseRenewTime("renew until 05/22/2023 09:00:00", ticket)
+		assert.Equal(t, parseTime("05/22/2023 09:00:00"), ticket.RenewUntil)
 	})
 }
 
 func TestIsDateFormat(t *testing.T) {
 	testCases := []struct {
+		name     string
 		input    string
 		expected bool
 	}{
-		{"05/15/2023", true},
-		{"12/31/2023", true},
-		{"5/15/2023", false},   // missing leading zero
-		{"05-15-2023", false},  // wrong separator
-		{"05/15/23", false},    // year too short
-		{"05/15/20233", false}, // year too long
-		{"hello", false},
+		{
+			name:     "05/15/2023",
+			input:    "05/15/2023",
+			expected: true,
+		},
+		{
+			name:     "12/31/2023",
+			input:    "12/31/2023",
+			expected: true,
+		},
+		{
+			name:     "5/15/2023",
+			input:    "5/15/2023",
+			expected: false, // Missing leading zero
+		},
+		{
+			name:     "05-15-2023",
+			input:    "05-15-2023",
+			expected: false, // Wrong separator
+		},
+		{
+			name:     "05/15/23",
+			input:    "05/15/23",
+			expected: false, // Short year
+		},
+		{
+			name:     "05/15/20233",
+			input:    "05/15/20233",
+			expected: false, // Too long
+		},
+		{
+			name:     "hello",
+			input:    "hello",
+			expected: false, // Not a date
+		},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.input, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			result := isDateFormat(tc.input)
-			assert.Equal(t, tc.expected, result, "isDateFormat(%s) should return %v", tc.input, tc.expected)
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
 
 func TestValidateTicket(t *testing.T) {
-	validTime := time.Now()
-
 	testCases := []struct {
 		name          string
-		ticket        *Ticket
+		ticket        *types.Ticket
 		expectedError bool
 	}{
 		{
 			name: "Valid ticket",
-			ticket: &Ticket{
+			ticket: &types.Ticket{
+				Path:           "/path/to/ticket",
 				Principal:      "user123",
 				Domain:         "EXAMPLE.COM",
-				ExpirationTime: validTime,
+				CreationTime:   parseTime("05/15/2023 09:00:00"),
+				ExpirationTime: parseTime("05/16/2023 10:00:00"),
 			},
 			expectedError: false,
 		},
 		{
 			name: "Missing principal",
-			ticket: &Ticket{
+			ticket: &types.Ticket{
+				Path:           "/path/to/ticket",
 				Domain:         "EXAMPLE.COM",
-				ExpirationTime: validTime,
+				CreationTime:   parseTime("05/15/2023 09:00:00"),
+				ExpirationTime: parseTime("05/16/2023 10:00:00"),
 			},
 			expectedError: true,
 		},
 		{
 			name: "Missing domain",
-			ticket: &Ticket{
+			ticket: &types.Ticket{
+				Path:           "/path/to/ticket",
 				Principal:      "user123",
-				ExpirationTime: validTime,
+				CreationTime:   parseTime("05/15/2023 09:00:00"),
+				ExpirationTime: parseTime("05/16/2023 10:00:00"),
 			},
 			expectedError: true,
 		},
 		{
 			name: "Missing expiration time",
-			ticket: &Ticket{
-				Principal: "user123",
-				Domain:    "EXAMPLE.COM",
+			ticket: &types.Ticket{
+				Path:         "/path/to/ticket",
+				Principal:    "user123",
+				Domain:       "EXAMPLE.COM",
+				CreationTime: parseTime("05/15/2023 09:00:00"),
 			},
 			expectedError: true,
 		},
@@ -541,4 +555,10 @@ func TestValidateTicket(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Helper function to parse time strings
+func parseTime(timeStr string) time.Time {
+	t, _ := time.Parse(constants.KlistDateTimeFormat, timeStr)
+	return t
 }

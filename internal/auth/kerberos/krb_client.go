@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
-	"golang.a2z.com/CredentialsFetcherV2/internal/cmdexec"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
 var (
@@ -17,8 +19,8 @@ var (
 )
 
 var (
-	readMetadataJSONFunc     = ReadMetadataJSON
-	getMetadataFilePathsFunc = GetMetadataFilePaths
+	readMetadataJSONFunc     = metadata_utils.ReadMetadataJSON
+	getMetadataFilePathsFunc = metadata_utils.GetMetadataFilePaths
 )
 
 type Client struct{}
@@ -47,6 +49,7 @@ var defaultExecutor KlistExecutor = NewDefaultKlistExecutor()
 func (e *DefaultKlistExecutor) executeKlist(path string) (string, error) {
 	ctx := context.Background()
 
+	// Use the safer Execute method with separate command and arguments
 	output, err := e.shellExecutor.Execute(ctx, "klist", "-c", path)
 	if err != nil {
 		log.Error("Klist command failed",
@@ -61,14 +64,14 @@ func (e *DefaultKlistExecutor) executeKlist(path string) (string, error) {
 }
 
 // parseKlistOutput parses the output of klist command to populate both Ticket and TicketInfo structs
-func parseKlistOutput(output string, path string) (*Ticket, *TicketInfo, error) {
+func parseKlistOutput(output string, path string) (*types.Ticket, *types.TicketInfo, error) {
 	lines := strings.Split(output, "\n")
 
-	ticketInfo := &TicketInfo{
+	ticketInfo := &types.TicketInfo{
 		KrbFilePath: path,
 	}
 
-	ticket := &Ticket{
+	ticket := &types.Ticket{
 		Path: path,
 	}
 
@@ -86,7 +89,7 @@ func parseKlistOutput(output string, path string) (*Ticket, *TicketInfo, error) 
 }
 
 // parsePrincipalInfo extracts principal and domain information from klist output
-func parsePrincipalInfo(lines []string, ticket *Ticket, ticketInfo *TicketInfo) error {
+func parsePrincipalInfo(lines []string, ticket *types.Ticket, ticketInfo *types.TicketInfo) error {
 	for _, line := range lines {
 		if strings.Contains(line, "Default principal:") {
 			// Format is typically: "Default principal: username@DOMAIN.COM"
@@ -128,7 +131,7 @@ func parsePrincipalInfo(lines []string, ticket *Ticket, ticketInfo *TicketInfo) 
 	return fmt.Errorf("could not find principal information in klist output")
 }
 
-func parseTicketDates(lines []string, ticket *Ticket) {
+func parseTicketDates(lines []string, ticket *types.Ticket) {
 	inTicketSection := false
 	var ticketLine string
 	dateStartRegex := regexp.MustCompile(`^\s*(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])`)
@@ -175,7 +178,7 @@ func parseTicketDates(lines []string, ticket *Ticket) {
 }
 
 // parseTicketLine handles the case where all ticket info is on one line
-func parseTicketLine(line string, ticket *Ticket) {
+func parseTicketLine(line string, ticket *types.Ticket) {
 	fields := strings.Fields(line)
 	if len(fields) >= 4 {
 		// First date (fields 0-1) is start time
@@ -230,7 +233,7 @@ func parseDateFromFields(fields []string, logPrefix string) (time.Time, error) {
 }
 
 // parseStartTime extracts and sets the ticket creation time
-func parseStartTime(line string, ticket *Ticket) {
+func parseStartTime(line string, ticket *types.Ticket) {
 	fields := strings.Fields(strings.TrimSpace(line))
 	if parsedTime, err := parseDateFromFields(fields, "start"); err == nil {
 		ticket.CreationTime = parsedTime
@@ -238,7 +241,7 @@ func parseStartTime(line string, ticket *Ticket) {
 }
 
 // parseExpiryTime extracts and sets the ticket expiration time
-func parseExpiryTime(line string, ticket *Ticket) {
+func parseExpiryTime(line string, ticket *types.Ticket) {
 	fields := strings.Fields(strings.TrimSpace(line))
 	if parsedTime, err := parseDateFromFields(fields, "expiry"); err == nil {
 		ticket.ExpirationTime = parsedTime
@@ -246,7 +249,7 @@ func parseExpiryTime(line string, ticket *Ticket) {
 }
 
 // parseRenewTime extracts and sets the ticket renewal time
-func parseRenewTime(line string, ticket *Ticket) {
+func parseRenewTime(line string, ticket *types.Ticket) {
 	fields := strings.Fields(strings.TrimSpace(line))
 	if parsedTime, err := parseDateFromFields(fields, "renew"); err == nil {
 		ticket.RenewUntil = parsedTime
@@ -263,7 +266,7 @@ func isDateFormat(str string) bool {
 }
 
 // validateTicket ensures the ticket has all required fields
-func validateTicket(ticket *Ticket, path string) error {
+func validateTicket(ticket *types.Ticket, path string) error {
 	if ticket.Principal == "" || ticket.Domain == "" {
 		return fmt.Errorf("could not find principal information in klist output")
 	}
@@ -276,7 +279,7 @@ func validateTicket(ticket *Ticket, path string) error {
 }
 
 // GetTicket retrieves comprehensive information about a Kerberos ticket from a file
-func (c *Client) GetTicket(path string, executor KlistExecutor) (*Ticket, *TicketInfo, error) {
+func (c *Client) GetTicket(path string, executor KlistExecutor) (*types.Ticket, *types.TicketInfo, error) {
 	log.Debug("Reading ticket info using klist", "path", path)
 
 	// If no executor is provided, use the default one
@@ -305,7 +308,7 @@ func (c *Client) GetTicket(path string, executor KlistExecutor) (*Ticket, *Ticke
 }
 
 // GetTicketsFromMetadata retrieves all ticket information from a metadata file
-func (c *Client) GetTicketsFromMetadata(metadataPath string) ([]*Ticket, []*TicketInfo, error) {
+func (c *Client) GetTicketsFromMetadata(metadataPath string) ([]*types.Ticket, []*types.TicketInfo, error) {
 
 	ticketInfoList, err := readMetadataJSONFunc(metadataPath)
 	if err != nil {
@@ -318,8 +321,8 @@ func (c *Client) GetTicketsFromMetadata(metadataPath string) ([]*Ticket, []*Tick
 		return nil, nil, fmt.Errorf("no ticket information found in metadata file: %s", metadataPath)
 	}
 
-	var tickets []*Ticket
-	var validTicketInfos []*TicketInfo
+	var tickets []*types.Ticket
+	var validTicketInfos []*types.TicketInfo
 
 	for _, ticketInfo := range ticketInfoList {
 		ticket, _, err := c.GetTicket(ticketInfo.KrbFilePath, defaultExecutor)
@@ -344,7 +347,7 @@ func (c *Client) GetTicketsFromMetadata(metadataPath string) ([]*Ticket, []*Tick
 }
 
 // GetAllTicketsFromDirectory retrieves all tickets from metadata files in a directory
-func (c *Client) GetAllTicketsFromDirectory(directory string) ([]*Ticket, []*TicketInfo, error) {
+func (c *Client) GetAllTicketsFromDirectory(directory string) ([]*types.Ticket, []*types.TicketInfo, error) {
 
 	metadataFiles, err := getMetadataFilePathsFunc(directory)
 	if err != nil {
@@ -352,8 +355,8 @@ func (c *Client) GetAllTicketsFromDirectory(directory string) ([]*Ticket, []*Tic
 		return nil, nil, fmt.Errorf("failed to get metadata files: %w", err)
 	}
 
-	var allTickets []*Ticket
-	var allTicketInfos []*TicketInfo
+	var allTickets []*types.Ticket
+	var allTicketInfos []*types.TicketInfo
 
 	for _, metadataPath := range metadataFiles {
 		tickets, ticketInfos, err := c.GetTicketsFromMetadata(metadataPath)

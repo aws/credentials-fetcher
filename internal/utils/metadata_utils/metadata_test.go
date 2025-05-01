@@ -1,4 +1,4 @@
-package kerberos
+package metadata_utils
 
 import (
 	"os"
