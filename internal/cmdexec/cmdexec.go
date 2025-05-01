@@ -12,7 +12,7 @@ import (
 var log = logger.GetInstance()
 
 type Executor interface {
-	Execute(ctx context.Context, commandString string) ([]byte, error)
+	Execute(ctx context.Context, command string, args ...string) ([]byte, error)
 	BuildCommand(command string, args ...string) string
 }
 
@@ -22,23 +22,15 @@ func NewExecutor() *DefaultExecutor {
 	return &DefaultExecutor{}
 }
 
-// Execute runs a shell command and returns its output
-// The commandString should be a complete command with all arguments
-func (e *DefaultExecutor) Execute(ctx context.Context, commandString string) ([]byte, error) {
-	// Split the command string into command and arguments
-	parts := strings.Fields(commandString)
-	if len(parts) == 0 {
+// Execute runs a shell command with separate command and arguments to prevent command injection
+func (e *DefaultExecutor) Execute(ctx context.Context, command string, args ...string) ([]byte, error) {
+	if command == "" {
 		return nil, fmt.Errorf("empty command")
-	}
-
-	command := parts[0]
-	var args []string
-	if len(parts) > 1 {
-		args = parts[1:]
 	}
 
 	cmd := exec.CommandContext(ctx, command, args...)
 
+	commandString := e.BuildCommand(command, args...)
 	log.Debug("Executing shell command",
 		"command", commandString)
 

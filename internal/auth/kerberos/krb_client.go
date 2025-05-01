@@ -47,10 +47,7 @@ var defaultExecutor KlistExecutor = NewDefaultKlistExecutor()
 func (e *DefaultKlistExecutor) executeKlist(path string) (string, error) {
 	ctx := context.Background()
 
-	cmdString := e.shellExecutor.BuildCommand("klist", "-c", path)
-	log.Debug("Executing klist command", "command", cmdString)
-
-	output, err := e.shellExecutor.Execute(ctx, cmdString)
+	output, err := e.shellExecutor.Execute(ctx, "klist", "-c", path)
 	if err != nil {
 		log.Error("Klist command failed",
 			"error", err,

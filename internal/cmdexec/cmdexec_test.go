@@ -58,14 +58,14 @@ func TestExecute(t *testing.T) {
 
 	// Test successful command execution
 	t.Run("successful execution", func(t *testing.T) {
-		output, err := executor.Execute(ctx, "echo hello")
+		output, err := executor.Execute(ctx, "echo", "hello")
 		assert.NoError(t, err, "Execute() should not return an error for valid command")
 		assert.Equal(t, "hello\n", string(output), "Execute() should return expected output")
 	})
 
 	// Test command with multiple arguments
 	t.Run("multiple arguments", func(t *testing.T) {
-		output, err := executor.Execute(ctx, "echo hello world")
+		output, err := executor.Execute(ctx, "echo", "hello", "world")
 		assert.NoError(t, err, "Execute() should not return an error for valid command with multiple arguments")
 		assert.Equal(t, "hello world\n", string(output), "Execute() should return expected output")
 	})
@@ -90,7 +90,7 @@ func TestExecute(t *testing.T) {
 		defer cancel()
 
 		// Execute a command that takes longer than the timeout
-		_, err := executor.Execute(ctx, "sleep 1")
+		_, err := executor.Execute(ctx, "sleep", "1")
 
 		// On some systems, this might not return an error if the command completes before the context is checked
 		// So we'll just log the result rather than asserting

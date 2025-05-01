@@ -60,8 +60,8 @@ func (e *DefaultLdapsearchExecutor) executeLdapsearch(ctx context.Context, dn, f
 	// ldapsearch -o ldif_wrap=no -LLL -Y GSSAPI -H ldap://ip-c613012f.contoso.com -b 'CN=WebApp01,OU=MYOU,OU=Users,OU=contoso,DC=contoso,DC=com'
 	// -s sub  '(objectClass=msDs-GroupManagedServiceAccount)' msDS-ManagedPassword -N
 
-	// Execute the command
-	output, err := e.shellExecutor.Execute(ctx, cmdString)
+	// Execute the command with separate command and arguments to prevent command injection
+	output, err := e.shellExecutor.Execute(ctx, command, args...)
 	if err != nil {
 		log.Error("ldapsearch failed",
 			"error", err,
