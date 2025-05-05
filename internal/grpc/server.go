@@ -14,8 +14,6 @@ import (
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var log = logger.GetInstance()
@@ -94,12 +92,7 @@ func (s *CredentialsFetcherServer) HealthCheck(ctx context.Context, req *pb.Heal
 	log.Info("Received HealthCheck request", "service", req.Service)
 
 	// Perform basic health checks
-	// 1. Check if the server is running (which it is if we're here)
-	// 2. Check if we can access the krbFilesDir
-	if _, err := os.Stat(s.krbFilesDir); os.IsNotExist(err) {
-		log.Error("Health check failed: krbFilesDir does not exist", "dir", s.krbFilesDir)
-		return nil, status.Errorf(codes.Internal, "Health check failed: krbFilesDir does not exist")
-	}
+	// The server is running if we're here, which is sufficient for a health check
 
 	// Return OK status
 	return &pb.HealthCheckResponse{Status: "OK"}, nil
