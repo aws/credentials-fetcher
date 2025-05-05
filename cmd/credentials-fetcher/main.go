@@ -50,7 +50,7 @@ func main() {
 	log.Info("Watchdog created successfully")
 
 	// Create the gRPC server
-	server := grpc.NewCredentialsFetcherServer()
+	server := grpc.NewCredentialsFetcherServer(constants.DefaultKrbFilesDir, constants.DefaultAWSSecretName)
 
 	var wg sync.WaitGroup
 	wg.Add(constants.NumberofWaitGroups)

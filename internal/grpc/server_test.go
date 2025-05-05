@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.a2z.com/CredentialsFetcherV2/constants"
+	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -26,9 +28,9 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 // setupGrpcServer sets up a test gRPC server using bufconn
 func setupGrpcServer(t *testing.T) (*grpc.ClientConn, *CredentialsFetcherServer, func()) {
 	lis = bufconn.Listen(bufSize)
-	server := NewCredentialsFetcherServer()
+	server := NewCredentialsFetcherServer(constants.DefaultKrbFilesDir, constants.DefaultAWSSecretName).(*CredentialsFetcherServer)
 	s := grpc.NewServer()
-	RegisterCredentialsFetcherServiceServer(s, server)
+	pb.RegisterCredentialsFetcherServiceServer(s, server)
 
 	go func() {
 		if err := s.Serve(lis); err != nil {
@@ -50,10 +52,12 @@ func setupGrpcServer(t *testing.T) (*grpc.ClientConn, *CredentialsFetcherServer,
 }
 
 func TestNewCredentialsFetcherServer(t *testing.T) {
-	server := NewCredentialsFetcherServer()
+	server := NewCredentialsFetcherServer(constants.DefaultKrbFilesDir, constants.DefaultAWSSecretName).(*CredentialsFetcherServer)
 
 	// Verify that the server was created with the expected default values
 	assert.NotNil(t, server)
+	assert.Equal(t, constants.DefaultKrbFilesDir, server.krbFilesDir)
+	assert.Equal(t, constants.DefaultAWSSecretName, server.awsSecretsManager)
 	assert.NotNil(t, server.shutdownCh)
 	assert.NotNil(t, server.krbClient)
 	assert.NotNil(t, server.ldapClient)
@@ -66,10 +70,10 @@ func TestCredentialsFetcherServer_HealthCheck(t *testing.T) {
 	defer cleanup()
 
 	// Create client
-	client := NewCredentialsFetcherServiceClient(conn)
+	client := pb.NewCredentialsFetcherServiceClient(conn)
 
 	// Test HealthCheck
-	req := &HealthCheckRequest{
+	req := &pb.HealthCheckRequest{
 		Service: "test-service",
 	}
 	resp, err := client.HealthCheck(context.Background(), req)
@@ -85,10 +89,10 @@ func TestCredentialsFetcherServer_AddKerberosLease(t *testing.T) {
 	defer cleanup()
 
 	// Create client
-	client := NewCredentialsFetcherServiceClient(conn)
+	client := pb.NewCredentialsFetcherServiceClient(conn)
 
 	// Test AddKerberosLease
-	req := &CreateKerberosLeaseRequest{
+	req := &pb.CreateKerberosLeaseRequest{
 		CredspecContents: []string{"test-credspec"},
 	}
 	resp, err := client.AddKerberosLease(context.Background(), req)
@@ -105,10 +109,10 @@ func TestCredentialsFetcherServer_AddNonDomainJoinedKerberosLease(t *testing.T) 
 	defer cleanup()
 
 	// Create client
-	client := NewCredentialsFetcherServiceClient(conn)
+	client := pb.NewCredentialsFetcherServiceClient(conn)
 
 	// Test AddNonDomainJoinedKerberosLease
-	req := &CreateNonDomainJoinedKerberosLeaseRequest{
+	req := &pb.CreateNonDomainJoinedKerberosLeaseRequest{
 		CredspecContents: []string{"test-credspec"},
 		Username:         "test-user",
 		Password:         "test-password",
@@ -128,10 +132,10 @@ func TestCredentialsFetcherServer_RenewNonDomainJoinedKerberosLease(t *testing.T
 	defer cleanup()
 
 	// Create client
-	client := NewCredentialsFetcherServiceClient(conn)
+	client := pb.NewCredentialsFetcherServiceClient(conn)
 
 	// Test RenewNonDomainJoinedKerberosLease
-	req := &RenewNonDomainJoinedKerberosLeaseRequest{
+	req := &pb.RenewNonDomainJoinedKerberosLeaseRequest{
 		Username: "test-user",
 		Password: "test-password",
 		Domain:   "test-domain",
@@ -149,10 +153,10 @@ func TestCredentialsFetcherServer_DeleteKerberosLease(t *testing.T) {
 	defer cleanup()
 
 	// Create client
-	client := NewCredentialsFetcherServiceClient(conn)
+	client := pb.NewCredentialsFetcherServiceClient(conn)
 
 	// Test DeleteKerberosLease
-	req := &DeleteKerberosLeaseRequest{
+	req := &pb.DeleteKerberosLeaseRequest{
 		LeaseId: "test-lease-id",
 	}
 	resp, err := client.DeleteKerberosLease(context.Background(), req)
@@ -169,10 +173,10 @@ func TestCredentialsFetcherServer_AddKerberosArnLease(t *testing.T) {
 	defer cleanup()
 
 	// Create client
-	client := NewCredentialsFetcherServiceClient(conn)
+	client := pb.NewCredentialsFetcherServiceClient(conn)
 
 	// Test AddKerberosArnLease
-	req := &KerberosArnLeaseRequest{
+	req := &pb.KerberosArnLeaseRequest{
 		CredspecArns:    []string{"test-arn"},
 		AccessKeyId:     "test-access-key",
 		SecretAccessKey: "test-secret-key",
@@ -193,10 +197,10 @@ func TestCredentialsFetcherServer_RenewKerberosArnLease(t *testing.T) {
 	defer cleanup()
 
 	// Create client
-	client := NewCredentialsFetcherServiceClient(conn)
+	client := pb.NewCredentialsFetcherServiceClient(conn)
 
 	// Test RenewKerberosArnLease
-	req := &RenewKerberosArnLeaseRequest{
+	req := &pb.RenewKerberosArnLeaseRequest{
 		AccessKeyId:     "test-access-key",
 		SecretAccessKey: "test-secret-key",
 		SessionToken:    "test-session-token",
@@ -219,7 +223,7 @@ func TestCredentialsFetcherServer_RunServer(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a server
-	server := NewCredentialsFetcherServer()
+	server := NewCredentialsFetcherServer(constants.DefaultKrbFilesDir, constants.DefaultAWSSecretName)
 
 	// Start the server in a goroutine
 	go func() {
@@ -244,10 +248,10 @@ func TestCredentialsFetcherServer_RunServer(t *testing.T) {
 	defer conn.Close()
 
 	// Create a client
-	client := NewCredentialsFetcherServiceClient(conn)
+	client := pb.NewCredentialsFetcherServiceClient(conn)
 
 	// Test that the server is responding
-	resp, err := client.HealthCheck(context.Background(), &HealthCheckRequest{Service: "test"})
+	resp, err := client.HealthCheck(context.Background(), &pb.HealthCheckRequest{Service: "test"})
 	assert.NoError(t, err)
 	assert.Equal(t, "OK", resp.Status)
 
@@ -259,7 +263,7 @@ func TestCredentialsFetcherServer_RunServer(t *testing.T) {
 }
 
 func TestCredentialsFetcherServer_Shutdown(t *testing.T) {
-	server := NewCredentialsFetcherServer()
+	server := NewCredentialsFetcherServer(constants.DefaultKrbFilesDir, constants.DefaultAWSSecretName).(*CredentialsFetcherServer)
 
 	// Create a channel to signal when the goroutine is done
 	done := make(chan struct{})

@@ -14,3 +14,11 @@ const NumberofWaitGroups = 2
 
 // KlistDateTimeFormat is the standard date time format used for parsing Kerberos klist output
 const KlistDateTimeFormat = "01/02/2006 15:04:05"
+
+const LeaseIDLength = 16
+
+// Default Secret for user principal
+const DefaultAWSSecretName = "aws/directoryservice/contoso/gmsa"
+
+// DefaultKrbFilesDir is the directory where Kerberos files are stored
+const DefaultKrbFilesDir = "/var/credentials-fetcher/krbdir"

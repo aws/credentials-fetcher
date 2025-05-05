@@ -10,89 +10,114 @@ import (
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap"
+	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var log = logger.GetInstance()
 
-// CredentialsFetcherServer implements the CredentialsFetcherService gRPC service
-type CredentialsFetcherServer struct {
-	UnimplementedCredentialsFetcherServiceServer
-	krbFilesDir     string
-	awsSmSecretName string
-	mu              sync.Mutex
-	shutdownCh      chan struct{}
-	krbClient       *kerberos.Client
-	ldapClient      *ldap.Client
-	shellExecutor   cmdexec.Executor
+// Server defines the interface for the gRPC server
+type Server interface {
+	RunServer(socketDir string) error
+	Shutdown()
 }
 
-// NewCredentialsFetcherServer creates a new instance of CredentialsFetcherServer
-func NewCredentialsFetcherServer() *CredentialsFetcherServer {
+// CredentialsFetcherServer implements the CredentialsFetcherService gRPC service
+type CredentialsFetcherServer struct {
+	pb.UnimplementedCredentialsFetcherServiceServer
+	krbFilesDir       string
+	awsSecretsManager string
+	mu                sync.Mutex
+	shutdownCh        chan struct{}
+	krbClient         *kerberos.Client
+	ldapClient        *ldap.Client
+	shellExecutor     cmdexec.Executor
+}
+
+// NewCredentialsFetcherServerFunc is the function type for creating a new server
+type NewCredentialsFetcherServerFunc func(krbFilesDir, awsSecretsManager string) Server
+
+// NewCredentialsFetcherServer is the default implementation for creating a new server
+var NewCredentialsFetcherServer NewCredentialsFetcherServerFunc = func(krbFilesDir, awsSecretsManager string) Server {
 	return &CredentialsFetcherServer{
-		shutdownCh:    make(chan struct{}),
-		krbClient:     kerberos.NewClient(),
-		ldapClient:    ldap.NewClient(),
-		shellExecutor: cmdexec.NewExecutor(),
+		krbFilesDir:       krbFilesDir,
+		awsSecretsManager: awsSecretsManager,
+		shutdownCh:        make(chan struct{}),
+		krbClient:         kerberos.NewClient(),
+		ldapClient:        ldap.NewClient(),
+		shellExecutor:     cmdexec.NewExecutor(),
 	}
 }
 
 // AddKerberosLease implements the AddKerberosLease RPC method
-func (s *CredentialsFetcherServer) AddKerberosLease(ctx context.Context, req *CreateKerberosLeaseRequest) (*CreateKerberosLeaseResponse, error) {
+func (s *CredentialsFetcherServer) AddKerberosLease(ctx context.Context, req *pb.CreateKerberosLeaseRequest) (*pb.CreateKerberosLeaseResponse, error) {
 	log.Info("Received AddKerberosLease request")
-	return &CreateKerberosLeaseResponse{
+
+	return &pb.CreateKerberosLeaseResponse{
 		LeaseId:                  "",
 		CreatedKerberosFilePaths: []string{},
 	}, nil
 }
 
 // AddNonDomainJoinedKerberosLease implements the AddNonDomainJoinedKerberosLease RPC method
-func (s *CredentialsFetcherServer) AddNonDomainJoinedKerberosLease(ctx context.Context, req *CreateNonDomainJoinedKerberosLeaseRequest) (*CreateNonDomainJoinedKerberosLeaseResponse, error) {
+func (s *CredentialsFetcherServer) AddNonDomainJoinedKerberosLease(ctx context.Context, req *pb.CreateNonDomainJoinedKerberosLeaseRequest) (*pb.CreateNonDomainJoinedKerberosLeaseResponse, error) {
 	log.Info("Received AddNonDomainJoinedKerberosLease request")
-	return &CreateNonDomainJoinedKerberosLeaseResponse{
+	return &pb.CreateNonDomainJoinedKerberosLeaseResponse{
 		LeaseId:                  "",
 		CreatedKerberosFilePaths: []string{},
 	}, nil
 }
 
 // RenewNonDomainJoinedKerberosLease implements the RenewNonDomainJoinedKerberosLease RPC method
-func (s *CredentialsFetcherServer) RenewNonDomainJoinedKerberosLease(ctx context.Context, req *RenewNonDomainJoinedKerberosLeaseRequest) (*RenewNonDomainJoinedKerberosLeaseResponse, error) {
+func (s *CredentialsFetcherServer) RenewNonDomainJoinedKerberosLease(ctx context.Context, req *pb.RenewNonDomainJoinedKerberosLeaseRequest) (*pb.RenewNonDomainJoinedKerberosLeaseResponse, error) {
 	log.Info("Received RenewNonDomainJoinedKerberosLease request")
-	return &RenewNonDomainJoinedKerberosLeaseResponse{
+	return &pb.RenewNonDomainJoinedKerberosLeaseResponse{
 		RenewedKerberosFilePaths: []string{},
 	}, nil
 }
 
 // DeleteKerberosLease implements the DeleteKerberosLease RPC method
-func (s *CredentialsFetcherServer) DeleteKerberosLease(ctx context.Context, req *DeleteKerberosLeaseRequest) (*DeleteKerberosLeaseResponse, error) {
+func (s *CredentialsFetcherServer) DeleteKerberosLease(ctx context.Context, req *pb.DeleteKerberosLeaseRequest) (*pb.DeleteKerberosLeaseResponse, error) {
 	log.Info("Received DeleteKerberosLease request")
-	return &DeleteKerberosLeaseResponse{
+	return &pb.DeleteKerberosLeaseResponse{
 		LeaseId:                  "",
 		DeletedKerberosFilePaths: []string{},
 	}, nil
 }
 
 // HealthCheck implements the HealthCheck RPC method
-func (s *CredentialsFetcherServer) HealthCheck(ctx context.Context, req *HealthCheckRequest) (*HealthCheckResponse, error) {
+func (s *CredentialsFetcherServer) HealthCheck(ctx context.Context, req *pb.HealthCheckRequest) (*pb.HealthCheckResponse, error) {
 	log.Info("Received HealthCheck request", "service", req.Service)
-	return &HealthCheckResponse{Status: "OK"}, nil
+
+	// Perform basic health checks
+	// 1. Check if the server is running (which it is if we're here)
+	// 2. Check if we can access the krbFilesDir
+	if _, err := os.Stat(s.krbFilesDir); os.IsNotExist(err) {
+		log.Error("Health check failed: krbFilesDir does not exist", "dir", s.krbFilesDir)
+		return nil, status.Errorf(codes.Internal, "Health check failed: krbFilesDir does not exist")
+	}
+
+	// Return OK status
+	return &pb.HealthCheckResponse{Status: "OK"}, nil
 }
 
 // AddKerberosArnLease implements the AddKerberosArnLease RPC method
-func (s *CredentialsFetcherServer) AddKerberosArnLease(ctx context.Context, req *KerberosArnLeaseRequest) (*CreateKerberosArnLeaseResponse, error) {
+func (s *CredentialsFetcherServer) AddKerberosArnLease(ctx context.Context, req *pb.KerberosArnLeaseRequest) (*pb.CreateKerberosArnLeaseResponse, error) {
 	log.Info("Received AddKerberosArnLease request")
-	return &CreateKerberosArnLeaseResponse{
+	return &pb.CreateKerberosArnLeaseResponse{
 		LeaseId:              "",
-		KrbTicketResponseMap: []*KerberosTicketArnResponse{},
+		KrbTicketResponseMap: []*pb.KerberosTicketArnResponse{},
 	}, nil
 }
 
 // RenewKerberosArnLease implements the RenewKerberosArnLease RPC method
-func (s *CredentialsFetcherServer) RenewKerberosArnLease(ctx context.Context, req *RenewKerberosArnLeaseRequest) (*RenewKerberosArnLeaseResponse, error) {
+func (s *CredentialsFetcherServer) RenewKerberosArnLease(ctx context.Context, req *pb.RenewKerberosArnLeaseRequest) (*pb.RenewKerberosArnLeaseResponse, error) {
 	log.Info("Received RenewKerberosArnLease request")
-	return &RenewKerberosArnLeaseResponse{
+	return &pb.RenewKerberosArnLeaseResponse{
 		Status: "OK",
 	}, nil
 }
@@ -115,7 +140,7 @@ func (s *CredentialsFetcherServer) RunServer(unixSocketDir string) error {
 	}
 
 	grpcServer := grpc.NewServer()
-	RegisterCredentialsFetcherServiceServer(grpcServer, s)
+	pb.RegisterCredentialsFetcherServiceServer(grpcServer, s)
 
 	// Start the server in a goroutine
 	go func() {
