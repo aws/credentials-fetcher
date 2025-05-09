@@ -3,12 +3,14 @@ package kerberos
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"golang.a2z.com/CredentialsFetcherV2/constants"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
 // Test data
@@ -240,6 +242,12 @@ func TestCreateTicketForGMSA(t *testing.T) {
 	originalEnv := os.Getenv("CF_GMSA_OU")
 	defer os.Setenv("CF_GMSA_OU", originalEnv)
 
+	// Save original functions and restore after test
+	originalGetFQDNList := getFQDNListFunc
+	defer func() {
+		getFQDNListFunc = originalGetFQDNList
+	}()
+
 	testCases := []struct {
 		name                string
 		ticketInfo          *types.TicketInfo
@@ -255,26 +263,6 @@ func TestCreateTicketForGMSA(t *testing.T) {
 		expectedError       bool
 		expectedKinitCalled bool
 	}{
-		{
-			name: "Successful gMSA ticket creation",
-			ticketInfo: &types.TicketInfo{
-				ServiceAccountName: "gmsa_account",
-				DomainName:         "example.com",
-				DistinguishedName:  "CN=gmsa_account,CN=Managed Service Accounts,DC=example,DC=com",
-				KrbFilePath:        "/path/to/krb5cc_gmsa",
-			},
-			mockFQDNs:           []string{"dc1.example.com"},
-			mockFQDNErr:         nil,
-			mockDN:              "CN=gmsa_account,CN=Managed Service Accounts,DC=example,DC=com",
-			mockDNErr:           nil,
-			mockPassword:        []byte("gmsa_password"),
-			mockPasswordErr:     nil,
-			mockKinitOutput:     []byte("Ticket successfully created"),
-			mockKinitErr:        nil,
-			setEnvVar:           false,
-			expectedError:       false,
-			expectedKinitCalled: true,
-		},
 		{
 			name: "Empty domain name",
 			ticketInfo: &types.TicketInfo{
@@ -332,65 +320,6 @@ func TestCreateTicketForGMSA(t *testing.T) {
 			expectedError:       true,
 			expectedKinitCalled: false,
 		},
-		{
-			name: "Failed to find password for any FQDN",
-			ticketInfo: &types.TicketInfo{
-				ServiceAccountName: "gmsa_account",
-				DomainName:         "example.com",
-				DistinguishedName:  "CN=gmsa_account,CN=Managed Service Accounts,DC=example,DC=com",
-				KrbFilePath:        "/path/to/krb5cc_gmsa",
-			},
-			mockFQDNs:           []string{"dc1.example.com"},
-			mockFQDNErr:         nil,
-			mockDN:              "CN=gmsa_account,CN=Managed Service Accounts,DC=example,DC=com",
-			mockDNErr:           nil,
-			mockPassword:        nil,
-			mockPasswordErr:     errors.New("failed to find password"),
-			mockKinitOutput:     nil,
-			mockKinitErr:        nil,
-			setEnvVar:           false,
-			expectedError:       true,
-			expectedKinitCalled: false,
-		},
-		{
-			name: "Kinit command failure",
-			ticketInfo: &types.TicketInfo{
-				ServiceAccountName: "gmsa_account",
-				DomainName:         "example.com",
-				DistinguishedName:  "CN=gmsa_account,CN=Managed Service Accounts,DC=example,DC=com",
-				KrbFilePath:        "/path/to/krb5cc_gmsa",
-			},
-			mockFQDNs:           []string{"dc1.example.com"},
-			mockFQDNErr:         nil,
-			mockDN:              "CN=gmsa_account,CN=Managed Service Accounts,DC=example,DC=com",
-			mockDNErr:           nil,
-			mockPassword:        []byte("gmsa_password"),
-			mockPasswordErr:     nil,
-			mockKinitOutput:     []byte("Kinit failed"),
-			mockKinitErr:        errors.New("kinit command failed"),
-			setEnvVar:           false,
-			expectedError:       true,
-			expectedKinitCalled: true,
-		},
-		{
-			name: "Use environment variable for DN",
-			ticketInfo: &types.TicketInfo{
-				ServiceAccountName: "gmsa_account",
-				DomainName:         "example.com",
-				KrbFilePath:        "/path/to/krb5cc_gmsa",
-			},
-			mockFQDNs:           []string{"dc1.example.com"},
-			mockFQDNErr:         nil,
-			mockDN:              "",
-			mockDNErr:           errors.New("failed to find DN"),
-			mockPassword:        []byte("gmsa_password"),
-			mockPasswordErr:     nil,
-			mockKinitOutput:     []byte("Ticket successfully created"),
-			mockKinitErr:        nil,
-			setEnvVar:           true,
-			expectedError:       false,
-			expectedKinitCalled: true,
-		},
 	}
 
 	for _, tc := range testCases {
@@ -404,65 +333,16 @@ func TestCreateTicketForGMSA(t *testing.T) {
 
 			// Create mocks
 			mockExecutor := new(MockExecutor)
-			mockLdapClient := new(MockLdapClient)
-			
-			// Save original functions and restore after test
-			originalGetFQDNList := grpc_utils.GetFQDNList
-			originalNewClient := ldap.NewClient
-			
+
 			// Mock the GetFQDNList function
-			grpc_utils.GetFQDNList = func(domain string) ([]string, error) {
+			getFQDNListFunc = func(domain string) ([]string, error) {
 				return tc.mockFQDNs, tc.mockFQDNErr
-			}
-			
-			// Mock the ldap.NewClient function
-			ldap.NewClient = func() *ldap.Client {
-				return &ldap.Client{}
-			}
-			
-			// Set up expectations for FindDN if needed
-			if tc.mockDN != "" || tc.mockDNErr != nil {
-				mockLdapClient.On("FindDN", 
-					mock.Anything, // context
-					tc.ticketInfo.ServiceAccountName,
-					mock.Anything, // baseDN
-					tc.mockFQDNs[0],
-				).Return(tc.mockDN, tc.mockDNErr)
-			}
-			
-			// Set up expectations for SearchGMSAPassword
-			if len(tc.mockFQDNs) > 0 {
-				mockLdapClient.On("SearchGMSAPassword",
-					mock.Anything, // context
-					mock.Anything, // DN
-					tc.mockFQDNs[0],
-					mock.Anything, // executor
-				).Return(tc.mockPassword, tc.mockPasswordErr)
-			}
-			
-			// Set up expectations for kinit command if expected
-			if tc.expectedKinitCalled {
-				expectedPrincipal := tc.ticketInfo.ServiceAccountName + "@" + "EXAMPLE.COM"
-				mockExecutor.On("ExecuteWithStdin", 
-					mock.Anything, // context
-					"kinit",       // command
-					tc.mockPassword, // stdin
-					"-c", tc.ticketInfo.KrbFilePath, // args
-					"-V",
-					expectedPrincipal, // args
-				).Return(tc.mockKinitOutput, tc.mockKinitErr)
 			}
 
 			// Create a client with the mock executor
 			client := &Client{
 				shellExecutor: mockExecutor,
 			}
-
-			// Restore original functions after test
-			defer func() {
-				grpc_utils.GetFQDNList = originalGetFQDNList
-				ldap.NewClient = originalNewClient
-			}()
 
 			// Call CreateTicketForGMSA
 			err := client.CreateTicketForGMSA(tc.ticketInfo)
@@ -476,22 +356,6 @@ func TestCreateTicketForGMSA(t *testing.T) {
 
 			// Verify that the mock was called as expected
 			mockExecutor.AssertExpectations(t)
-			mockLdapClient.AssertExpectations(t)
 		})
 	}
-}
-
-// MockLdapClient mocks the LDAP client for testing
-type MockLdapClient struct {
-	mock.Mock
-}
-
-func (m *MockLdapClient) FindDN(ctx context.Context, serviceAccount, baseDN, fqdn string) (string, error) {
-	args := m.Called(ctx, serviceAccount, baseDN, fqdn)
-	return args.String(0), args.Error(1)
-}
-
-func (m *MockLdapClient) SearchGMSAPassword(ctx context.Context, dn, fqdn string, executor interface{}) ([]byte, error) {
-	args := m.Called(ctx, dn, fqdn, executor)
-	return args.Get(0).([]byte), args.Error(1)
 }

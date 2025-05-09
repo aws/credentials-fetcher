@@ -2,51 +2,17 @@ package api
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
-	"golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap"
 	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
-
-// MockKerberosClient is a mock implementation of the Kerberos client
-type MockKerberosClient struct {
-	mock.Mock
-}
-
-func (m *MockKerberosClient) CreateTicketUsingUsernamePassword(username, password, domain string) error {
-	args := m.Called(username, password, domain)
-	return args.Error(0)
-}
-
-func (m *MockKerberosClient) CreateTicketForServiceAccount(ctx context.Context, domain, username, password, krbFilePath string) error {
-	args := m.Called(ctx, domain, username, password, krbFilePath)
-	return args.Error(0)
-}
-
-func (m *MockKerberosClient) CreateTicketForGMSA(ctx context.Context, domain, serviceAccount, dn, krbFilePath string, ldapClient *ldap.Client) error {
-	args := m.Called(ctx, domain, serviceAccount, dn, krbFilePath, ldapClient)
-	return args.Error(0)
-}
-
-// MockLDAPClient is a mock implementation of the LDAP client
-type MockLDAPClient struct {
-	mock.Mock
-}
-
-func (m *MockLDAPClient) SearchGMSAPassword(ctx context.Context, dn, fqdn string, executor ldap.LdapsearchExecutor) ([]byte, error) {
-	args := m.Called(ctx, dn, fqdn, executor)
-	return args.Get(0).([]byte), args.Error(1)
-}
-
-func (m *MockLDAPClient) FindDN(ctx context.Context, gmsaAccountName, baseDN, fqdn string) (string, error) {
-	args := m.Called(ctx, gmsaAccountName, baseDN, fqdn)
-	return args.String(0), args.Error(1)
-}
 
 // MockShellExecutor is a mock implementation of cmdexec.Executor
 type MockShellExecutor struct {
@@ -137,12 +103,10 @@ func TestValidateRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create handler
+			// Create handler with minimal dependencies for validation test
 			handler := &NonDomainJoinedKerberosHandler{
 				krbFilesDir:       "/tmp/krb",
 				awsSecretsManager: "test-secret",
-				krbClient:         &kerberos.Client{},
-				ldapClient:        &ldap.Client{},
 				shellExecutor:     cmdexec.NewExecutor(),
 			}
 
@@ -157,4 +121,81 @@ func TestValidateRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Test for NewNonDomainJoinedKerberosHandler
+func TestNewNonDomainJoinedKerberosHandler(t *testing.T) {
+	// Call the function with minimal dependencies
+	handler := NewNonDomainJoinedKerberosHandler(
+		"/tmp/krb",
+		"test-secret",
+		nil,
+		nil,
+		cmdexec.NewExecutor(),
+	)
+
+	// Verify the handler was created correctly
+	assert.NotNil(t, handler)
+	assert.Equal(t, "/tmp/krb", handler.krbFilesDir)
+	assert.Equal(t, "test-secret", handler.awsSecretsManager)
+}
+
+// Test for setupKerberosFileForTicket
+func TestSetupKerberosFileForTicket(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+
+	// Create a mock handler
+	handler := &NonDomainJoinedKerberosHandler{
+		krbFilesDir: tempDir,
+	}
+
+	// Create a ticket info object
+	ticketInfo := &types.TicketInfo{
+		KrbFilePath:        filepath.Join(tempDir, "test-lease-id", "testaccount"),
+		ServiceAccountName: "testaccount",
+		DomainName:         "example.com",
+	}
+
+	// Call the function
+	krbFilePath, err := handler.setupKerberosFileForTicket(ticketInfo)
+
+	// Verify the results
+	assert.NoError(t, err)
+	assert.Equal(t, filepath.Join(tempDir, "test-lease-id", "testaccount", "krb5cc"), krbFilePath)
+	assert.Equal(t, filepath.Join(tempDir, "test-lease-id", "testaccount", "krb5cc"), ticketInfo.KrbFilePath)
+
+	// Verify that the directory and file were created
+	_, err = os.Stat(filepath.Join(tempDir, "test-lease-id", "testaccount"))
+	assert.NoError(t, err)
+	_, err = os.Stat(filepath.Join(tempDir, "test-lease-id", "testaccount", "krb5cc"))
+	assert.NoError(t, err)
+}
+
+// Test for cleanupKerberosFiles
+func TestCleanupKerberosFiles(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+
+	// Create a test file
+	testFilePath := filepath.Join(tempDir, "test-file")
+	file, err := os.Create(testFilePath)
+	assert.NoError(t, err)
+	file.Close()
+
+	// Verify the file exists
+	_, err = os.Stat(testFilePath)
+	assert.NoError(t, err)
+
+	// Call the function
+	err = cleanupKerberosFiles(testFilePath)
+	assert.NoError(t, err)
+
+	// Verify the file was removed
+	_, err = os.Stat(testFilePath)
+	assert.True(t, os.IsNotExist(err))
+
+	// Test with a non-existent file
+	err = cleanupKerberosFiles(filepath.Join(tempDir, "non-existent-file"))
+	assert.NoError(t, err) // Should not return an error for non-existent files
 }

@@ -20,10 +20,18 @@ var (
 	log = logger.GetInstance()
 )
 
+// Define an interface that matches the methods we need to mock
+type LdapClientInterface interface {
+	FindDN(ctx context.Context, serviceAccount, baseDN, fqdn string) (string, error)
+	SearchGMSAPassword(ctx context.Context, dn, fqdn string, executor interface{}) ([]byte, error)
+}
+
 var (
 	readMetadataJSONFunc     = metadata_utils.ReadMetadataJSON
 	getMetadataFilePathsFunc = metadata_utils.GetMetadataFilePaths
 	krbCCName                = "/tmp/krb5cc_credentialsfetcher"
+	getFQDNListFunc          = grpc_utils.GetFQDNList
+	newLdapClientFunc        = ldap.NewClient
 )
 
 type Client struct {
@@ -195,12 +203,12 @@ func (c *Client) CreateTicketForGMSA(ticketInfo *types.TicketInfo) error {
 		ticketInfo.DistinguishedName = os.Getenv("CF_GMSA_OU")
 	}
 
-	fqdnListResult, err := grpc_utils.GetFQDNList(ticketInfo.DomainName)
+	fqdnListResult, err := getFQDNListFunc(ticketInfo.DomainName)
 	if err != nil {
 		return fmt.Errorf("failed to get FQDN list: %w", err)
 	}
 
-	ldapClient := ldap.NewClient()
+	ldapClient := newLdapClientFunc()
 	var password []byte
 	var passwordFound bool
 

@@ -24,6 +24,7 @@ func TestHealthCheckHandler(t *testing.T) {
 	// Check results
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
+	assert.Equal(t, "OK", resp.Status)
 }
 
 // TestNewHealthCheckHandler tests the NewHealthCheckHandler function
@@ -33,4 +34,5 @@ func TestNewHealthCheckHandler(t *testing.T) {
 
 	// Check that it's not nil
 	assert.NotNil(t, handler)
+	assert.IsType(t, &HealthCheckHandler{}, handler)
 }
