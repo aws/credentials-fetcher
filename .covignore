@@ -1,1 +1,2 @@
-**/internal/grpc/proto/**
+/internal/grpc/proto/**
+/tests/**

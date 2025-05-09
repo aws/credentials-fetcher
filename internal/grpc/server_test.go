@@ -120,10 +120,10 @@ func TestCredentialsFetcherServer_AddNonDomainJoinedKerberosLease(t *testing.T) 
 	}
 	resp, err := client.AddNonDomainJoinedKerberosLease(context.Background(), req)
 
-	// Verify response
-	assert.NoError(t, err)
-	assert.Equal(t, "", resp.LeaseId)
-	assert.Empty(t, resp.CreatedKerberosFilePaths)
+	// Expect an error due to invalid domain format
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid domain format")
+	assert.Nil(t, resp)
 }
 
 func TestCredentialsFetcherServer_RenewNonDomainJoinedKerberosLease(t *testing.T) {

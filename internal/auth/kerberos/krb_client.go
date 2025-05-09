@@ -3,13 +3,15 @@ package kerberos
 import (
 	"context"
 	"fmt"
-	"regexp"
+	"os"
 	"strings"
 	"time"
 
-	"golang.a2z.com/CredentialsFetcherV2/constants"
+	"golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/krb_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
@@ -21,279 +23,38 @@ var (
 var (
 	readMetadataJSONFunc     = metadata_utils.ReadMetadataJSON
 	getMetadataFilePathsFunc = metadata_utils.GetMetadataFilePaths
+	krbCCName                = "/tmp/krb5cc_credentialsfetcher"
 )
 
-type Client struct{}
-
-func NewClient() *Client {
-	return &Client{}
-}
-
-type KlistExecutor interface {
-	executeKlist(path string) (string, error)
-}
-
-type DefaultKlistExecutor struct {
+type Client struct {
 	shellExecutor cmdexec.Executor
 }
 
-func NewDefaultKlistExecutor() *DefaultKlistExecutor {
-	return &DefaultKlistExecutor{
+func NewClient() *Client {
+	return &Client{
 		shellExecutor: cmdexec.NewExecutor(),
 	}
 }
 
-var defaultExecutor KlistExecutor = NewDefaultKlistExecutor()
+// GetTicket retrieves comprehensive information about a Kerberos ticket from a file
+func (c *Client) GetTicket(path string) (*types.Ticket, *types.TicketInfo, error) {
+	log.Debug("Reading ticket info using klist", "path", path)
 
-// executeKlist runs the klist command on the specified ticket file and returns the output
-func (e *DefaultKlistExecutor) executeKlist(path string) (string, error) {
 	ctx := context.Background()
 
-	// Use the safer Execute method with separate command and arguments
-	output, err := e.shellExecutor.Execute(ctx, "klist", "-c", path)
+	// Use the cmdexec package to execute the klist command
+	output, err := c.shellExecutor.Execute(ctx, "klist", "-c", path)
 	if err != nil {
 		log.Error("Klist command failed",
 			"error", err,
 			"output", string(output),
 			"path", path)
-		return "", fmt.Errorf("failed to execute klist command: %w", err)
+		return nil, nil, fmt.Errorf("failed to execute klist command: %w", err)
 	}
 	log.Debug("Klist command completed successfully", "output_size", len(output))
 
-	return string(output), nil
-}
-
-// parseKlistOutput parses the output of klist command to populate both Ticket and TicketInfo structs
-func parseKlistOutput(output string, path string) (*types.Ticket, *types.TicketInfo, error) {
-	lines := strings.Split(output, "\n")
-
-	ticketInfo := &types.TicketInfo{
-		KrbFilePath: path,
-	}
-
-	ticket := &types.Ticket{
-		Path: path,
-	}
-
-	if err := parsePrincipalInfo(lines, ticket, ticketInfo); err != nil {
-		return nil, nil, err
-	}
-
-	parseTicketDates(lines, ticket)
-
-	if err := validateTicket(ticket, path); err != nil {
-		return nil, nil, err
-	}
-
-	return ticket, ticketInfo, nil
-}
-
-// parsePrincipalInfo extracts principal and domain information from klist output
-func parsePrincipalInfo(lines []string, ticket *types.Ticket, ticketInfo *types.TicketInfo) error {
-	for _, line := range lines {
-		if strings.Contains(line, "Default principal:") {
-			// Format is typically: "Default principal: username@DOMAIN.COM"
-			parts := strings.Fields(line)
-			if len(parts) >= 3 {
-				principal := parts[2]
-				principalParts := strings.Split(principal, "@")
-				if len(principalParts) == 2 {
-
-					serviceAccount := principalParts[0]
-
-					serviceAccount = strings.Trim(serviceAccount, "'")
-
-					ticketInfo.ServiceAccountName = serviceAccount
-					ticketInfo.DomainName = principalParts[1]
-
-					if strings.HasSuffix(serviceAccount, "$") {
-						ticketInfo.DomainlessUser = serviceAccount[:len(serviceAccount)-1]
-					} else {
-						ticketInfo.DomainlessUser = serviceAccount
-					}
-
-					domainParts := strings.Split(ticketInfo.DomainName, ".")
-					var dnParts []string
-					for _, part := range domainParts {
-						dnParts = append(dnParts, "DC="+part)
-					}
-					ticketInfo.DistinguishedName = "CN=" + serviceAccount + "," + strings.Join(dnParts, ",")
-
-					ticket.Principal = serviceAccount
-					ticket.Domain = ticketInfo.DomainName
-
-					return nil
-				}
-			}
-		}
-	}
-
-	return fmt.Errorf("could not find principal information in klist output")
-}
-
-func parseTicketDates(lines []string, ticket *types.Ticket) {
-	inTicketSection := false
-	var ticketLine string
-	dateStartRegex := regexp.MustCompile(`^\s*(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])`)
-
-	// Check both one-line and multi-line formats
-	for i, line := range lines {
-		if strings.Contains(line, "Valid starting") {
-			inTicketSection = true
-			// Try to find the whole ticket line (compact format)
-			if i+1 < len(lines) && len(strings.TrimSpace(lines[i+1])) > 0 &&
-				!strings.Contains(lines[i+1], "Renew until") {
-				ticketLine = lines[i+1]
-				parseTicketLine(ticketLine, ticket)
-			}
-			continue
-		}
-
-		// For multi-line format
-		if inTicketSection {
-			// Check if line starts with a date
-			if dateStartRegex.MatchString(line) {
-				parseStartTime(line, ticket)
-			} else if strings.Contains(line, "renew until") {
-				parseRenewTime(line, ticket)
-			} else if ticket.CreationTime.IsZero() && !ticket.ExpirationTime.IsZero() {
-				// If we have expiry but no creation time, this might be a multi-line format
-				// with creation time missing, use a reasonable default
-				ticket.CreationTime = time.Now()
-			} else if !strings.Contains(line, "Valid starting") &&
-				!strings.Contains(line, "Service principal") &&
-				len(strings.TrimSpace(line)) > 0 {
-				parseExpiryTime(line, ticket)
-			}
-		}
-	}
-
-	// Last resort if we still don't have both times
-	if ticket.ExpirationTime.IsZero() && !ticket.CreationTime.IsZero() {
-		// Default expiry to 24h after creation as a fallback
-		ticket.ExpirationTime = ticket.CreationTime.Add(24 * time.Hour)
-		log.Warn("Could not parse expiry time, setting default 24h expiry",
-			"creation", ticket.CreationTime)
-	}
-}
-
-// parseTicketLine handles the case where all ticket info is on one line
-func parseTicketLine(line string, ticket *types.Ticket) {
-	fields := strings.Fields(line)
-	if len(fields) >= 4 {
-		// First date (fields 0-1) is start time
-		startTime, err := time.Parse(constants.KlistDateTimeFormat, fields[0]+" "+fields[1])
-		if err != nil {
-			log.Warn("Failed to parse start time from ticket line",
-				"value", fields[0]+" "+fields[1], "error", err)
-		} else {
-			ticket.CreationTime = startTime
-		}
-
-		// Second date (fields 2-3) is expiry time
-		expiryTime, err := time.Parse(constants.KlistDateTimeFormat, fields[2]+" "+fields[3])
-		if err != nil {
-			log.Warn("Failed to parse expiry time from ticket line",
-				"value", fields[2]+" "+fields[3], "error", err)
-		} else {
-			ticket.ExpirationTime = expiryTime
-		}
-	}
-}
-
-// parseDateFromFields is a helper function to parse dates from fields with appropriate logging
-func parseDateFromFields(fields []string, logPrefix string) (time.Time, error) {
-	// Try to find date in the format MM/DD/YYYY
-	for i, field := range fields {
-		if i+1 < len(fields) && isDateFormat(field) {
-			dateStr := field + " " + fields[i+1]
-			parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
-			if err != nil {
-				log.Warn(fmt.Sprintf("Failed to parse %s time", logPrefix),
-					"value", dateStr, "error", err)
-				continue
-			}
-			return parsedTime, nil
-		}
-	}
-
-	// Fallback: try brute force approach
-	if len(fields) >= 4 && isDateFormat(fields[2]) {
-		dateStr := fields[2] + " " + fields[3]
-		parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
-		if err != nil {
-			log.Warn(fmt.Sprintf("Failed to parse %s time with fallback", logPrefix),
-				"value", dateStr, "error", err)
-			return time.Time{}, err
-		}
-		return parsedTime, nil
-	}
-
-	return time.Time{}, fmt.Errorf("could not parse date")
-}
-
-// parseStartTime extracts and sets the ticket creation time
-func parseStartTime(line string, ticket *types.Ticket) {
-	fields := strings.Fields(strings.TrimSpace(line))
-	if parsedTime, err := parseDateFromFields(fields, "start"); err == nil {
-		ticket.CreationTime = parsedTime
-	}
-}
-
-// parseExpiryTime extracts and sets the ticket expiration time
-func parseExpiryTime(line string, ticket *types.Ticket) {
-	fields := strings.Fields(strings.TrimSpace(line))
-	if parsedTime, err := parseDateFromFields(fields, "expiry"); err == nil {
-		ticket.ExpirationTime = parsedTime
-	}
-}
-
-// parseRenewTime extracts and sets the ticket renewal time
-func parseRenewTime(line string, ticket *types.Ticket) {
-	fields := strings.Fields(strings.TrimSpace(line))
-	if parsedTime, err := parseDateFromFields(fields, "renew"); err == nil {
-		ticket.RenewUntil = parsedTime
-	}
-}
-
-// Helper function to check if a string is in date format MM/DD/YYYY
-func isDateFormat(str string) bool {
-	return len(str) == 10 &&
-		str[2] == '/' &&
-		str[5] == '/' &&
-		(str[0] >= '0' && str[0] <= '1') &&
-		(str[3] >= '0' && str[3] <= '3')
-}
-
-// validateTicket ensures the ticket has all required fields
-func validateTicket(ticket *types.Ticket, path string) error {
-	if ticket.Principal == "" || ticket.Domain == "" {
-		return fmt.Errorf("could not find principal information in klist output")
-	}
-
-	if ticket.ExpirationTime.IsZero() {
-		return fmt.Errorf("failed to parse expiry time from klist output for %s", path)
-	}
-
-	return nil
-}
-
-// GetTicket retrieves comprehensive information about a Kerberos ticket from a file
-func (c *Client) GetTicket(path string, executor KlistExecutor) (*types.Ticket, *types.TicketInfo, error) {
-	log.Debug("Reading ticket info using klist", "path", path)
-
-	// If no executor is provided, use the default one
-	if executor == nil {
-		executor = defaultExecutor
-	}
-
-	output, err := executor.executeKlist(path)
-	if err != nil {
-		log.Error("Failed to execute klist command", "error", err)
-		return nil, nil, fmt.Errorf("failed to execute klist command: %w", err)
-	}
-
-	ticket, ticketInfo, err := parseKlistOutput(output, path)
+	// Parse the output using the krb_utils package
+	ticket, ticketInfo, err := krb_utils.ParseKlistOutput(string(output), path)
 	if err != nil {
 		log.Error("Failed to parse klist output", "error", err)
 		return nil, nil, fmt.Errorf("failed to parse klist output: %w", err)
@@ -309,7 +70,6 @@ func (c *Client) GetTicket(path string, executor KlistExecutor) (*types.Ticket, 
 
 // GetTicketsFromMetadata retrieves all ticket information from a metadata file
 func (c *Client) GetTicketsFromMetadata(metadataPath string) ([]*types.Ticket, []*types.TicketInfo, error) {
-
 	ticketInfoList, err := readMetadataJSONFunc(metadataPath)
 	if err != nil {
 		log.Error("Failed to read metadata file", "path", metadataPath, "error", err)
@@ -325,7 +85,7 @@ func (c *Client) GetTicketsFromMetadata(metadataPath string) ([]*types.Ticket, [
 	var validTicketInfos []*types.TicketInfo
 
 	for _, ticketInfo := range ticketInfoList {
-		ticket, _, err := c.GetTicket(ticketInfo.KrbFilePath, defaultExecutor)
+		ticket, _, err := c.GetTicket(ticketInfo.KrbFilePath)
 		if err != nil {
 			log.Warn("Failed to get ticket referenced in metadata",
 				"metadata_path", metadataPath,
@@ -348,7 +108,6 @@ func (c *Client) GetTicketsFromMetadata(metadataPath string) ([]*types.Ticket, [
 
 // GetAllTicketsFromDirectory retrieves all tickets from metadata files in a directory
 func (c *Client) GetAllTicketsFromDirectory(directory string) ([]*types.Ticket, []*types.TicketInfo, error) {
-
 	metadataFiles, err := getMetadataFilePathsFunc(directory)
 	if err != nil {
 		log.Error("Failed to get metadata files", "directory", directory, "error", err)
@@ -375,4 +134,180 @@ func (c *Client) GetAllTicketsFromDirectory(directory string) ([]*types.Ticket, 
 	}
 
 	return allTickets, allTicketInfos, nil
+}
+
+// CreateTicketUsingUsernamePassword creates a Kerberos ticket for user principal
+func (c *Client) CreateTicketUsingUsernamePassword(domain, username, password string) error {
+	log.Info("Creating Kerberos ticket", "user principal", username, "domain", domain)
+
+	// Build and execute the kinit command to create a Kerberos ticket
+	ctx := context.Background()
+
+	// Example command: kinit standarduser01@EXAMPLE.COM
+	principal := fmt.Sprintf("%s@%s", username, strings.ToUpper(domain))
+
+	// Use ExecuteWithStdin to pipe the password to kinit without setting environment variables
+	// Execute: kinit username@domain
+	// and pipe in the password
+	output, err := c.shellExecutor.ExecuteWithStdin(
+		ctx,
+		"kinit",
+		[]byte(password+"\n"), // Add newline to simulate pressing Enter
+		principal,
+	)
+
+	if err != nil {
+		log.Error("Kinit command failed",
+			"error", err,
+			"output", string(output),
+			"principal", principal)
+		return fmt.Errorf("failed to execute kinit command: %v: %s", err, string(output))
+	}
+
+	log.Info("Successfully created Kerberos ticket", "principal", principal)
+	return nil
+}
+
+// CreateTicketForGMSA creates a Kerberos ticket for a gMSA account
+func (c *Client) CreateTicketForGMSA(ticketInfo *types.TicketInfo) error {
+	ctx := context.Background()
+
+	log.Info("Creating Kerberos ticket for gMSA account",
+		"domain", ticketInfo.DomainName,
+		"service_account", ticketInfo.ServiceAccountName,
+		"distinguished_name", ticketInfo.DistinguishedName,
+		"krb_file_path", ticketInfo.KrbFilePath)
+
+	if ticketInfo.DomainName == "" {
+		return fmt.Errorf("domain name is empty")
+	}
+
+	if ticketInfo.ServiceAccountName == "" {
+		return fmt.Errorf("service account name is empty")
+	}
+	var baseDN = ""
+	baseDN, err := grpc_utils.GetBaseDnFromDomain(ticketInfo.DomainName)
+	if err != nil {
+		return fmt.Errorf("failed to get base DN from domain: %w", err)
+	}
+
+	if ticketInfo.DistinguishedName == "" && os.Getenv("CF_GMSA_OU") != "" {
+		ticketInfo.DistinguishedName = os.Getenv("CF_GMSA_OU")
+	}
+
+	fqdnListResult, err := grpc_utils.GetFQDNList(ticketInfo.DomainName)
+	if err != nil {
+		return fmt.Errorf("failed to get FQDN list: %w", err)
+	}
+
+	ldapClient := ldap.NewClient()
+	var password []byte
+	var passwordFound bool
+
+	for _, fqdn := range fqdnListResult {
+		if ticketInfo.DistinguishedName == "" {
+			// execute ldapsearch to find DN
+			distinguishedNameResult, err := ldapClient.FindDN(ctx, ticketInfo.ServiceAccountName, baseDN, fqdn)
+			if err != nil {
+				log.Warn("Failed to find DN for service account",
+					"service_account", ticketInfo.ServiceAccountName,
+					"error", err)
+			} else {
+				ticketInfo.DistinguishedName = distinguishedNameResult
+				log.Info("Found DN for service account",
+					"service_account", ticketInfo.ServiceAccountName,
+					"distinguished_name", ticketInfo.DistinguishedName)
+			}
+		}
+
+		// Execute ldapsearch to find the password
+		password, err = ldapClient.SearchGMSAPassword(ctx, ticketInfo.DistinguishedName, fqdn, nil)
+		if err != nil {
+			log.Error("Failed to find gMSA password",
+				"service_account", ticketInfo.ServiceAccountName,
+				"distinguished_name", ticketInfo.DistinguishedName,
+				"fqdn", fqdn,
+				"error", err)
+			continue // Try with next FQDN
+		}
+
+		// Successfully found the password
+		log.Info("Successfully found gMSA password",
+			"service_account", ticketInfo.ServiceAccountName,
+			"fqdn", fqdn)
+
+		passwordFound = true
+		break // Successfully found the password, no need to try other FQDNs
+	}
+
+	if !passwordFound || len(password) == 0 {
+		log.Error("Failed to find gMSA password for any FQDN",
+			"service_account", ticketInfo.ServiceAccountName)
+		return fmt.Errorf("failed to find gMSA password for service account %s", ticketInfo.ServiceAccountName)
+	}
+
+	// Now run kinit command with the found password
+	principal := fmt.Sprintf("%s@%s", ticketInfo.ServiceAccountName, strings.ToUpper(ticketInfo.DomainName))
+
+	log.Info("Creating Kerberos ticket for gMSA account",
+		"principal", principal,
+		"krb_file_path", ticketInfo.KrbFilePath)
+
+	// Use ExecuteWithStdin to pipe the password to kinit with command-line arguments
+	output, err := c.shellExecutor.ExecuteWithStdin(
+		ctx,
+		"kinit",
+		password, // Use the found password
+		"-c", ticketInfo.KrbFilePath,
+		"-V",
+		principal,
+	)
+
+	if err != nil {
+		log.Error("Kinit command failed for gMSA account",
+			"error", err,
+			"output", string(output),
+			"principal", principal)
+		return fmt.Errorf("failed to execute kinit command: %v: %s", err, string(output))
+	}
+
+	log.Info("Successfully created Kerberos ticket for gMSA account",
+		"principal", principal,
+		"krb_file_path", ticketInfo.KrbFilePath)
+
+	return nil
+}
+
+// CreateTicketForServiceAccount creates a Kerberos ticket for a service account
+func (c *Client) CreateTicketForServiceAccount(ctx context.Context, domain, username, password, krbFilePath string) error {
+	log.Info("Creating Kerberos ticket for service account",
+		"domain", domain,
+		"username", username,
+		"krb_file_path", krbFilePath)
+
+	// Build and execute the kinit command to create a Kerberos ticket
+	principal := fmt.Sprintf("%s@%s", username, strings.ToUpper(domain))
+
+	// Use ExecuteWithStdin to pipe the password to kinit with command-line arguments
+	output, err := c.shellExecutor.ExecuteWithStdin(
+		ctx,
+		"kinit",
+		[]byte(password+"\n"), // Add newline to simulate pressing Enter
+		"-c", krbFilePath,
+		principal,
+	)
+
+	if err != nil {
+		log.Error("Kinit command failed for service account",
+			"error", err,
+			"output", string(output),
+			"principal", principal)
+		return fmt.Errorf("failed to execute kinit command: %v: %s", err, string(output))
+	}
+
+	log.Info("Successfully created Kerberos ticket for service account",
+		"principal", principal,
+		"krb_file_path", krbFilePath)
+
+	return nil
 }

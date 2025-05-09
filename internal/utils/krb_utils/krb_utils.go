@@ -1,0 +1,230 @@
+package krb_utils
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+	"time"
+
+	"golang.a2z.com/CredentialsFetcherV2/constants"
+	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
+)
+
+var log = logger.GetInstance()
+
+// ParseKlistOutput parses the output of klist command to populate both Ticket and TicketInfo structs
+func ParseKlistOutput(output string, path string) (*types.Ticket, *types.TicketInfo, error) {
+	lines := strings.Split(output, "\n")
+
+	ticketInfo := &types.TicketInfo{
+		KrbFilePath: path,
+	}
+
+	ticket := &types.Ticket{
+		Path: path,
+	}
+
+	if err := ParsePrincipalInfo(lines, ticket, ticketInfo); err != nil {
+		return nil, nil, err
+	}
+
+	ParseTicketDates(lines, ticket)
+
+	if err := ValidateTicket(ticket, path); err != nil {
+		return nil, nil, err
+	}
+
+	return ticket, ticketInfo, nil
+}
+
+// ParsePrincipalInfo extracts principal and domain information from klist output
+func ParsePrincipalInfo(lines []string, ticket *types.Ticket, ticketInfo *types.TicketInfo) error {
+	for _, line := range lines {
+		if strings.Contains(line, "Default principal:") {
+			// Format is typically: "Default principal: username@DOMAIN.COM"
+			parts := strings.Fields(line)
+			if len(parts) >= 3 {
+				principal := parts[2]
+				principalParts := strings.Split(principal, "@")
+				if len(principalParts) == 2 {
+
+					serviceAccount := principalParts[0]
+
+					serviceAccount = strings.Trim(serviceAccount, "'")
+
+					ticketInfo.ServiceAccountName = serviceAccount
+					ticketInfo.DomainName = principalParts[1]
+
+					if strings.HasSuffix(serviceAccount, "$") {
+						ticketInfo.DomainlessUser = serviceAccount[:len(serviceAccount)-1]
+					} else {
+						ticketInfo.DomainlessUser = serviceAccount
+					}
+
+					domainParts := strings.Split(ticketInfo.DomainName, ".")
+					var dnParts []string
+					for _, part := range domainParts {
+						dnParts = append(dnParts, "DC="+part)
+					}
+					ticketInfo.DistinguishedName = "CN=" + serviceAccount + "," + strings.Join(dnParts, ",")
+
+					ticket.Principal = serviceAccount
+					ticket.Domain = ticketInfo.DomainName
+
+					return nil
+				}
+			}
+		}
+	}
+
+	return fmt.Errorf("could not find principal information in klist output")
+}
+
+// ParseTicketDates parses ticket dates from klist output
+func ParseTicketDates(lines []string, ticket *types.Ticket) {
+	inTicketSection := false
+	var ticketLine string
+	dateStartRegex := regexp.MustCompile(`^\s*(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])`)
+
+	// Check both one-line and multi-line formats
+	for i, line := range lines {
+		if strings.Contains(line, "Valid starting") {
+			inTicketSection = true
+			// Try to find the whole ticket line (compact format)
+			if i+1 < len(lines) && len(strings.TrimSpace(lines[i+1])) > 0 &&
+				!strings.Contains(lines[i+1], "Renew until") {
+				ticketLine = lines[i+1]
+				ParseTicketLine(ticketLine, ticket)
+			}
+			continue
+		}
+
+		// For multi-line format
+		if inTicketSection {
+			// Check if line starts with a date
+			if dateStartRegex.MatchString(line) {
+				ParseStartTime(line, ticket)
+			} else if strings.Contains(line, "renew until") {
+				ParseRenewTime(line, ticket)
+			} else if ticket.CreationTime.IsZero() && !ticket.ExpirationTime.IsZero() {
+				// If we have expiry but no creation time, this might be a multi-line format
+				// with creation time missing, use a reasonable default
+				ticket.CreationTime = time.Now()
+			} else if !strings.Contains(line, "Valid starting") &&
+				!strings.Contains(line, "Service principal") &&
+				len(strings.TrimSpace(line)) > 0 {
+				ParseExpiryTime(line, ticket)
+			}
+		}
+	}
+
+	// Last resort if we still don't have both times
+	if ticket.ExpirationTime.IsZero() && !ticket.CreationTime.IsZero() {
+		// Default expiry to 24h after creation as a fallback
+		ticket.ExpirationTime = ticket.CreationTime.Add(24 * time.Hour)
+		log.Warn("Could not parse expiry time, setting default 24h expiry",
+			"creation", ticket.CreationTime)
+	}
+}
+
+// ParseTicketLine handles the case where all ticket info is on one line
+func ParseTicketLine(line string, ticket *types.Ticket) {
+	fields := strings.Fields(line)
+	if len(fields) >= 4 {
+		// First date (fields 0-1) is start time
+		startTime, err := time.Parse(constants.KlistDateTimeFormat, fields[0]+" "+fields[1])
+		if err != nil {
+			log.Warn("Failed to parse start time from ticket line",
+				"value", fields[0]+" "+fields[1], "error", err)
+		} else {
+			ticket.CreationTime = startTime
+		}
+
+		// Second date (fields 2-3) is expiry time
+		expiryTime, err := time.Parse(constants.KlistDateTimeFormat, fields[2]+" "+fields[3])
+		if err != nil {
+			log.Warn("Failed to parse expiry time from ticket line",
+				"value", fields[2]+" "+fields[3], "error", err)
+		} else {
+			ticket.ExpirationTime = expiryTime
+		}
+	}
+}
+
+// ParseDateFromFields is a helper function to parse dates from fields with appropriate logging
+func ParseDateFromFields(fields []string, logPrefix string) (time.Time, error) {
+	// Try to find date in the format MM/DD/YYYY
+	for i, field := range fields {
+		if i+1 < len(fields) && IsDateFormat(field) {
+			dateStr := field + " " + fields[i+1]
+			parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
+			if err != nil {
+				log.Warn(fmt.Sprintf("Failed to parse %s time", logPrefix),
+					"value", dateStr, "error", err)
+				continue
+			}
+			return parsedTime, nil
+		}
+	}
+
+	// Fallback: try brute force approach
+	if len(fields) >= 4 && IsDateFormat(fields[2]) {
+		dateStr := fields[2] + " " + fields[3]
+		parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
+		if err != nil {
+			log.Warn(fmt.Sprintf("Failed to parse %s time with fallback", logPrefix),
+				"value", dateStr, "error", err)
+			return time.Time{}, err
+		}
+		return parsedTime, nil
+	}
+
+	return time.Time{}, fmt.Errorf("could not parse date")
+}
+
+// ParseStartTime extracts and sets the ticket creation time
+func ParseStartTime(line string, ticket *types.Ticket) {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if parsedTime, err := ParseDateFromFields(fields, "start"); err == nil {
+		ticket.CreationTime = parsedTime
+	}
+}
+
+// ParseExpiryTime extracts and sets the ticket expiration time
+func ParseExpiryTime(line string, ticket *types.Ticket) {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if parsedTime, err := ParseDateFromFields(fields, "expiry"); err == nil {
+		ticket.ExpirationTime = parsedTime
+	}
+}
+
+// ParseRenewTime extracts and sets the ticket renewal time
+func ParseRenewTime(line string, ticket *types.Ticket) {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if parsedTime, err := ParseDateFromFields(fields, "renew"); err == nil {
+		ticket.RenewUntil = parsedTime
+	}
+}
+
+// IsDateFormat checks if a string is in date format MM/DD/YYYY
+func IsDateFormat(str string) bool {
+	return len(str) == 10 &&
+		str[2] == '/' &&
+		str[5] == '/' &&
+		(str[0] >= '0' && str[0] <= '1') &&
+		(str[3] >= '0' && str[3] <= '3')
+}
+
+// ValidateTicket ensures the ticket has all required fields
+func ValidateTicket(ticket *types.Ticket, path string) error {
+	if ticket.Principal == "" || ticket.Domain == "" {
+		return fmt.Errorf("could not find principal information in klist output")
+	}
+
+	if ticket.ExpirationTime.IsZero() {
+		return fmt.Errorf("failed to parse expiry time from klist output for %s", path)
+	}
+
+	return nil
+}
