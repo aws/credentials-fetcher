@@ -186,6 +186,35 @@ func (c *Client) CreateTicketForGMSA(ticketInfo *types.TicketInfo) error {
 		"distinguished_name", ticketInfo.DistinguishedName,
 		"krb_file_path", ticketInfo.KrbFilePath)
 
+	// 1. Validate input parameters
+	if err := c.validateGMSATicketInfo(ticketInfo); err != nil {
+		return err
+	}
+
+	// 2. Get base DN and prepare LDAP query parameters
+	baseDN, fqdnList, err := c.prepareGMSALDAPParameters(ticketInfo)
+	if err != nil {
+		return err
+	}
+
+	// 3. Find the Distinguished Name if not provided
+	if err := c.ensureDistinguishedName(ctx, ticketInfo, baseDN, fqdnList); err != nil {
+		// Continue even if we can't find DN - it might be provided in the ticket info
+		log.Warn("Could not find distinguished name", "error", err)
+	}
+
+	// 4. Find the gMSA password
+	password, err := c.findGMSAPassword(ctx, ticketInfo, fqdnList)
+	if err != nil {
+		return err
+	}
+
+	// 5. Create the Kerberos ticket
+	return c.createKerberosTicket(ctx, ticketInfo, password)
+}
+
+// validateGMSATicketInfo validates the required fields in the ticket info
+func (c *Client) validateGMSATicketInfo(ticketInfo *types.TicketInfo) error {
 	if ticketInfo.DomainName == "" {
 		return fmt.Errorf("domain name is empty")
 	}
@@ -193,79 +222,97 @@ func (c *Client) CreateTicketForGMSA(ticketInfo *types.TicketInfo) error {
 	if ticketInfo.ServiceAccountName == "" {
 		return fmt.Errorf("service account name is empty")
 	}
-	var baseDN = ""
+
+	return nil
+}
+
+// prepareGMSALDAPParameters prepares the LDAP parameters needed for querying
+func (c *Client) prepareGMSALDAPParameters(ticketInfo *types.TicketInfo) (string, []string, error) {
 	baseDN, err := grpc_utils.GetBaseDnFromDomain(ticketInfo.DomainName)
 	if err != nil {
-		return fmt.Errorf("failed to get base DN from domain: %w", err)
+		return "", nil, fmt.Errorf("failed to get base DN from domain: %w", err)
 	}
 
+	fqdnList, err := getFQDNListFunc(ticketInfo.DomainName)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get FQDN list: %w", err)
+	}
+
+	// Check for environment variable override for DN
 	if ticketInfo.DistinguishedName == "" && os.Getenv("CF_GMSA_OU") != "" {
 		ticketInfo.DistinguishedName = os.Getenv("CF_GMSA_OU")
 	}
 
-	fqdnListResult, err := getFQDNListFunc(ticketInfo.DomainName)
-	if err != nil {
-		return fmt.Errorf("failed to get FQDN list: %w", err)
+	return baseDN, fqdnList, nil
+}
+
+// ensureDistinguishedName ensures that the ticket info has a distinguished name
+func (c *Client) ensureDistinguishedName(ctx context.Context, ticketInfo *types.TicketInfo, baseDN string, fqdnList []string) error {
+	if ticketInfo.DistinguishedName != "" {
+		return nil // DN already provided
 	}
 
 	ldapClient := newLdapClientFunc()
-	var password []byte
-	var passwordFound bool
 
-	for _, fqdn := range fqdnListResult {
-		if ticketInfo.DistinguishedName == "" {
-			// execute ldapsearch to find DN
-			distinguishedNameResult, err := ldapClient.FindDN(ctx, ticketInfo.ServiceAccountName, baseDN, fqdn)
-			if err != nil {
-				log.Warn("Failed to find DN for service account",
-					"service_account", ticketInfo.ServiceAccountName,
-					"error", err)
-			} else {
-				ticketInfo.DistinguishedName = distinguishedNameResult
-				log.Info("Found DN for service account",
-					"service_account", ticketInfo.ServiceAccountName,
-					"distinguished_name", ticketInfo.DistinguishedName)
-			}
+	// Try each FQDN until we find the DN
+	for _, fqdn := range fqdnList {
+		distinguishedName, err := ldapClient.FindDN(ctx, ticketInfo.ServiceAccountName, baseDN, fqdn)
+		if err != nil {
+			log.Warn("Failed to find DN for service account",
+				"service_account", ticketInfo.ServiceAccountName,
+				"fqdn", fqdn,
+				"error", err)
+			continue
 		}
 
-		// Execute ldapsearch to find the password
-		password, err = ldapClient.SearchGMSAPassword(ctx, ticketInfo.DistinguishedName, fqdn, nil)
+		ticketInfo.DistinguishedName = distinguishedName
+		log.Info("Found DN for service account",
+			"service_account", ticketInfo.ServiceAccountName,
+			"distinguished_name", ticketInfo.DistinguishedName)
+		return nil
+	}
+
+	return fmt.Errorf("failed to find distinguished name for service account %s", ticketInfo.ServiceAccountName)
+}
+
+// findGMSAPassword finds the gMSA password using LDAP queries
+func (c *Client) findGMSAPassword(ctx context.Context, ticketInfo *types.TicketInfo, fqdnList []string) ([]byte, error) {
+	ldapClient := newLdapClientFunc()
+
+	// Try each FQDN until we find the password
+	for _, fqdn := range fqdnList {
+		password, err := ldapClient.SearchGMSAPassword(ctx, ticketInfo.DistinguishedName, fqdn, nil)
 		if err != nil {
 			log.Error("Failed to find gMSA password",
 				"service_account", ticketInfo.ServiceAccountName,
 				"distinguished_name", ticketInfo.DistinguishedName,
 				"fqdn", fqdn,
 				"error", err)
-			continue // Try with next FQDN
+			continue
 		}
 
-		// Successfully found the password
 		log.Info("Successfully found gMSA password",
 			"service_account", ticketInfo.ServiceAccountName,
 			"fqdn", fqdn)
 
-		passwordFound = true
-		break // Successfully found the password, no need to try other FQDNs
+		return password, nil
 	}
 
-	if !passwordFound || len(password) == 0 {
-		log.Error("Failed to find gMSA password for any FQDN",
-			"service_account", ticketInfo.ServiceAccountName)
-		return fmt.Errorf("failed to find gMSA password for service account %s", ticketInfo.ServiceAccountName)
-	}
+	return nil, fmt.Errorf("failed to find gMSA password for service account %s", ticketInfo.ServiceAccountName)
+}
 
-	// Now run kinit command with the found password
+// createKerberosTicket creates a Kerberos ticket using kinit
+func (c *Client) createKerberosTicket(ctx context.Context, ticketInfo *types.TicketInfo, password []byte) error {
 	principal := fmt.Sprintf("%s@%s", ticketInfo.ServiceAccountName, strings.ToUpper(ticketInfo.DomainName))
 
 	log.Info("Creating Kerberos ticket for gMSA account",
 		"principal", principal,
 		"krb_file_path", ticketInfo.KrbFilePath)
 
-	// Use ExecuteWithStdin to pipe the password to kinit with command-line arguments
 	output, err := c.shellExecutor.ExecuteWithStdin(
 		ctx,
 		"kinit",
-		password, // Use the found password
+		password,
 		"-c", ticketInfo.KrbFilePath,
 		"-V",
 		principal,
