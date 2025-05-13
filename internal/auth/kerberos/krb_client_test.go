@@ -714,3 +714,182 @@ func TestGetTicketsFromMetadata(t *testing.T) {
 		})
 	}
 }
+
+// Test GetAllTicketsFromDirectory function
+func TestGetAllTicketsFromDirectory(t *testing.T) {
+	// Save original functions and restore after test
+	originalGetMetadataFilePaths := getMetadataFilePathsFunc
+	originalReadMetadataJSON := readMetadataJSONFunc
+	defer func() {
+		getMetadataFilePathsFunc = originalGetMetadataFilePaths
+		readMetadataJSONFunc = originalReadMetadataJSON
+	}()
+
+	testCases := []struct {
+		name              string
+		directory         string
+		mockMetadataFiles []string
+		mockMetadataErr   error
+		mockTicketInfos   map[string][]*types.TicketInfo
+		mockReadErrs      map[string]error
+		mockGetTicketErr  error
+		expectedError     bool
+		expectedTickets   int
+	}{
+		{
+			name:              "Successfully get all tickets from directory",
+			directory:         "/path/to/directory",
+			mockMetadataFiles: []string{"/path/to/directory/metadata1.json", "/path/to/directory/metadata2.json"},
+			mockMetadataErr:   nil,
+			mockTicketInfos: map[string][]*types.TicketInfo{
+				"/path/to/directory/metadata1.json": {
+					{
+						ServiceAccountName: "svc1",
+						DomainName:         "example.com",
+						KrbFilePath:        "/path/to/krb5cc_svc1",
+					},
+				},
+				"/path/to/directory/metadata2.json": {
+					{
+						ServiceAccountName: "svc2",
+						DomainName:         "example.com",
+						KrbFilePath:        "/path/to/krb5cc_svc2",
+					},
+				},
+			},
+			mockReadErrs:     map[string]error{},
+			mockGetTicketErr: nil,
+			expectedError:    false,
+			expectedTickets:  2,
+		},
+		{
+			name:              "Failed to get metadata files",
+			directory:         "/path/to/directory",
+			mockMetadataFiles: nil,
+			mockMetadataErr:   errors.New("failed to get metadata files"),
+			mockTicketInfos:   map[string][]*types.TicketInfo{},
+			mockReadErrs:      map[string]error{},
+			mockGetTicketErr:  nil,
+			expectedError:     true,
+			expectedTickets:   0,
+		},
+		{
+			name:              "No valid tickets in directory",
+			directory:         "/path/to/directory",
+			mockMetadataFiles: []string{"/path/to/directory/metadata1.json", "/path/to/directory/metadata2.json"},
+			mockMetadataErr:   nil,
+			mockTicketInfos: map[string][]*types.TicketInfo{
+				"/path/to/directory/metadata1.json": {},
+				"/path/to/directory/metadata2.json": {},
+			},
+			mockReadErrs: map[string]error{
+				"/path/to/directory/metadata1.json": errors.New("failed to read metadata file"),
+				"/path/to/directory/metadata2.json": errors.New("failed to read metadata file"),
+			},
+			mockGetTicketErr: nil,
+			expectedError:    true,
+			expectedTickets:  0,
+		},
+		{
+			name:              "Some valid tickets in directory",
+			directory:         "/path/to/directory",
+			mockMetadataFiles: []string{"/path/to/directory/metadata1.json", "/path/to/directory/metadata2.json"},
+			mockMetadataErr:   nil,
+			mockTicketInfos: map[string][]*types.TicketInfo{
+				"/path/to/directory/metadata1.json": {
+					{
+						ServiceAccountName: "svc1",
+						DomainName:         "example.com",
+						KrbFilePath:        "/path/to/krb5cc_svc1",
+					},
+				},
+				"/path/to/directory/metadata2.json": {},
+			},
+			mockReadErrs: map[string]error{
+				"/path/to/directory/metadata1.json": nil,
+				"/path/to/directory/metadata2.json": errors.New("failed to read metadata file"),
+			},
+			mockGetTicketErr: nil,
+			expectedError:    false,
+			expectedTickets:  1,
+		},
+		{
+			name:              "Empty metadata files list",
+			directory:         "/path/to/directory",
+			mockMetadataFiles: []string{},
+			mockMetadataErr:   nil,
+			mockTicketInfos:   map[string][]*types.TicketInfo{},
+			mockReadErrs:      map[string]error{},
+			mockGetTicketErr:  nil,
+			expectedError:     true,
+			expectedTickets:   0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Mock the GetMetadataFilePaths function
+			getMetadataFilePathsFunc = func(dir string) ([]string, error) {
+				assert.Equal(t, tc.directory, dir, "Directory should match")
+				return tc.mockMetadataFiles, tc.mockMetadataErr
+			}
+
+			// Mock the ReadMetadataJSON function
+			readMetadataJSONFunc = func(path string) ([]*types.TicketInfo, error) {
+				// Check if the path is one of our mock metadata files
+				if ticketInfos, ok := tc.mockTicketInfos[path]; ok {
+					return ticketInfos, tc.mockReadErrs[path]
+				}
+				return nil, errors.New("unexpected metadata path")
+			}
+
+			// Create a mock shell executor
+			mockExecutor := new(MockExecutor)
+
+			// Create a client
+			client := &Client{
+				shellExecutor: mockExecutor,
+			}
+
+			// Set up expectations for GetTicket for each valid ticket info
+			for _, metadataPath := range tc.mockMetadataFiles {
+				ticketInfos, ok := tc.mockTicketInfos[metadataPath]
+				if !ok {
+					continue
+				}
+
+				readErr, hasErr := tc.mockReadErrs[metadataPath]
+				if hasErr && readErr != nil {
+					continue
+				}
+
+				for _, ticketInfo := range ticketInfos {
+					// Set up mock for Execute to return valid klist output
+					mockExecutor.On("Execute",
+						mock.Anything,                // context
+						"klist",                      // command
+						"-c", ticketInfo.KrbFilePath, // args
+					).Return([]byte(validKlistOutput), tc.mockGetTicketErr)
+				}
+			}
+
+			// Call GetAllTicketsFromDirectory
+			tickets, ticketInfos, err := client.GetAllTicketsFromDirectory(tc.directory)
+
+			if tc.expectedError {
+				assert.Error(t, err, "Expected an error but got none")
+				assert.Nil(t, tickets, "Tickets should be nil on error")
+				assert.Nil(t, ticketInfos, "TicketInfos should be nil on error")
+			} else {
+				assert.NoError(t, err, "Did not expect an error")
+				assert.NotNil(t, tickets, "Tickets should not be nil")
+				assert.NotNil(t, ticketInfos, "TicketInfos should not be nil")
+				assert.Equal(t, tc.expectedTickets, len(tickets), "Number of tickets should match expected")
+				assert.Equal(t, tc.expectedTickets, len(ticketInfos), "Number of ticket infos should match expected")
+			}
+
+			// Verify that the mock was called as expected
+			mockExecutor.AssertExpectations(t)
+		})
+	}
+}

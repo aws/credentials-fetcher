@@ -193,6 +193,108 @@ func TestExecuteWithEnv(t *testing.T) {
 	})
 }
 
+// TestExecuteWithStdin tests the ExecuteWithStdin function
+func TestExecuteWithStdin(t *testing.T) {
+	executor := NewExecutor()
+	ctx := context.Background()
+
+	// Test successful command execution with stdin
+	t.Run("successful execution with stdin", func(t *testing.T) {
+		stdin := []byte("hello world")
+		output, err := executor.ExecuteWithStdin(ctx, "cat", stdin)
+		assert.NoError(t, err, "ExecuteWithStdin() should not return an error for valid command")
+		assert.Equal(t, "hello world", string(output), "ExecuteWithStdin() output should match stdin")
+	})
+
+	// Test command with stdin and arguments
+	t.Run("stdin with arguments", func(t *testing.T) {
+		stdin := []byte("test input")
+		output, err := executor.ExecuteWithStdin(ctx, "grep", stdin, "input")
+		assert.NoError(t, err, "ExecuteWithStdin() should not return an error")
+		assert.Contains(t, string(output), "test input", "Output should contain matching line")
+	})
+
+	// Test command that fails with stdin
+	t.Run("command failure with stdin", func(t *testing.T) {
+		stdin := []byte("test input")
+		_, err := executor.ExecuteWithStdin(ctx, "nonexistentcommand", stdin)
+		assert.Error(t, err, "ExecuteWithStdin() should return an error for nonexistent command")
+	})
+
+	// Test empty command with stdin
+	t.Run("empty command with stdin", func(t *testing.T) {
+		stdin := []byte("test input")
+		_, err := executor.ExecuteWithStdin(ctx, "", stdin)
+		assert.Error(t, err, "ExecuteWithStdin() should return an error for empty command")
+		assert.Contains(t, err.Error(), "empty command", "Error message should mention empty command")
+	})
+
+	// Test command with context timeout and stdin
+	t.Run("context timeout with stdin", func(t *testing.T) {
+		// Create a context with a short timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+
+		stdin := []byte("test input")
+
+		// Execute a command that takes longer than the timeout
+		_, err := executor.ExecuteWithStdin(ctx, "sleep", stdin, "1")
+
+		// The command should be killed due to context timeout
+		assert.Error(t, err, "ExecuteWithStdin() should return an error when context times out")
+	})
+
+	// Test with large stdin data
+	t.Run("large stdin data", func(t *testing.T) {
+		// Create a large input (100KB)
+		largeInput := strings.Repeat("A", 100*1024)
+		stdin := []byte(largeInput)
+
+		output, err := executor.ExecuteWithStdin(ctx, "wc", stdin, "-c")
+		assert.NoError(t, err, "ExecuteWithStdin() should handle large stdin")
+		assert.Contains(t, string(output), "102400", "Output should contain the correct byte count")
+	})
+
+	// Test with empty stdin
+	t.Run("empty stdin", func(t *testing.T) {
+		stdin := []byte{}
+		output, err := executor.ExecuteWithStdin(ctx, "cat", stdin)
+		assert.NoError(t, err, "ExecuteWithStdin() should handle empty stdin")
+		assert.Empty(t, string(output), "Output should be empty with empty stdin")
+	})
+
+	// Test with multiline stdin
+	t.Run("multiline stdin", func(t *testing.T) {
+		stdin := []byte("line 1\nline 2\nline 3")
+		output, err := executor.ExecuteWithStdin(ctx, "wc", stdin, "-l")
+		assert.NoError(t, err, "ExecuteWithStdin() should handle multiline stdin")
+		assert.Contains(t, string(output), "2", "Output should count 2 newlines (3 lines)")
+	})
+
+	// Test with binary data in stdin
+	t.Run("binary data in stdin", func(t *testing.T) {
+		// Create some binary data
+		binaryData := make([]byte, 256)
+		for i := 0; i < 256; i++ {
+			binaryData[i] = byte(i)
+		}
+
+		// Use hexdump to safely display binary data
+		output, err := executor.ExecuteWithStdin(ctx, "hexdump", binaryData, "-C", "-n", "32")
+		assert.NoError(t, err, "ExecuteWithStdin() should handle binary data")
+		assert.Contains(t, string(output), "00000000", "Output should contain hexdump header")
+	})
+
+	// Test with a command that processes stdin and produces error
+	t.Run("command that errors with stdin", func(t *testing.T) {
+		stdin := []byte("invalid input")
+		// Try to use stdin with a command that expects a specific format
+		_, err := executor.ExecuteWithStdin(ctx, "sort", stdin, "-n")
+		// This might not error on all systems, so we'll just log the result
+		t.Logf("sort -n with invalid input result: %v", err)
+	})
+}
+
 // TestExecuteWithStdinAndEnv tests the ExecuteWithStdinAndEnv function
 func TestExecuteWithStdinAndEnv(t *testing.T) {
 	executor := NewExecutor()
