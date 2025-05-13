@@ -245,11 +245,6 @@ func extractManagedPassword(output []byte) ([]byte, error) {
 
 	currentPassword := decodedBlob[startOffset:endOffset]
 
-	// Print the raw password bytes before conversion
-	log.Info("Raw managed password before UTF-16 to UTF-8 conversion",
-		"raw_password_hex", fmt.Sprintf("%x", currentPassword),
-		"raw_password_size", len(currentPassword))
-
 	// Convert the password from UTF-16 to UTF-8
 	utf8Password, err := decode.UTF16ToUTF8(currentPassword)
 	if err != nil {
@@ -257,11 +252,6 @@ func extractManagedPassword(output []byte) ([]byte, error) {
 		return currentPassword, nil // Return the raw password as fallback
 	}
 
-	// Print the decoded UTF-8 password
-	log.Info("Decoded UTF-8 password",
-		"utf8_password_hex", fmt.Sprintf("%x", utf8Password),
-		"utf8_password_string", fmt.Sprintf("%q", string(utf8Password)),
-		"utf8_password_size", len(utf8Password))
 	if err != nil {
 		log.Error("Failed to convert password from UTF-16 to UTF-8", "error", err)
 		return currentPassword, nil // Return the raw password as fallback

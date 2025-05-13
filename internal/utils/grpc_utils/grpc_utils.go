@@ -288,6 +288,7 @@ func GetBaseDnFromSecret(secretArn string) (string, error) {
 		log.Error("Failed to get secret from Secrets Manager", "error", err)
 		return "", fmt.Errorf("failed to get secret from Secrets Manager: %v", err)
 	}
+	log.Info("Attempting to get Distinguished Name from Secrets Manager")
 
 	// First try to get "distinguishedName"
 	var distinguishedName string

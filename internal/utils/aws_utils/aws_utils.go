@@ -8,7 +8,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/aws/aws-sdk-go/service/secretsmanager/secretsmanageriface"
+	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 )
+
+var log = logger.GetInstance()
 
 // GetSecretFromSecretsManager retrieves a secret value from AWS Secrets Manager
 // given a secretArn. It returns the secret value as a JSON object (map[string]interface{}).
@@ -18,7 +21,7 @@ func GetSecretFromSecretsManager(secretArn string) (map[string]interface{}, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AWS session: %v", err)
 	}
-
+	log.Info("Created AWS session to retrieve secret from Secrets Manager", "secretArn", secretArn)
 	// Create a Secrets Manager client
 	svc := secretsmanager.New(sess)
 

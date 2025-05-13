@@ -57,31 +57,37 @@
 				
 				<option value="file0">golang.a2z.com/CredentialsFetcherV2/internal/auth/decode/utf16_decoder.go (100.0%)</option>
 				
-				<option value="file1">golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos/krb_client.go (60.5%)</option>
+				<option value="file1">golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos/krb_client.go (76.8%)</option>
 				
-				<option value="file2">golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap/ldap_client.go (44.2%)</option>
+				<option value="file2">golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos/mock_ldap_client.go (100.0%)</option>
 				
-				<option value="file3">golang.a2z.com/CredentialsFetcherV2/internal/grpc/api/AddNonDomainJoinedKerberosLease.go (26.3%)</option>
+				<option value="file3">golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap/ldap_client.go (44.9%)</option>
 				
-				<option value="file4">golang.a2z.com/CredentialsFetcherV2/internal/grpc/api/HealthCheck.go (100.0%)</option>
+				<option value="file4">golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap/ldap_client_wrapper.go (0.0%)</option>
 				
-				<option value="file5">golang.a2z.com/CredentialsFetcherV2/internal/grpc/server.go (88.6%)</option>
+				<option value="file5">golang.a2z.com/CredentialsFetcherV2/internal/grpc/api/AddNonDomainJoinedKerberosLease.go (26.3%)</option>
 				
-				<option value="file6">golang.a2z.com/CredentialsFetcherV2/internal/logger/logger.go (100.0%)</option>
+				<option value="file6">golang.a2z.com/CredentialsFetcherV2/internal/grpc/api/HealthCheck.go (100.0%)</option>
 				
-				<option value="file7">golang.a2z.com/CredentialsFetcherV2/internal/utils/aws_utils/aws_utils.go (61.5%)</option>
+				<option value="file7">golang.a2z.com/CredentialsFetcherV2/internal/grpc/api/HealthCheck_Test.go (0.0%)</option>
 				
-				<option value="file8">golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec/cmdexec.go (67.9%)</option>
+				<option value="file8">golang.a2z.com/CredentialsFetcherV2/internal/grpc/server.go (88.6%)</option>
 				
-				<option value="file9">golang.a2z.com/CredentialsFetcherV2/internal/utils/config/ecs_config.go (93.1%)</option>
+				<option value="file9">golang.a2z.com/CredentialsFetcherV2/internal/logger/logger.go (100.0%)</option>
 				
-				<option value="file10">golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils/grpc_utils.go (69.2%)</option>
+				<option value="file10">golang.a2z.com/CredentialsFetcherV2/internal/utils/aws_utils/aws_utils.go (57.1%)</option>
 				
-				<option value="file11">golang.a2z.com/CredentialsFetcherV2/internal/utils/krb_utils/krb_utils.go (89.5%)</option>
+				<option value="file11">golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec/cmdexec.go (67.9%)</option>
 				
-				<option value="file12">golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils/metadata.go (96.4%)</option>
+				<option value="file12">golang.a2z.com/CredentialsFetcherV2/internal/utils/config/ecs_config.go (93.1%)</option>
 				
-				<option value="file13">golang.a2z.com/CredentialsFetcherV2/internal/watchdog/watchdog.go (82.1%)</option>
+				<option value="file13">golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils/grpc_utils.go (68.8%)</option>
+				
+				<option value="file14">golang.a2z.com/CredentialsFetcherV2/internal/utils/krb_utils/krb_utils.go (89.5%)</option>
+				
+				<option value="file15">golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils/metadata.go (96.4%)</option>
+				
+				<option value="file16">golang.a2z.com/CredentialsFetcherV2/internal/watchdog/watchdog.go (82.1%)</option>
 				
 				</select>
 			</div>
@@ -178,7 +184,9 @@ var (
         getMetadataFilePathsFunc = metadata_utils.GetMetadataFilePaths
         krbCCName                = "/tmp/krb5cc_credentialsfetcher"
         getFQDNListFunc          = grpc_utils.GetFQDNList
-        newLdapClientFunc        = ldap.NewClient
+        newLdapClientFunc        = func() LdapClientInterface <span class="cov0" title="0">{
+                return ldap.NewLdapClientWrapper()
+        }</span>
 )
 
 type Client struct {
@@ -394,17 +402,17 @@ func (c *Client) prepareGMSALDAPParameters(ticketInfo *types.TicketInfo) (string
 }
 
 // ensureDistinguishedName ensures that the ticket info has a distinguished name
-func (c *Client) ensureDistinguishedName(ctx context.Context, ticketInfo *types.TicketInfo, baseDN string, fqdnList []string) error <span class="cov0" title="0">{
-        if ticketInfo.DistinguishedName != "" </span><span class="cov0" title="0">{
+func (c *Client) ensureDistinguishedName(ctx context.Context, ticketInfo *types.TicketInfo, baseDN string, fqdnList []string) error <span class="cov8" title="1">{
+        if ticketInfo.DistinguishedName != "" </span><span class="cov8" title="1">{
                 return nil // DN already provided
         }</span>
 
-        <span class="cov0" title="0">ldapClient := newLdapClientFunc()
+        <span class="cov8" title="1">ldapClient := newLdapClientFunc()
 
         // Try each FQDN until we find the DN
-        for _, fqdn := range fqdnList </span><span class="cov0" title="0">{
+        for _, fqdn := range fqdnList </span><span class="cov8" title="1">{
                 distinguishedName, err := ldapClient.FindDN(ctx, ticketInfo.ServiceAccountName, baseDN, fqdn)
-                if err != nil </span><span class="cov0" title="0">{
+                if err != nil </span><span class="cov8" title="1">{
                         log.Warn("Failed to find DN for service account",
                                 "service_account", ticketInfo.ServiceAccountName,
                                 "fqdn", fqdn,
@@ -412,24 +420,24 @@ func (c *Client) ensureDistinguishedName(ctx context.Context, ticketInfo *types.
                         continue</span>
                 }
 
-                <span class="cov0" title="0">ticketInfo.DistinguishedName = distinguishedName
+                <span class="cov8" title="1">ticketInfo.DistinguishedName = distinguishedName
                 log.Info("Found DN for service account",
                         "service_account", ticketInfo.ServiceAccountName,
                         "distinguished_name", ticketInfo.DistinguishedName)
                 return nil</span>
         }
 
-        <span class="cov0" title="0">return fmt.Errorf("failed to find distinguished name for service account %s", ticketInfo.ServiceAccountName)</span>
+        <span class="cov8" title="1">return fmt.Errorf("failed to find distinguished name for service account %s", ticketInfo.ServiceAccountName)</span>
 }
 
 // findGMSAPassword finds the gMSA password using LDAP queries
-func (c *Client) findGMSAPassword(ctx context.Context, ticketInfo *types.TicketInfo, fqdnList []string) ([]byte, error) <span class="cov0" title="0">{
+func (c *Client) findGMSAPassword(ctx context.Context, ticketInfo *types.TicketInfo, fqdnList []string) ([]byte, error) <span class="cov8" title="1">{
         ldapClient := newLdapClientFunc()
 
         // Try each FQDN until we find the password
-        for _, fqdn := range fqdnList </span><span class="cov0" title="0">{
+        for _, fqdn := range fqdnList </span><span class="cov8" title="1">{
                 password, err := ldapClient.SearchGMSAPassword(ctx, ticketInfo.DistinguishedName, fqdn, nil)
-                if err != nil </span><span class="cov0" title="0">{
+                if err != nil </span><span class="cov8" title="1">{
                         log.Error("Failed to find gMSA password",
                                 "service_account", ticketInfo.ServiceAccountName,
                                 "distinguished_name", ticketInfo.DistinguishedName,
@@ -438,14 +446,14 @@ func (c *Client) findGMSAPassword(ctx context.Context, ticketInfo *types.TicketI
                         continue</span>
                 }
 
-                <span class="cov0" title="0">log.Info("Successfully found gMSA password",
+                <span class="cov8" title="1">log.Info("Successfully found gMSA password",
                         "service_account", ticketInfo.ServiceAccountName,
                         "fqdn", fqdn)
 
                 return password, nil</span>
         }
 
-        <span class="cov0" title="0">return nil, fmt.Errorf("failed to find gMSA password for service account %s", ticketInfo.ServiceAccountName)</span>
+        <span class="cov8" title="1">return nil, fmt.Errorf("failed to find gMSA password for service account %s", ticketInfo.ServiceAccountName)</span>
 }
 
 // createKerberosTicket creates a Kerberos ticket using kinit
@@ -515,7 +523,31 @@ func (c *Client) CreateTicketForServiceAccount(ctx context.Context, domain, user
 }
 </pre>
 		
-		<pre class="file" id="file2" style="display: none">package ldap
+		<pre class="file" id="file2" style="display: none">package kerberos
+
+import (
+        "context"
+
+        "github.com/stretchr/testify/mock"
+)
+
+// Mock LDAP client for testing
+type MockLdapClient struct {
+        mock.Mock
+}
+
+func (m *MockLdapClient) FindDN(ctx context.Context, serviceAccount, baseDN, fqdn string) (string, error) <span class="cov8" title="1">{
+        args := m.Called(ctx, serviceAccount, baseDN, fqdn)
+        return args.String(0), args.Error(1)
+}</span>
+
+func (m *MockLdapClient) SearchGMSAPassword(ctx context.Context, dn, fqdn string, executor interface{}) ([]byte, error) <span class="cov8" title="1">{
+        args := m.Called(ctx, dn, fqdn, executor)
+        return args.Get(0).([]byte), args.Error(1)
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package ldap
 
 import (
         "bytes"
@@ -762,11 +794,6 @@ func extractManagedPassword(output []byte) ([]byte, error) <span class="cov8" ti
 
         <span class="cov0" title="0">currentPassword := decodedBlob[startOffset:endOffset]
 
-        // Print the raw password bytes before conversion
-        log.Info("Raw managed password before UTF-16 to UTF-8 conversion",
-                "raw_password_hex", fmt.Sprintf("%x", currentPassword),
-                "raw_password_size", len(currentPassword))
-
         // Convert the password from UTF-16 to UTF-8
         utf8Password, err := decode.UTF16ToUTF8(currentPassword)
         if err != nil </span><span class="cov0" title="0">{
@@ -774,12 +801,7 @@ func extractManagedPassword(output []byte) ([]byte, error) <span class="cov8" ti
                 return currentPassword, nil // Return the raw password as fallback
         }</span>
 
-        // Print the decoded UTF-8 password
-        <span class="cov0" title="0">log.Info("Decoded UTF-8 password",
-                "utf8_password_hex", fmt.Sprintf("%x", utf8Password),
-                "utf8_password_string", fmt.Sprintf("%q", string(utf8Password)),
-                "utf8_password_size", len(utf8Password))
-        if err != nil </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
                 log.Error("Failed to convert password from UTF-16 to UTF-8", "error", err)
                 return currentPassword, nil // Return the raw password as fallback
         }</span>
@@ -856,7 +878,42 @@ func extractDistinguishedName(output string) string <span class="cov0" title="0"
 }
 </pre>
 		
-		<pre class="file" id="file3" style="display: none">package api
+		<pre class="file" id="file4" style="display: none">package ldap
+
+import (
+        "context"
+)
+
+// LdapClientWrapper wraps the LDAP client to match the interface expected by kerberos package
+type LdapClientWrapper struct {
+        client *Client
+}
+
+// NewLdapClientWrapper creates a new LDAP client wrapper
+func NewLdapClientWrapper() *LdapClientWrapper <span class="cov0" title="0">{
+        return &amp;LdapClientWrapper{
+                client: &amp;Client{},
+        }
+}</span>
+
+// FindDN finds the distinguished name for a service account
+func (w *LdapClientWrapper) FindDN(ctx context.Context, serviceAccount, baseDN, fqdn string) (string, error) <span class="cov0" title="0">{
+        return w.client.FindDN(ctx, serviceAccount, baseDN, fqdn)
+}</span>
+
+// SearchGMSAPassword searches for a gMSA account's password
+func (w *LdapClientWrapper) SearchGMSAPassword(ctx context.Context, dn, fqdn string, executor interface{}) ([]byte, error) <span class="cov0" title="0">{
+        var ldapExecutor LdapsearchExecutor
+        if executor != nil </span><span class="cov0" title="0">{
+                if e, ok := executor.(LdapsearchExecutor); ok </span><span class="cov0" title="0">{
+                        ldapExecutor = e
+                }</span>
+        }
+        <span class="cov0" title="0">return w.client.SearchGMSAPassword(ctx, dn, fqdn, ldapExecutor)</span>
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package api
 
 import (
         "context"
@@ -1144,7 +1201,7 @@ func cleanupKerberosFiles(krbFilePath string) error <span class="cov8" title="1"
 }
 </pre>
 		
-		<pre class="file" id="file4" style="display: none">package api
+		<pre class="file" id="file6" style="display: none">package api
 
 import (
         "context"
@@ -1172,7 +1229,47 @@ func (h *HealthCheckHandler) HealthCheck(ctx context.Context, req *pb.HealthChec
 }</span>
 </pre>
 		
-		<pre class="file" id="file5" style="display: none">package grpc
+		<pre class="file" id="file7" style="display: none">package api
+
+import (
+        "context"
+        "testing"
+
+        "github.com/stretchr/testify/assert"
+        pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
+)
+
+// TestHealthCheckHandler tests the HealthCheck handler
+func TestHealthCheckHandler(t *testing.T) <span class="cov0" title="0">{
+        // Create handler
+        handler := NewHealthCheckHandler()
+
+        // Create request
+        req := &amp;pb.HealthCheckRequest{
+                Service: "test-service",
+        }
+
+        // Call the method
+        resp, err := handler.HealthCheck(context.Background(), req)
+
+        // Check results
+        assert.NoError(t, err)
+        assert.NotNil(t, resp)
+        assert.Equal(t, "OK", resp.Status)
+}</span>
+
+// TestNewHealthCheckHandler tests the NewHealthCheckHandler function
+func TestNewHealthCheckHandler(t *testing.T) <span class="cov0" title="0">{
+        // Create handler
+        handler := NewHealthCheckHandler()
+
+        // Check that it's not nil
+        assert.NotNil(t, handler)
+        assert.IsType(t, &amp;HealthCheckHandler{}, handler)
+}</span>
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package grpc
 
 import (
         "context"
@@ -1337,7 +1434,7 @@ func (s *CredentialsFetcherServer) Shutdown() <span class="cov8" title="1">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file6" style="display: none">package logger
+		<pre class="file" id="file9" style="display: none">package logger
 
 import (
         "log/slog"
@@ -1415,7 +1512,7 @@ func (l *logger) Error(msg string, args ...any) <span class="cov8" title="1">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file7" style="display: none">package aws_utils
+		<pre class="file" id="file10" style="display: none">package aws_utils
 
 import (
         "encoding/json"
@@ -1425,7 +1522,10 @@ import (
         "github.com/aws/aws-sdk-go/aws/session"
         "github.com/aws/aws-sdk-go/service/secretsmanager"
         "github.com/aws/aws-sdk-go/service/secretsmanager/secretsmanageriface"
+        "golang.a2z.com/CredentialsFetcherV2/internal/logger"
 )
+
+var log = logger.GetInstance()
 
 // GetSecretFromSecretsManager retrieves a secret value from AWS Secrets Manager
 // given a secretArn. It returns the secret value as a JSON object (map[string]interface{}).
@@ -1435,9 +1535,9 @@ func GetSecretFromSecretsManager(secretArn string) (map[string]interface{}, erro
         if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to create AWS session: %v", err)
         }</span>
-
+        <span class="cov0" title="0">log.Info("Created AWS session to retrieve secret from Secrets Manager", "secretArn", secretArn)
         // Create a Secrets Manager client
-        <span class="cov0" title="0">svc := secretsmanager.New(sess)
+        svc := secretsmanager.New(sess)
 
         return getSecretWithClient(svc, secretArn)</span>
 }
@@ -1466,7 +1566,7 @@ func getSecretWithClient(svc secretsmanageriface.SecretsManagerAPI, secretArn st
 }
 </pre>
 		
-		<pre class="file" id="file8" style="display: none">package cmdexec
+		<pre class="file" id="file11" style="display: none">package cmdexec
 
 import (
         "context"
@@ -1682,7 +1782,7 @@ func (e *DefaultExecutor) ExecuteWithStdin(ctx context.Context, command string, 
 }
 </pre>
 		
-		<pre class="file" id="file9" style="display: none">package config
+		<pre class="file" id="file12" style="display: none">package config
 
 import (
         "bufio"
@@ -1763,7 +1863,7 @@ func GetConfigValue(key string) (string, error) <span class="cov8" title="1">{
 }
 </pre>
 		
-		<pre class="file" id="file10" style="display: none">package grpc_utils
+		<pre class="file" id="file13" style="display: none">package grpc_utils
 
 import (
         "context"
@@ -2053,9 +2153,10 @@ func GetBaseDnFromSecret(secretArn string) (string, error) <span class="cov0" ti
                 log.Error("Failed to get secret from Secrets Manager", "error", err)
                 return "", fmt.Errorf("failed to get secret from Secrets Manager: %v", err)
         }</span>
+        <span class="cov0" title="0">log.Info("Attempting to get Distinguished Name from Secrets Manager")
 
         // First try to get "distinguishedName"
-        <span class="cov0" title="0">var distinguishedName string
+        var distinguishedName string
         if dn, ok := secretData["distinguishedName"]; ok </span><span class="cov0" title="0">{
                 if dnStr, ok := dn.(string); ok </span><span class="cov0" title="0">{
                         distinguishedName = dnStr
@@ -2213,7 +2314,7 @@ func parseFQDNsFromOutput(output string) []string <span class="cov8" title="1">{
 }
 </pre>
 		
-		<pre class="file" id="file11" style="display: none">package krb_utils
+		<pre class="file" id="file14" style="display: none">package krb_utils
 
 import (
         "fmt"
@@ -2445,7 +2546,7 @@ func ValidateTicket(ticket *types.Ticket, path string) error <span class="cov8" 
 }
 </pre>
 		
-		<pre class="file" id="file12" style="display: none">package metadata_utils
+		<pre class="file" id="file15" style="display: none">package metadata_utils
 
 import (
         "encoding/json"
@@ -2583,7 +2684,7 @@ func WriteMetaDataJSON(ticketInfoList []*types.TicketInfo, leaseID string, krbFi
 }
 </pre>
 		
-		<pre class="file" id="file13" style="display: none">package watchdog
+		<pre class="file" id="file16" style="display: none">package watchdog
 
 import (
         "context"
