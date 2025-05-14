@@ -1,4 +1,4 @@
-package daemon
+package main
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 var log = logger.GetInstance()
 
 func main() {
-	log.Info("Starting Credentials Fetcher service")
+	log.Info("Starting Credentials Fetcher Daemon")
 
 	// Create a context that will be canceled on termination signals
 	ctx, cancel := context.WithCancel(context.Background())

@@ -252,11 +252,6 @@ func extractManagedPassword(output []byte) ([]byte, error) {
 		return currentPassword, nil // Return the raw password as fallback
 	}
 
-	if err != nil {
-		log.Error("Failed to convert password from UTF-16 to UTF-8", "error", err)
-		return currentPassword, nil // Return the raw password as fallback
-	}
-
 	log.Info("Successfully extracted and decoded managed password",
 		"blob_version", blob.Version,
 		"blob_length", blob.Length,

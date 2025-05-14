@@ -3,7 +3,6 @@ package ldap
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -109,31 +108,6 @@ func TestSearchGMSAPasswordWithNilExecutor(t *testing.T) {
 	client := NewClient()
 	_, err := client.SearchGMSAPassword(context.Background(), "test-dn", "test-fqdn", nil)
 	assert.Error(t, err) // Should fail because the default executor will try to run a real ldapsearch command
-}
-
-// Mock shell executor for testing
-type mockShellExecutor struct {
-	mockExecutor *MockLdapsearchExecutor
-}
-
-func (m *mockShellExecutor) Execute(ctx context.Context, command string, args ...string) ([]byte, error) {
-	return []byte{}, nil
-}
-
-func (m *mockShellExecutor) ExecuteWithEnv(ctx context.Context, command string, env []string, args ...string) ([]byte, error) {
-	return []byte{}, nil
-}
-
-func (m *mockShellExecutor) ExecuteWithStdin(ctx context.Context, command string, stdin []byte, args ...string) ([]byte, error) {
-	return []byte{}, nil
-}
-
-func (m *mockShellExecutor) ExecuteWithStdinAndEnv(ctx context.Context, command string, stdin []byte, env []string, args ...string) ([]byte, error) {
-	return []byte{}, nil
-}
-
-func (m *mockShellExecutor) BuildCommand(command string, args ...string) string {
-	return command + " " + strings.Join(args, " ")
 }
 
 // Test for BuildLdapsearchCommandWithFilter
