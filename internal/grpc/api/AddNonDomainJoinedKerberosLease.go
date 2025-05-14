@@ -20,23 +20,52 @@ import (
 
 var log = logger.GetInstance()
 
+// AddNonDomainJoinedKerberosLeaseInterface extends KerberosTicketOperations with Add-specific operations
+type AddNonDomainJoinedKerberosLeaseInterface interface {
+	KerberosTicketOperations
+
+	// AddNonDomainJoinedKerberosLease implements the AddNonDomainJoinedKerberosLease RPC method
+	AddNonDomainJoinedKerberosLease(ctx context.Context, req *pb.CreateNonDomainJoinedKerberosLeaseRequest) (*pb.CreateNonDomainJoinedKerberosLeaseResponse, error)
+}
+
+// KerberosTicketOperations defines operations for managing Kerberos tickets
+type KerberosTicketOperations interface {
+	// SetupKerberosFileForTicket sets up the Kerberos file for a ticket
+	SetupKerberosFileForTicket(ticketInfo *types.TicketInfo) (string, error)
+
+	// GetDistinguishedName gets the distinguished name from ECS config or secrets manager
+	GetDistinguishedName(ticketInfo *types.TicketInfo) (string, error)
+
+	// CreateKerberosTickets creates Kerberos tickets for each ticket info
+	CreateKerberosTickets(ctx context.Context, domain, username, password string, ticketInfoList []*types.TicketInfo) ([]string, error)
+
+	// ValidateCredentials validates the username, password, and domain
+	ValidateCredentials(username, password, domain string) error
+
+	// ProcessCredentialSpecs processes credential specs and returns ticket info list
+	ProcessCredentialSpecs(credspecContents []string, username, leaseID string) ([]*types.TicketInfo, error)
+
+	// CleanupKerberosFiles removes the Kerberos files if there's an error
+	CleanupKerberosFiles(krbFilePath string) error
+}
+
 // NonDomainJoinedKerberosHandler handles non-domain joined Kerberos operations
 type NonDomainJoinedKerberosHandler struct {
-	krbFilesDir       string
-	awsSecretsManager string
-	krbClient         *kerberos.Client
-	ldapClient        *ldap.Client
-	shellExecutor     cmdexec.Executor
+	krbFilesDir     string
+	awsSMSecretName string
+	krbClient       *kerberos.Client
+	ldapClient      *ldap.Client
+	shellExecutor   cmdexec.Executor
 }
 
 // NewNonDomainJoinedKerberosHandler creates a new handler for non-domain joined Kerberos operations
-func NewNonDomainJoinedKerberosHandler(krbFilesDir, awsSecretsManager string, krbClient *kerberos.Client, ldapClient *ldap.Client, shellExecutor cmdexec.Executor) *NonDomainJoinedKerberosHandler {
+func NewNonDomainJoinedKerberosHandler(krbFilesDir, awsSMSecretName string, krbClient *kerberos.Client, ldapClient *ldap.Client, shellExecutor cmdexec.Executor) *NonDomainJoinedKerberosHandler {
 	return &NonDomainJoinedKerberosHandler{
-		krbFilesDir:       krbFilesDir,
-		awsSecretsManager: awsSecretsManager,
-		krbClient:         krbClient,
-		ldapClient:        ldapClient,
-		shellExecutor:     shellExecutor,
+		krbFilesDir:     krbFilesDir,
+		awsSMSecretName: awsSMSecretName,
+		krbClient:       krbClient,
+		ldapClient:      ldapClient,
+		shellExecutor:   shellExecutor,
 	}
 }
 
@@ -45,8 +74,13 @@ func (h *NonDomainJoinedKerberosHandler) AddNonDomainJoinedKerberosLease(ctx con
 	log.Info("Received AddNonDomainJoinedKerberosLease request")
 
 	// Validate request
-	if err := h.validateRequest(req); err != nil {
+	if err := h.ValidateCredentials(req.Username, req.Password, req.Domain); err != nil {
 		return nil, err
+	}
+
+	if len(req.CredspecContents) == 0 {
+		log.Error("No credential specs provided in request")
+		return nil, fmt.Errorf("at least one credential spec is required")
 	}
 
 	// Generate a lease ID
@@ -57,13 +91,13 @@ func (h *NonDomainJoinedKerberosHandler) AddNonDomainJoinedKerberosLease(ctx con
 	}
 
 	// Process credential specs
-	ticketInfoList, err := h.processCredentialSpecs(req, leaseID)
+	ticketInfoList, err := h.ProcessCredentialSpecs(req.CredspecContents, req.Username, leaseID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create Kerberos tickets
-	createdKrbFilePaths, err := h.createKerberosTickets(ctx, req, ticketInfoList)
+	createdKrbFilePaths, err := h.CreateKerberosTickets(ctx, req.Domain, req.Username, req.Password, ticketInfoList)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +107,7 @@ func (h *NonDomainJoinedKerberosHandler) AddNonDomainJoinedKerberosLease(ctx con
 		log.Error("Failed to write metadata JSON", "error", err)
 		// Clean up all created Kerberos files if there's an error
 		for _, krbFilePath := range createdKrbFilePaths {
-			if cleanupErr := cleanupKerberosFiles(krbFilePath); cleanupErr != nil {
+			if cleanupErr := h.CleanupKerberosFiles(krbFilePath); cleanupErr != nil {
 				log.Error("Failed to clean up Kerberos files", "error", cleanupErr)
 			}
 		}
@@ -87,46 +121,41 @@ func (h *NonDomainJoinedKerberosHandler) AddNonDomainJoinedKerberosLease(ctx con
 	}, nil
 }
 
-// validateRequest validates the request parameters
-func (h *NonDomainJoinedKerberosHandler) validateRequest(req *pb.CreateNonDomainJoinedKerberosLeaseRequest) error {
+// ValidateCredentials validates the username, password, and domain
+func (h *NonDomainJoinedKerberosHandler) ValidateCredentials(username, password, domain string) error {
 	// Validate required parameters
-	if req.Username == "" || req.Password == "" || req.Domain == "" {
+	if username == "" || password == "" || domain == "" {
 		log.Error("Missing required parameters in request")
 		return fmt.Errorf("username, password, and domain are required")
 	}
 
 	// Validate credential lengths
-	if err := grpc_utils.ValidateCredentialLength(req.Username, req.Password, req.Domain); err != nil {
+	if err := grpc_utils.ValidateCredentialLength(username, password, domain); err != nil {
 		log.Error("Invalid credential length", "error", err)
 		return fmt.Errorf("invalid credential length: %v", err)
 	}
 
 	// Validate username
-	if err := grpc_utils.ValidateAccountName(req.Username); err != nil {
+	if err := grpc_utils.ValidateAccountName(username); err != nil {
 		log.Error("Invalid username", "error", err)
 		return fmt.Errorf("invalid username: %v", err)
 	}
 
 	// Validate domain
-	if err := grpc_utils.ValidateDomain(req.Domain); err != nil {
+	if err := grpc_utils.ValidateDomain(domain); err != nil {
 		log.Error("Invalid domain", "error", err)
 		return fmt.Errorf("invalid domain: %v", err)
-	}
-
-	if len(req.CredspecContents) == 0 {
-		log.Error("No credential specs provided in request")
-		return fmt.Errorf("at least one credential spec is required")
 	}
 
 	return nil
 }
 
-// processCredentialSpecs processes the credential specs and returns a list of ticket info objects
-func (h *NonDomainJoinedKerberosHandler) processCredentialSpecs(req *pb.CreateNonDomainJoinedKerberosLeaseRequest, leaseID string) ([]*types.TicketInfo, error) {
+// ProcessCredentialSpecs processes the credential specs and returns a list of ticket info objects
+func (h *NonDomainJoinedKerberosHandler) ProcessCredentialSpecs(credspecContents []string, username, leaseID string) ([]*types.TicketInfo, error) {
 	var ticketInfoList []*types.TicketInfo
 	krbFilePathSet := make(map[string]bool) // Set to track unique Kerberos file paths
 
-	for _, credspecContent := range req.CredspecContents {
+	for _, credspecContent := range credspecContents {
 		// Parse the credential spec
 		credSpec, err := grpc_utils.ParseCredSpec(credspecContent)
 		if err != nil {
@@ -142,7 +171,7 @@ func (h *NonDomainJoinedKerberosHandler) processCredentialSpecs(req *pb.CreateNo
 			KrbFilePath:        krbFilePath,
 			ServiceAccountName: credSpec.ServiceAccountName,
 			DomainName:         credSpec.DomainName,
-			DomainlessUser:     req.Username,
+			DomainlessUser:     username,
 			CredentialArn:      credSpec.CredentialArn,
 		}
 
@@ -158,34 +187,34 @@ func (h *NonDomainJoinedKerberosHandler) processCredentialSpecs(req *pb.CreateNo
 	return ticketInfoList, nil
 }
 
-// createKerberosTickets creates Kerberos tickets for each ticket info
-func (h *NonDomainJoinedKerberosHandler) createKerberosTickets(ctx context.Context, req *pb.CreateNonDomainJoinedKerberosLeaseRequest, ticketInfoList []*types.TicketInfo) ([]string, error) {
+// CreateKerberosTickets creates Kerberos tickets for each ticket info
+func (h *NonDomainJoinedKerberosHandler) CreateKerberosTickets(ctx context.Context, domain, username, password string, ticketInfoList []*types.TicketInfo) ([]string, error) {
 	var createdKrbFilePaths []string
 
 	// Generate krb ticket using username and password
-	err := h.krbClient.CreateTicketUsingUsernamePassword(req.Domain, req.Username, req.Password)
+	err := h.krbClient.CreateTicketUsingUsernamePassword(domain, username, password)
 	if err != nil {
 		log.Error("Failed to create Kerberos ticket for domainless user", "error", err)
 		return nil, fmt.Errorf("failed to create Kerberos ticket for domainless user: %v", err)
 	}
 
 	for _, ticketInfo := range ticketInfoList {
-		krbFilePath, err := h.setupKerberosFileForTicket(ticketInfo)
+		krbFilePath, err := h.SetupKerberosFileForTicket(ticketInfo)
 		if err != nil {
 			// Clean up any created files on error
 			for _, path := range createdKrbFilePaths {
-				cleanupKerberosFiles(path)
+				h.CleanupKerberosFiles(path)
 			}
 			return nil, err
 		}
 
 		// Get distinguished name
-		distinguishedName, err := h.getDistinguishedName(ticketInfo)
+		distinguishedName, err := h.GetDistinguishedName(ticketInfo)
 		if err != nil {
 			// Clean up any created files on error
-			cleanupKerberosFiles(krbFilePath)
+			h.CleanupKerberosFiles(krbFilePath)
 			for _, path := range createdKrbFilePaths {
-				cleanupKerberosFiles(path)
+				h.CleanupKerberosFiles(path)
 			}
 			return nil, err
 		}
@@ -199,9 +228,9 @@ func (h *NonDomainJoinedKerberosHandler) createKerberosTickets(ctx context.Conte
 		if err != nil {
 			log.Error("Failed to create Kerberos ticket for gMSA account", "error", err)
 			// Clean up Kerberos files if there's an error
-			cleanupKerberosFiles(krbFilePath)
+			h.CleanupKerberosFiles(krbFilePath)
 			for _, path := range createdKrbFilePaths {
-				cleanupKerberosFiles(path)
+				h.CleanupKerberosFiles(path)
 			}
 			return nil, fmt.Errorf("failed to create Kerberos ticket for gMSA account: %v", err)
 		}
@@ -213,8 +242,8 @@ func (h *NonDomainJoinedKerberosHandler) createKerberosTickets(ctx context.Conte
 	return createdKrbFilePaths, nil
 }
 
-// setupKerberosFileForTicket sets up the Kerberos file for a ticket
-func (h *NonDomainJoinedKerberosHandler) setupKerberosFileForTicket(ticketInfo *types.TicketInfo) (string, error) {
+// SetupKerberosFileForTicket sets up the Kerberos file for a ticket
+func (h *NonDomainJoinedKerberosHandler) SetupKerberosFileForTicket(ticketInfo *types.TicketInfo) (string, error) {
 	krbFilePath := ticketInfo.KrbFilePath
 
 	// Check if krb file path directory already exists, otherwise create directory
@@ -247,8 +276,8 @@ func (h *NonDomainJoinedKerberosHandler) setupKerberosFileForTicket(ticketInfo *
 	return krbCCNameStr, nil
 }
 
-// getDistinguishedName gets the distinguished name from ECS config or secrets manager
-func (h *NonDomainJoinedKerberosHandler) getDistinguishedName(ticketInfo *types.TicketInfo) (string, error) {
+// GetDistinguishedName gets the distinguished name from ECS config or secrets manager
+func (h *NonDomainJoinedKerberosHandler) GetDistinguishedName(ticketInfo *types.TicketInfo) (string, error) {
 	// Get distinguished name from ECS config
 	distinguishedName, err := config.RetrieveVariableFromECSConfig(constants.EnvCFDistinguishedName)
 	if err != nil {
@@ -275,8 +304,8 @@ func (h *NonDomainJoinedKerberosHandler) getDistinguishedName(ticketInfo *types.
 	return distinguishedName, nil
 }
 
-// cleanupKerberosFiles removes the Kerberos files if there's an error
-func cleanupKerberosFiles(krbFilePath string) error {
+// CleanupKerberosFiles removes the Kerberos files if there's an error
+func (h *NonDomainJoinedKerberosHandler) CleanupKerberosFiles(krbFilePath string) error {
 	log.Info("Cleaning up Kerberos files", "path", krbFilePath)
 	if err := os.Remove(krbFilePath); err != nil && !os.IsNotExist(err) {
 		log.Error("Failed to remove Kerberos file", "path", krbFilePath, "error", err)

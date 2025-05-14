@@ -57,7 +57,7 @@ func TestNewCredentialsFetcherServer(t *testing.T) {
 	// Verify that the server was created with the expected default values
 	assert.NotNil(t, server)
 	assert.Equal(t, constants.DefaultKrbFilesDir, server.krbFilesDir)
-	assert.Equal(t, constants.DefaultAWSSecretName, server.awsSecretsManager)
+	assert.Equal(t, constants.DefaultAWSSecretName, server.awsSMSecretName)
 	assert.NotNil(t, server.shutdownCh)
 	assert.NotNil(t, server.krbClient)
 	assert.NotNil(t, server.ldapClient)

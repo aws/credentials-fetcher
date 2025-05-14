@@ -28,13 +28,13 @@ type Server interface {
 // CredentialsFetcherServer implements the CredentialsFetcherService gRPC service
 type CredentialsFetcherServer struct {
 	pb.UnimplementedCredentialsFetcherServiceServer
-	krbFilesDir       string
-	awsSecretsManager string
-	mu                sync.Mutex
-	shutdownCh        chan struct{}
-	krbClient         *kerberos.Client
-	ldapClient        *ldap.Client
-	shellExecutor     cmdexec.Executor
+	krbFilesDir     string
+	awsSMSecretName string
+	mu              sync.Mutex
+	shutdownCh      chan struct{}
+	krbClient       *kerberos.Client
+	ldapClient      *ldap.Client
+	shellExecutor   cmdexec.Executor
 
 	// API handlers
 	nonDomainJoinedHandler *api.NonDomainJoinedKerberosHandler
@@ -42,24 +42,24 @@ type CredentialsFetcherServer struct {
 }
 
 // NewCredentialsFetcherServerFunc is the function type for creating a new server
-type NewCredentialsFetcherServerFunc func(krbFilesDir, awsSecretsManager string) Server
+type NewCredentialsFetcherServerFunc func(krbFilesDir, awsSMSecretName string) Server
 
 // NewCredentialsFetcherServer is the default implementation for creating a new server
-var NewCredentialsFetcherServer NewCredentialsFetcherServerFunc = func(krbFilesDir, awsSecretsManager string) Server {
+var NewCredentialsFetcherServer NewCredentialsFetcherServerFunc = func(krbFilesDir, awsSMSecretName string) Server {
 	krbClient := kerberos.NewClient()
 	ldapClient := ldap.NewClient()
 	shellExecutor := cmdexec.NewExecutor()
 
 	return &CredentialsFetcherServer{
-		krbFilesDir:       krbFilesDir,
-		awsSecretsManager: awsSecretsManager,
-		shutdownCh:        make(chan struct{}),
-		krbClient:         krbClient,
-		ldapClient:        ldapClient,
-		shellExecutor:     shellExecutor,
+		krbFilesDir:     krbFilesDir,
+		awsSMSecretName: awsSMSecretName,
+		shutdownCh:      make(chan struct{}),
+		krbClient:       krbClient,
+		ldapClient:      ldapClient,
+		shellExecutor:   shellExecutor,
 
 		// Initialize API handlers
-		nonDomainJoinedHandler: api.NewNonDomainJoinedKerberosHandler(krbFilesDir, awsSecretsManager, krbClient, ldapClient, shellExecutor),
+		nonDomainJoinedHandler: api.NewNonDomainJoinedKerberosHandler(krbFilesDir, awsSMSecretName, krbClient, ldapClient, shellExecutor),
 		healthCheckHandler:     api.NewHealthCheckHandler(),
 	}
 }
