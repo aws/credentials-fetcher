@@ -366,3 +366,27 @@ func (c *Client) CreateTicketForServiceAccount(ctx context.Context, domain, user
 
 	return nil
 }
+
+// RenewKerberosTicket renews a Kerberos ticket using kinit -R
+func (c *Client) RenewKerberosTicket(ctx context.Context, krbFilePath string) error {
+	log.Info("Renewing Kerberos ticket", "krb_file_path", krbFilePath)
+
+	// Execute kinit -R to renew the ticket
+	output, err := c.shellExecutor.Execute(
+		ctx,
+		"kinit",
+		"-R",
+		"-c", krbFilePath,
+	)
+
+	if err != nil {
+		log.Error("Kinit renewal command failed",
+			"error", err,
+			"output", string(output),
+			"krb_file_path", krbFilePath)
+		return fmt.Errorf("failed to execute kinit renewal command: %v: %s", err, string(output))
+	}
+
+	log.Info("Successfully renewed Kerberos ticket", "krb_file_path", krbFilePath)
+	return nil
+}

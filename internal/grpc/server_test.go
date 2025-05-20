@@ -143,8 +143,9 @@ func TestCredentialsFetcherServer_RenewNonDomainJoinedKerberosLease(t *testing.T
 	resp, err := client.RenewNonDomainJoinedKerberosLease(context.Background(), req)
 
 	// Verify response
-	assert.NoError(t, err)
-	assert.Empty(t, resp.RenewedKerberosFilePaths)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid domain format")
+	assert.Nil(t, resp)
 }
 
 func TestCredentialsFetcherServer_DeleteKerberosLease(t *testing.T) {

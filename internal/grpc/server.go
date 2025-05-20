@@ -83,10 +83,9 @@ func (s *CredentialsFetcherServer) AddNonDomainJoinedKerberosLease(ctx context.C
 
 // RenewNonDomainJoinedKerberosLease implements the RenewNonDomainJoinedKerberosLease RPC method
 func (s *CredentialsFetcherServer) RenewNonDomainJoinedKerberosLease(ctx context.Context, req *pb.RenewNonDomainJoinedKerberosLeaseRequest) (*pb.RenewNonDomainJoinedKerberosLeaseResponse, error) {
-	log.Info("Received RenewNonDomainJoinedKerberosLease request")
-	return &pb.RenewNonDomainJoinedKerberosLeaseResponse{
-		RenewedKerberosFilePaths: []string{},
-	}, nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nonDomainJoinedHandler.RenewNonDomainJoinedKerberosLease(ctx, req)
 }
 
 // DeleteKerberosLease implements the DeleteKerberosLease RPC method
