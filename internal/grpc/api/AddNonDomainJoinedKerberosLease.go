@@ -203,7 +203,10 @@ func (h *NonDomainJoinedKerberosHandler) CreateKerberosTickets(ctx context.Conte
 		if err != nil {
 			// Clean up any created files on error
 			for _, path := range createdKrbFilePaths {
-				h.CleanupKerberosFiles(path)
+				err := h.CleanupKerberosFiles(path)
+				if err != nil {
+					return nil, err
+				}
 			}
 			return nil, err
 		}
@@ -212,9 +215,15 @@ func (h *NonDomainJoinedKerberosHandler) CreateKerberosTickets(ctx context.Conte
 		distinguishedName, err := h.GetDistinguishedName(ticketInfo)
 		if err != nil {
 			// Clean up any created files on error
-			h.CleanupKerberosFiles(krbFilePath)
+			err := h.CleanupKerberosFiles(krbFilePath)
+			if err != nil {
+				return nil, err
+			}
 			for _, path := range createdKrbFilePaths {
-				h.CleanupKerberosFiles(path)
+				err := h.CleanupKerberosFiles(path)
+				if err != nil {
+					return nil, err
+				}
 			}
 			return nil, err
 		}
@@ -228,9 +237,15 @@ func (h *NonDomainJoinedKerberosHandler) CreateKerberosTickets(ctx context.Conte
 		if err != nil {
 			log.Error("Failed to create Kerberos ticket for gMSA account", "error", err)
 			// Clean up Kerberos files if there's an error
-			h.CleanupKerberosFiles(krbFilePath)
+			err := h.CleanupKerberosFiles(krbFilePath)
+			if err != nil {
+				return nil, err
+			}
 			for _, path := range createdKrbFilePaths {
-				h.CleanupKerberosFiles(path)
+				err := h.CleanupKerberosFiles(path)
+				if err != nil {
+					return nil, err
+				}
 			}
 			return nil, fmt.Errorf("failed to create Kerberos ticket for gMSA account: %v", err)
 		}
@@ -249,7 +264,7 @@ func (h *NonDomainJoinedKerberosHandler) SetupKerberosFileForTicket(ticketInfo *
 	// Check if krb file path directory already exists, otherwise create directory
 	if _, err := os.Stat(krbFilePath); os.IsNotExist(err) {
 		log.Info("Creating directory for Kerberos ticket", "path", krbFilePath)
-		if err := os.MkdirAll(krbFilePath, 0755); err != nil {
+		if err := os.MkdirAll(krbFilePath, 0750); err != nil { // Changed from 0755 to 0750
 			log.Error("Failed to create directory for Kerberos ticket", "error", err)
 			return "", fmt.Errorf("failed to create directory for Kerberos ticket: %v", err)
 		}
@@ -262,12 +277,15 @@ func (h *NonDomainJoinedKerberosHandler) SetupKerberosFileForTicket(ticketInfo *
 
 	// Create a file at krb5cc if it doesn't exist
 	if _, err := os.Stat(krbCCNameStr); os.IsNotExist(err) {
-		file, err := os.Create(krbCCNameStr)
+		file, err := os.Create(krbCCNameStr) // #nosec G304
 		if err != nil {
 			log.Error("Failed to create Kerberos credential cache file", "error", err)
 			return "", fmt.Errorf("failed to create Kerberos credential cache file: %v", err)
 		}
-		file.Close()
+		err = file.Close()
+		if err != nil {
+			return "", err
+		}
 
 		// Update the krb file path in the ticket info
 		ticketInfo.KrbFilePath = krbCCNameStr

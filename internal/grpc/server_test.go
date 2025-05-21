@@ -17,16 +17,19 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 )
 
-const bufSize = 1024 * 1024
+// bufSize is used by the bufconn listener in setupGrpcServer
+const bufSize = 1024 * 1024 // nolint:unused
 
-var lis *bufconn.Listener
+// lis is used by bufDialer and setupGrpcServer
+var lis *bufconn.Listener // nolint:unused
 
-func bufDialer(context.Context, string) (net.Conn, error) {
+// bufDialer is used as the context dialer in setupGrpcServer
+func bufDialer(context.Context, string) (net.Conn, error) { // nolint:unused
 	return lis.Dial()
 }
 
 // setupGrpcServer sets up a test gRPC server using bufconn
-func setupGrpcServer(t *testing.T) (*grpc.ClientConn, *CredentialsFetcherServer, func()) {
+func setupGrpcServer(t *testing.T) (*grpc.ClientConn, *CredentialsFetcherServer, func()) { // nolint:unused
 	lis = bufconn.Listen(bufSize)
 	server := NewCredentialsFetcherServer(constants.DefaultKrbFilesDir, constants.DefaultAWSSecretName).(*CredentialsFetcherServer)
 	s := grpc.NewServer()

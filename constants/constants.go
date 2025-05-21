@@ -3,7 +3,7 @@ package constants
 // LDAP-related constants
 const (
 	// LDAPSearchFilterString is the base LDAP filter for gMSA accounts
-	LDAPManagedPasswordSearchFilter = "(objectClass=msDS-GroupManagedServiceAccount)"
+	LDAPManagedPasswordSearchFilter = "(objectClass=msDS-GroupManagedServiceAccount)" // #nosec G101
 
 	// LDAPSearchCommand is the command to execute for LDAP searches
 	LDAPSearchCommand = "ldapsearch"

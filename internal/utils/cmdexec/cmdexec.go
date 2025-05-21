@@ -138,7 +138,10 @@ func (e *DefaultExecutor) ExecuteWithStdinAndEnv(ctx context.Context, command st
 	if err != nil {
 		return nil, fmt.Errorf("failed to write to stdin: %w", err)
 	}
-	stdinPipe.Close()
+	err = stdinPipe.Close()
+	if err != nil {
+		return nil, err
+	}
 
 	// Wait for command to complete
 	if err := cmd.Wait(); err != nil {
@@ -193,7 +196,10 @@ func (e *DefaultExecutor) ExecuteWithStdin(ctx context.Context, command string, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to write to stdin: %w", err)
 	}
-	stdinPipe.Close()
+	err = stdinPipe.Close()
+	if err != nil {
+		return nil, err
+	}
 
 	// Wait for command to complete
 	if err := cmd.Wait(); err != nil {

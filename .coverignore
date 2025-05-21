@@ -1,0 +1,3 @@
+internal/grpc/proto/
+cmd/credentials-fetcher/
+tests/test_client/

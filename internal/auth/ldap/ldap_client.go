@@ -209,7 +209,7 @@ func extractManagedPassword(output []byte) ([]byte, error) {
 	}
 
 	// Validate the blob
-	if uint32(len(decodedBlob)) < blob.Length {
+	if len(decodedBlob) < int(blob.Length) { // #nosec G115
 		log.Error("Decoded blob is smaller than the specified length",
 			"blob_size", len(decodedBlob),
 			"specified_length", blob.Length)

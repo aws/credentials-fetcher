@@ -1,0 +1,14 @@
+{
+  "global": {
+    "nosec": "enabled",
+    "audit": "enabled"
+  },
+  "exclude-generated": true,
+  "exclude": [
+    "**/proto/*.pb.go"
+  ],
+  "exclude-dir": [
+    "vendor",
+    "proto"
+  ]
+}

@@ -36,7 +36,7 @@ func GetMetadataFilePaths(krbDir string) ([]string, error) {
 
 // ReadMetadataJSON reads and parses a metadata JSON file
 func ReadMetadataJSON(filePath string) ([]*types.TicketInfo, error) {
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(filePath) // #nosec G304
 	if err != nil {
 		return nil, fmt.Errorf("failed to read metadata file: %w", err)
 	}
@@ -93,7 +93,7 @@ func WriteMetaDataJSON(ticketInfoList []*types.TicketInfo, leaseID string, krbFi
 
 	// Create the directory structure
 	dirPath := filepath.Dir(filePath)
-	if err := os.MkdirAll(dirPath, 0755); err != nil {
+	if err := os.MkdirAll(dirPath, 0750); err != nil { // Changed from 0755 to 0750
 		return fmt.Errorf("failed to create metadata directory: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func WriteMetaDataJSON(ticketInfoList []*types.TicketInfo, leaseID string, krbFi
 	}
 
 	// Write the JSON to file
-	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
+	if err := os.WriteFile(filePath, jsonData, 0600); err != nil { // Changed from 0644 to 0600
 		return fmt.Errorf("failed to write JSON file: %v", err)
 	}
 
