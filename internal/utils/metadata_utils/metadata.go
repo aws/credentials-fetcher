@@ -7,11 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
-
-var log = logger.GetInstance()
 
 // GetMetadataFilePaths returns paths to all metadata files in the given directory
 func GetMetadataFilePaths(krbDir string) ([]string, error) {

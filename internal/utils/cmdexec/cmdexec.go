@@ -91,7 +91,7 @@ func (e *DefaultExecutor) BuildCommand(command string, args ...string) string {
 	quotedArgs := make([]string, len(args))
 	for i, arg := range args {
 		if strings.ContainsAny(arg, " \t\n\r\"'$&|;<>(){}[]") {
-			quotedArgs[i] = fmt.Sprintf("'%s'", strings.Replace(arg, "'", "'\\''", -1))
+			quotedArgs[i] = fmt.Sprintf("'%s'", strings.ReplaceAll(arg, "'", "'\\''"))
 		} else {
 			quotedArgs[i] = arg
 		}

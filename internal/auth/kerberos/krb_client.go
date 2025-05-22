@@ -29,7 +29,6 @@ type LdapClientInterface interface {
 var (
 	readMetadataJSONFunc     = metadata_utils.ReadMetadataJSON
 	getMetadataFilePathsFunc = metadata_utils.GetMetadataFilePaths
-	krbCCName                = "/tmp/krb5cc_credentialsfetcher"
 	getFQDNListFunc          = grpc_utils.GetFQDNList
 	newLdapClientFunc        = ldap.NewClient
 )

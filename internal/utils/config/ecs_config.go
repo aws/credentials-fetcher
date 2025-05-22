@@ -27,7 +27,12 @@ func RetrieveVariableFromECSConfig(ecsVariableName string) (string, error) {
 		log.Error("Failed to open ECS config file", "path", constants.ECSConfigFilePath, "error", err)
 		return "", fmt.Errorf("failed to open ECS config file: %w", err)
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			fmt.Printf("%s", err.Error())
+		}
+	}(file)
 
 	// Read the file line by line
 	scanner := bufio.NewScanner(file)

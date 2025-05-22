@@ -3,7 +3,6 @@
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v4.25.0
 // source: credentialsfetcher.proto
-
 package grpc
 
 import (

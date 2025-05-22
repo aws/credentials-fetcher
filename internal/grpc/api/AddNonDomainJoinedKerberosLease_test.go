@@ -179,7 +179,10 @@ func TestCleanupKerberosFiles(t *testing.T) {
 	testFilePath := filepath.Join(tempDir, "test-file")
 	file, err := os.Create(testFilePath)
 	assert.NoError(t, err)
-	file.Close()
+	err = file.Close()
+	if err != nil {
+		return
+	}
 
 	// Create a handler
 	handler := &NonDomainJoinedKerberosHandler{

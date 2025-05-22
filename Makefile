@@ -6,11 +6,12 @@ VERSION := 1.3.8
 # Run the strict release to allow vetting and race detection.
 BGO_RELEASE_TARGET=release-strict
 
+BGO_COVER_FILTER_REPORT := 1
+
 # Define the default target for brazil-build (without install)
 BGO_DEFAULT_TARGET=build-only
 
 # Coverage configuration for Brazil
-BGO_TEST_COVERAGE_EXCLUDE_PKGS=golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto,golang.a2z.com/CredentialsFetcherV2/cmd/credentials-fetcher,golang.a2z.com/CredentialsFetcherV2/tests/test_client
 
 # Directories
 BIN_DIR := bin
@@ -32,7 +33,12 @@ ifeq ($(CODE_COVERAGE),1)
 endif
 
 # Detect OS
-OS := $(shell cat /etc/os-release | grep ^ID= | cut -d'=' -f2 | tr -d '"')
+OS := $(shell uname -s)
+ifeq ($(OS),Linux)
+    OS_ID := $(shell cat /etc/os-release 2>/dev/null | grep ^ID= | cut -d'=' -f2 | tr -d '"' || echo "unknown")
+else
+    OS_ID := $(OS)
+endif
 
 # Configuration
 CF_KRB_DIR ?= /var/credentials-fetcher/krbdir
@@ -46,25 +52,28 @@ CF_TEST_GMSA_ACCOUNT ?= webapp01
 include ${BGO_MAKEFILE}
 
 # Main targets
-release-strict:: security-check lint-check build test
+release-strict:: security-check lint-check build
 
 # Define a build-only target that doesn't include install
 .PHONY: build-only
-build-only:: security-check lint-check build test
+build-only:: security-check lint-check build
 
-.PHONY: security-check
-security-check::
-	mkdir -p build/private/gosec
-	gosec -exclude-generated -exclude="**/proto/*.pb.go" -fmt=json -out=build/private/gosec/results.json ./... || (cat build/private/gosec/results.json ; echo; echo "GoSec returned with error. Fix the errors above or add the comment '/* #nosec */' to ignore the affected line."; exit 1)
+.PHONY: build-clean
+build-clean::
+	@echo "Cleaning build directory..."
+	rm -rf $(BUILD_DIR)/gopath
+	mkdir -p $(BUILD_DIR)
 
 .PHONY: lint-check
 lint-check::
-	@if which golangci-lint > /dev/null 2>&1; then \
-		echo "Running golangci-lint..."; \
-		golangci-lint run ./...; \
-	else \
-		echo "golangci-lint not found. Skipping lint check."; \
-	fi
+	@echo "Running golangci-lint"
+	golangci-lint run ./...
+
+.PHONY: security-check
+security-check::
+	@echo "Running security check..."
+	mkdir -p $(BUILD_DIR)/private/gosec
+	gosec -exclude-generated -exclude="**/proto/*.pb.go" -fmt=json -out=build/private/gosec/results.json ./... || (cat build/private/gosec/results.json ; echo; echo "GoSec returned with error. Fix the errors above or add the comment '/* #nosec */' to ignore the affected line."; exit 1)
 
 .PHONY: build
 build:: $(BIN_DIR)/credentials-fetcherd
@@ -73,18 +82,11 @@ $(BIN_DIR)/credentials-fetcherd:
 	mkdir -p $(BIN_DIR)
 	go build $(GO_FLAGS) -o $@ ./cmd/credentials-fetcher/main.go
 
-.PHONY: test
-test::
-	go test ./...
-	@if [ -f build/brazil-documentation/coverage/coverage.out ]; then \
-		./scripts/fix-coverage.sh; \
-	fi
-
 # Define a custom install target that won't be run by default
 .PHONY: cf-install
 cf-install:: build cf-create-service
-	sudo install -m 755 $(BIN_DIR)/credentials-fetcherd /usr/sbin/
-	sudo install -m 644 $(BUILD_DIR)/credentials-fetcher.service /usr/lib/systemd/system/
+	sudo install -m 750 $(BIN_DIR)/credentials-fetcherd /usr/sbin/
+	sudo install -m 600 $(BUILD_DIR)/credentials-fetcher.service /usr/lib/systemd/system/
 	sudo systemctl daemon-reload
 
 # Create systemd service file
@@ -106,9 +108,9 @@ else ifeq ($(OS),ubuntu)
 	@echo "ExecStartPre=/bin/chgrp ubuntu /var/credentials-fetcher $(CF_KRB_DIR) $(CF_UNIX_DOMAIN_SOCKET_DIR) $(CF_LOGGING_DIR)" >> $(BUILD_DIR)/credentials-fetcher.service
 	@echo "ExecStartPost=/bin/chgrp ubuntu /var/credentials-fetcher/socket/credentials_fetcher.sock" >> $(BUILD_DIR)/credentials-fetcher.service
 endif
-	@echo "ExecStartPre=/bin/chmod 755 /var/credentials-fetcher $(CF_KRB_DIR) $(CF_UNIX_DOMAIN_SOCKET_DIR) $(CF_LOGGING_DIR)" >> $(BUILD_DIR)/credentials-fetcher.service
+	@echo "ExecStartPre=/bin/chmod 750 /var/credentials-fetcher $(CF_KRB_DIR) $(CF_UNIX_DOMAIN_SOCKET_DIR) $(CF_LOGGING_DIR)" >> $(BUILD_DIR)/credentials-fetcher.service
 	@echo "ExecStart=/usr/sbin/credentials-fetcherd" >> $(BUILD_DIR)/credentials-fetcher.service
-	@echo "ExecStartPost=/bin/chmod 660 /var/credentials-fetcher/socket/credentials_fetcher.sock" >> $(BUILD_DIR)/credentials-fetcher.service
+	@echo "ExecStartPost=/bin/chmod 600 /var/credentials-fetcher/socket/credentials_fetcher.sock" >> $(BUILD_DIR)/credentials-fetcher.service
 	@echo "Environment=\"CREDENTIALS_FETCHERD_STARTED_BY_SYSTEMD=1\"" >> $(BUILD_DIR)/credentials-fetcher.service
 	@echo "Type=notify" >> $(BUILD_DIR)/credentials-fetcher.service
 	@echo "NotifyAccess=main" >> $(BUILD_DIR)/credentials-fetcher.service
@@ -122,10 +124,3 @@ endif
 .PHONY: check_help
 check_help::
 	$(BIN_DIR)/credentials-fetcherd --help
-
-# Tools installation (if needed)
-.PHONY: install-tools
-install-tools::
-	@echo "Installing required tools..."
-	@which gosec > /dev/null 2>&1 || go install github.com/securego/gosec/v2/cmd/gosec@latest
-	@which golangci-lint > /dev/null 2>&1 || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest

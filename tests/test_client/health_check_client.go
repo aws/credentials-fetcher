@@ -41,7 +41,7 @@ func GetGrpcClientConnection(socketPath string) (*grpc.ClientConn, error) {
 	}
 
 	// Connect to the server
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Printf("Could not initialize client connection: %v", err)
 		return nil, err
@@ -83,7 +83,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to server: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Failed to close connection: %v", err)
+		}
+	}()
 
 	// Create client
 	client := NewCredentialsFetcherClient(conn, *timeout)

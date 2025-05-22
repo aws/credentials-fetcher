@@ -1,0 +1,19 @@
+linters-settings:
+  staticcheck:
+    # SAxxxx checks in https://staticcheck.io/docs/configuration/options/#checks
+    # Default: ["*"]
+    checks: [ "all", "-SA1006" ]
+  govet:
+    # Disable all analyzers.
+    # Default: false
+    disable-all: false
+    # Disable analyzers by name.
+    # (in addition to default
+    #   atomicalign, deepequalerrors, fieldalignment, findcall, nilness, reflectvaluecompare, shadow, sortslice,
+    #   timeformat, unusedwrite
+    # ).
+    # Run `GL_DEBUG=govet golangci-lint run --enable=govet` to see default, all available analyzers, and enabled analyzers.
+    # Default: []
+    disable:
+      - printf
+version: 2

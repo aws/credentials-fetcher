@@ -5,3 +5,5 @@ go.work.sum
 .idea
 /*.iml
 /coverage
+/vendor
+/bin

@@ -4,7 +4,10 @@ import (
 	"context"
 
 	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
+	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 )
+
+var log = logger.GetInstance()
 
 // HealthCheckHandler handles health check operations
 type HealthCheckHandler struct{}

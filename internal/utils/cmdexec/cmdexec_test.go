@@ -3,7 +3,7 @@ package cmdexec
 import (
 	"context"
 	"errors"
-	"io/ioutil"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -442,15 +442,23 @@ func TestExecutorWithRealCommands(t *testing.T) {
 	// Create a temporary file for testing
 	t.Run("file operations", func(t *testing.T) {
 		// Create a temporary file
-		tmpfile, err := ioutil.TempFile("", "cmdexec-test")
+		tmpfile, err := os.CreateTemp("", "cmdexec-test")
 		require.NoError(t, err, "Failed to create temporary file")
-		defer os.Remove(tmpfile.Name())
+		defer func(name string) {
+			err := os.Remove(name)
+			if err != nil {
+				fmt.Printf("%s", err.Error())
+			}
+		}(tmpfile.Name())
 
 		// Write test content to the file
 		testContent := "test content\nline 2\nline 3\n"
 		_, err = tmpfile.Write([]byte(testContent))
 		require.NoError(t, err, "Failed to write to temporary file")
-		tmpfile.Close()
+		err = tmpfile.Close()
+		if err != nil {
+			t.Fatalf("Failed to close temporary file: %v", err)
+		}
 
 		// Test reading the file with cat
 		output, err := executor.Execute(ctx, "cat", tmpfile.Name())

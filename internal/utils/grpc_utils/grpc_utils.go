@@ -437,9 +437,7 @@ func parseFQDNsFromOutput(output string) []string {
 			fqdn := fields[len(fields)-1]
 
 			// Remove trailing dot if present
-			if strings.HasSuffix(fqdn, ".") {
-				fqdn = fqdn[:len(fqdn)-1]
-			}
+			fqdn = strings.TrimSuffix(fqdn, ".")
 
 			fqdns = append(fqdns, fqdn)
 		}

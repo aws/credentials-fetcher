@@ -13,6 +13,7 @@ package.CredentialsFetcherV2 = {
             BrazilMakeGo = 3.0;
             GoLang = 1.x;
             Go3p-Github-Securego-Gosec-V2 = 2.x;
+            Go3p-Github-Golangci-GolangciLint-V2 = 2.x;
         };
     };
 

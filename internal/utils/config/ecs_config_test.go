@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,7 +23,11 @@ func createTempConfigFile(t *testing.T, content string) (string, func()) {
 
 	// Return the path and a cleanup function
 	cleanup := func() {
-		os.RemoveAll(tempDir)
+		err := os.RemoveAll(tempDir)
+		if err != nil {
+			fmt.Printf("%s", err.Error())
+			return
+		}
 	}
 
 	return tempConfigPath, cleanup

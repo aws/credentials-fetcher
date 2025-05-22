@@ -10,15 +10,12 @@ import (
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap"
 	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
-	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/config"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
-
-var log = logger.GetInstance()
 
 // AddNonDomainJoinedKerberosLeaseInterface extends KerberosTicketOperations with Add-specific operations
 type AddNonDomainJoinedKerberosLeaseInterface interface {

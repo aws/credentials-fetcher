@@ -2,6 +2,7 @@ package logger
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
 	"os"
 	"sync"
@@ -10,11 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type testHandler struct {
-	*slog.TextHandler
-	buf *bytes.Buffer
-}
 
 // Reset the singleton instance for testing
 func resetSingleton() {
@@ -95,7 +91,12 @@ func TestGetInstance(t *testing.T) {
 func TestLogLevelFromEnvironment(t *testing.T) {
 	// Save original environment and restore it after the test
 	originalLogLevel := os.Getenv("LOG_LEVEL")
-	defer os.Setenv("LOG_LEVEL", originalLogLevel)
+	defer func(key, value string) {
+		err := os.Setenv(key, value)
+		if err != nil {
+			fmt.Printf("%s", err.Error())
+		}
+	}("LOG_LEVEL", originalLogLevel)
 
 	testCases := []struct {
 		name          string
@@ -147,7 +148,11 @@ func TestLogLevelFromEnvironment(t *testing.T) {
 			resetSingleton()
 
 			// Set environment variable for this test case
-			os.Setenv("LOG_LEVEL", tc.envLevel)
+			err := os.Setenv("LOG_LEVEL", tc.envLevel)
+			if err != nil {
+				fmt.Printf("%s", err.Error())
+				return
+			}
 
 			// Capture stdout
 			oldStdout := os.Stdout
@@ -164,12 +169,14 @@ func TestLogLevelFromEnvironment(t *testing.T) {
 			log.Error("error " + tc.testMessage)
 
 			// Restore stdout
-			w.Close()
+			if err := w.Close(); err != nil {
+				t.Fatalf("Failed to close writer: %v", err)
+			}
 			os.Stdout = oldStdout
 
 			// Read captured output
 			var buf bytes.Buffer
-			_, err := buf.ReadFrom(r)
+			_, err = buf.ReadFrom(r)
 			require.NoError(t, err)
 			output := buf.String()
 
