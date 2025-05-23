@@ -25,17 +25,15 @@ cd CredentialsFetcherV2 && brazil ws use --p CredentialsFetcherV2 --p Credential
 cd src/CredentialsFetcherV2
 
 # Build all packages
-brazil-recursive-cmd --allPackages brazil-build release
+brazil-build
 ```
 
-### Run Tests
+### Prerequisites
 
-```bash
-# Navigate to the test directory
-cd src/CredentialsFetcherV2Tests
+The following dependencies are needed on the instance
 
-# Run tests
-brazil-build test
+```
+dnf install openldap-clients krb5-workstation sssd
 ```
 
 ### Development and Testing
@@ -43,11 +41,11 @@ brazil-build test
 It is recommended to develop on AL (ex: cloud desktop). To test any changes, an EC2 instance with Active Directory setup is a requirement.
 1. Setup the cdk stack according to the instructions [here](https://github.com/aws/credentials-fetcher/blob/dc5c2caec5e78052327b39cf2528eea7b2f45c91/cdk/cdk-domainless-mode/README.md).
 2. Create a binary with the latest changes using `brazil-build`.
-3. The binary is created at `build/bin/credentials-fetcher`
+3. The binary is created at `bin/credentials-fetcherd`
 3. `scp` this binary to the EC2 instance setup above, along with the `service/credentials-fetcher.service` file
 4. SSH into the EC2 instance and run the following
 ```
-sudo cp credentials-fetcher /usr/local/bin
+sudo cp credentials-fetcherd /usr/local/bin
 sudo chmod +x /usr/local/bin/credentials-fetcher
 sudo cp credentials-fetcher.service /etc/systemd/system/
 ```
@@ -62,8 +60,10 @@ sudo systemctl status credentials-fetcher.service
 ```
 sudo journalctl -u credentials-fetcher.service -f
 ```
-7. To see credentials-fetcher in action, run `systemctl restart ecs`
-8. Launch a new task from the AWS console
+
+### ECS
+1. To see credentials-fetcher in action in ECS, run `systemctl restart ecs`
+2. Launch a new task from the AWS console
 ```bash
 ECS > Credentials-fetcher-ecs-load-test > Tasks > Run new task
 # Stop any currently running task
@@ -75,6 +75,10 @@ Networking Security groups: Select all Security Groups
 Hit Create
 ```
 The task should successfully run and you should see the logs in the EC2 instance.
+
+### Standalone
+1. Run the python script [here](https://github.com/aws/credentials-fetcher/blob/mainline/cdk/cdk-domainless-mode/test-scripts/add_delete_kerberos_leases.py).
+2. See the Kerberos leases being added and delete in the jounrnalctl logs.
 
 ## Related Packages
 
