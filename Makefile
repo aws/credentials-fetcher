@@ -85,8 +85,8 @@ $(BIN_DIR)/credentials-fetcherd:
 # Define a custom install target that won't be run by default
 .PHONY: cf-install
 cf-install:: build cf-create-service
-	sudo install -m 750 $(BIN_DIR)/credentials-fetcherd /usr/sbin/
-	sudo install -m 600 $(BUILD_DIR)/credentials-fetcher.service /usr/lib/systemd/system/
+	sudo install -m 755 $(BIN_DIR)/credentials-fetcherd /usr/sbin/
+	sudo install -m 644 $(BUILD_DIR)/credentials-fetcher.service /usr/lib/systemd/system/
 	sudo systemctl daemon-reload
 
 # Create systemd service file

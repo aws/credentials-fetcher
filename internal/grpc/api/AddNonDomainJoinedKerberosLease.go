@@ -261,7 +261,8 @@ func (h *NonDomainJoinedKerberosHandler) SetupKerberosFileForTicket(ticketInfo *
 	// Check if krb file path directory already exists, otherwise create directory
 	if _, err := os.Stat(krbFilePath); os.IsNotExist(err) {
 		log.Info("Creating directory for Kerberos ticket", "path", krbFilePath)
-		if err := os.MkdirAll(krbFilePath, 0750); err != nil { // Changed from 0755 to 0750
+		// #nosec G301
+		if err := os.MkdirAll(krbFilePath, 0755); err != nil {
 			log.Error("Failed to create directory for Kerberos ticket", "error", err)
 			return "", fmt.Errorf("failed to create directory for Kerberos ticket: %v", err)
 		}

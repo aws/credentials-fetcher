@@ -18,7 +18,7 @@ func createTempConfigFile(t *testing.T, content string) (string, func()) {
 
 	// Create a temporary ECS config file
 	tempConfigPath := filepath.Join(tempDir, "ecs.config")
-	err = os.WriteFile(tempConfigPath, []byte(content), 0644)
+	err = os.WriteFile(tempConfigPath, []byte(content), 0644) /* #nosec */
 	require.NoError(t, err)
 
 	// Return the path and a cleanup function

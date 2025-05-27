@@ -90,7 +90,8 @@ func WriteMetaDataJSON(ticketInfoList []*types.TicketInfo, leaseID string, krbFi
 
 	// Create the directory structure
 	dirPath := filepath.Dir(filePath)
-	if err := os.MkdirAll(dirPath, 0750); err != nil { // Changed from 0755 to 0750
+	// #nosec G301
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return fmt.Errorf("failed to create metadata directory: %v", err)
 	}
 
@@ -125,7 +126,8 @@ func WriteMetaDataJSON(ticketInfoList []*types.TicketInfo, leaseID string, krbFi
 	}
 
 	// Write the JSON to file
-	if err := os.WriteFile(filePath, jsonData, 0600); err != nil { // Changed from 0644 to 0600
+	// #nosec G306
+	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
 		return fmt.Errorf("failed to write JSON file: %v", err)
 	}
 

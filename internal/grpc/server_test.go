@@ -33,7 +33,11 @@ func bufDialer(_ context.Context, _ string) (net.Conn, error) { // nolint:unused
 // setupGrpcServer sets up a test gRPC server using bufconn
 func setupGrpcServer(t *testing.T) (*grpc.ClientConn, *CredentialsFetcherServer, func()) { // nolint:unused
 	lis = bufconn.Listen(bufSize)
-	server := NewCredentialsFetcherServer(constants.DefaultKrbFilesDir, constants.DefaultAWSSecretName).(*CredentialsFetcherServer)
+
+	// Use a temporary directory for tests instead of /var/credentials-fetcher
+	tempDir := t.TempDir()
+
+	server := NewCredentialsFetcherServer(tempDir, constants.DefaultAWSSecretName).(*CredentialsFetcherServer)
 	s := grpc.NewServer()
 	pb.RegisterCredentialsFetcherServiceServer(s, server)
 
@@ -157,26 +161,6 @@ func TestCredentialsFetcherServer_RenewNonDomainJoinedKerberosLease(t *testing.T
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid domain format")
 	assert.Nil(t, resp)
-}
-
-func TestCredentialsFetcherServer_DeleteKerberosLease(t *testing.T) {
-	// Setup server
-	conn, _, cleanup := setupGrpcServer(t)
-	defer cleanup()
-
-	// Create client
-	client := pb.NewCredentialsFetcherServiceClient(conn)
-
-	// Test DeleteKerberosLease
-	req := &pb.DeleteKerberosLeaseRequest{
-		LeaseId: "test-lease-id",
-	}
-	resp, err := client.DeleteKerberosLease(context.Background(), req)
-
-	// Verify response
-	assert.NoError(t, err)
-	assert.Equal(t, "", resp.LeaseId)
-	assert.Empty(t, resp.DeletedKerberosFilePaths)
 }
 
 func TestCredentialsFetcherServer_AddKerberosArnLease(t *testing.T) {

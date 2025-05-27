@@ -38,14 +38,14 @@ func TestGetMetadataFilePaths(t *testing.T) {
 	// Create valid metadata files
 	for _, file := range validFiles {
 		path := filepath.Join(tempDir, file)
-		err := os.WriteFile(path, []byte("{}"), 0644)
+		err := os.WriteFile(path, []byte("{}"), 0644) /* #nosec */
 		require.NoError(t, err)
 	}
 
 	// Create non-metadata files
 	for _, file := range invalidFiles {
 		path := filepath.Join(tempDir, file)
-		err := os.WriteFile(path, []byte("{}"), 0600)
+		err := os.WriteFile(path, []byte("{}"), 0644) /* #nosec */
 		require.NoError(t, err)
 	}
 
@@ -116,7 +116,7 @@ func TestReadMetadataJSON(t *testing.T) {
 		newFormatPath := filepath.Join(tempDir, "new_format_metadata.json")
 		newFormatJSON, err := json.Marshal(newFormatData)
 		require.NoError(t, err)
-		err = os.WriteFile(newFormatPath, newFormatJSON, 0600)
+		err = os.WriteFile(newFormatPath, newFormatJSON, 0644) /* #nosec */
 		require.NoError(t, err)
 
 		// Test reading new format
@@ -159,7 +159,7 @@ func TestReadMetadataJSON(t *testing.T) {
 		oldFormatPath := filepath.Join(tempDir, "old_format_metadata.json")
 		oldFormatJSON, err := json.Marshal(oldFormatData)
 		require.NoError(t, err)
-		err = os.WriteFile(oldFormatPath, oldFormatJSON, 0600)
+		err = os.WriteFile(oldFormatPath, oldFormatJSON, 0644) /* #nosec */
 		require.NoError(t, err)
 
 		// Test reading old format
@@ -177,7 +177,7 @@ func TestReadMetadataJSON(t *testing.T) {
 	t.Run("Invalid JSON", func(t *testing.T) {
 		// Create invalid JSON file
 		invalidPath := filepath.Join(tempDir, "invalid_metadata.json")
-		err = os.WriteFile(invalidPath, []byte("invalid json"), 0600)
+		err = os.WriteFile(invalidPath, []byte("invalid json"), 0644) /* #nosec */
 		require.NoError(t, err)
 
 		// Test reading invalid JSON
@@ -202,7 +202,7 @@ func TestWriteMetaDataJSON(t *testing.T) {
 
 	// Create metadata directory with proper permissions
 	metadataDir := filepath.Join(tempDir, "metadata")
-	err = os.MkdirAll(metadataDir, 0750)
+	err = os.MkdirAll(metadataDir, 0755)
 	require.NoError(t, err)
 
 	t.Run("Basic Write", func(t *testing.T) {
@@ -353,12 +353,12 @@ func TestWriteMetaDataJSON(t *testing.T) {
 		// Create a file with the same name as the directory we want to create
 		// This will cause MkdirAll to fail
 		readOnlyDir := filepath.Join(tempDir, "readonly")
-		err := os.MkdirAll(readOnlyDir, 0750)
+		err := os.MkdirAll(readOnlyDir, 0755)
 		require.NoError(t, err)
 
 		// Create a file that will conflict with directory creation
 		conflictPath := filepath.Join(readOnlyDir, "conflict")
-		err = os.WriteFile(conflictPath, []byte("test"), 0600)
+		err = os.WriteFile(conflictPath, []byte("test"), 0644) /* #nosec */
 		require.NoError(t, err)
 
 		// Try to write metadata to a path that will conflict

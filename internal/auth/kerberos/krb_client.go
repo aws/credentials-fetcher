@@ -2,8 +2,10 @@ package kerberos
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -387,5 +389,97 @@ func (c *Client) RenewKerberosTicket(ctx context.Context, krbFilePath string) er
 	}
 
 	log.Info("Successfully renewed Kerberos ticket", "krb_file_path", krbFilePath)
+	return nil
+}
+
+// DeleteKerberosLease deletes a Kerberos ticket file and removes its associated metadata
+func (c *Client) DeleteKerberosLease(ctx context.Context, krbFilePath string) error {
+	log.Info("Deleting Kerberos lease", "krb_file_path", krbFilePath)
+
+	// First, try to destroy the Kerberos ticket using kdestroy
+	output, err := c.shellExecutor.Execute(
+		ctx,
+		"kdestroy",
+		"-c", krbFilePath,
+	)
+
+	if err != nil {
+		log.Warn("Kdestroy command failed, falling back to manual file deletion",
+			"error", err,
+			"output", string(output),
+			"krb_file_path", krbFilePath)
+	}
+
+	// Regardless of kdestroy result, attempt to remove the ticket file
+	if err := os.Remove(krbFilePath); err != nil && !os.IsNotExist(err) {
+		log.Error("Failed to delete Kerberos ticket file",
+			"error", err,
+			"krb_file_path", krbFilePath)
+		return fmt.Errorf("failed to delete Kerberos ticket file: %w", err)
+	}
+
+	// Get the metadata file path associated with this ticket
+	metadataDir := filepath.Dir(krbFilePath)
+	metadataFiles, err := getMetadataFilePathsFunc(metadataDir)
+	if err != nil {
+		log.Error("Failed to get metadata files",
+			"error", err,
+			"directory", metadataDir)
+		return fmt.Errorf("failed to get metadata files: %w", err)
+	}
+
+	// Find and update relevant metadata files
+	for _, metadataPath := range metadataFiles {
+		if err := c.removeTicketFromMetadata(metadataPath, krbFilePath); err != nil {
+			log.Warn("Failed to update metadata file",
+				"error", err,
+				"metadata_path", metadataPath,
+				"krb_file_path", krbFilePath)
+			// Continue with other metadata files
+		}
+	}
+
+	log.Info("Successfully deleted Kerberos lease", "krb_file_path", krbFilePath)
+	return nil
+}
+
+// removeTicketFromMetadata removes the specified ticket from the metadata file
+func (c *Client) removeTicketFromMetadata(metadataPath, krbFilePath string) error {
+	ticketInfoList, err := readMetadataJSONFunc(metadataPath)
+	if err != nil {
+		return fmt.Errorf("failed to read metadata file: %w", err)
+	}
+
+	// Filter out the ticket we want to remove
+	var updatedTicketInfoList []*types.TicketInfo
+	for _, ticketInfo := range ticketInfoList {
+		if ticketInfo.KrbFilePath != krbFilePath {
+			updatedTicketInfoList = append(updatedTicketInfoList, ticketInfo)
+		}
+	}
+
+	// If no tickets were removed, return early
+	if len(updatedTicketInfoList) == len(ticketInfoList) {
+		return nil
+	}
+
+	// Write the updated list back to the metadata file
+	if len(updatedTicketInfoList) == 0 {
+		// If no tickets remain, delete the metadata file
+		if err := os.Remove(metadataPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to delete empty metadata file: %w", err)
+		}
+	} else {
+		// Otherwise, write the updated list back to the file
+		data, err := json.Marshal(updatedTicketInfoList)
+		if err != nil {
+			return fmt.Errorf("failed to marshal updated ticket info list: %w", err)
+		}
+
+		if err := os.WriteFile(metadataPath, data, 0600); err != nil {
+			return fmt.Errorf("failed to write updated metadata file: %w", err)
+		}
+	}
+
 	return nil
 }
