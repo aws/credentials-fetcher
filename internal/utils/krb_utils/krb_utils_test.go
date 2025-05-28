@@ -1,6 +1,7 @@
 package krb_utils
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -371,6 +372,162 @@ func TestParseTicketDates(t *testing.T) {
 				assert.False(t, ticket.RenewUntil.IsZero(), "Expected renew time to be set")
 			} else {
 				assert.True(t, ticket.RenewUntil.IsZero(), "Expected renew time to be zero")
+			}
+		})
+	}
+}
+
+func TestProcessCredentialSpecs(t *testing.T) {
+	testCases := []struct {
+		name             string
+		credspecContents []string
+		username         string
+		leaseID          string
+		krbFilesDir      string
+		expectedCount    int
+		expectedError    bool
+	}{
+		{
+			name: "Valid credential specs - domain-joined mode",
+			credspecContents: []string{
+				`{
+					"DomainJoinConfig": {
+						"DnsName": "example.com",
+						"NetbiosName": "EXAMPLE"
+					},
+					"ActiveDirectoryConfig": {
+						"GroupManagedServiceAccounts": [
+							{
+								"Name": "WebApp01",
+								"Scope": "example.com"
+							}
+						]
+					}
+				}`,
+				`{
+					"DomainJoinConfig": {
+						"DnsName": "example.com",
+						"NetbiosName": "EXAMPLE"
+					},
+					"ActiveDirectoryConfig": {
+						"GroupManagedServiceAccounts": [
+							{
+								"Name": "WebApp02",
+								"Scope": "example.com"
+							}
+						]
+					}
+				}`,
+			},
+			username:      "", // Empty username indicates domain-joined mode
+			leaseID:       "lease123",
+			krbFilesDir:   "/tmp/krb",
+			expectedCount: 2,
+			expectedError: false,
+		},
+		{
+			name: "Valid credential specs - domainless mode",
+			credspecContents: []string{
+				`{
+					"DomainJoinConfig": {
+						"DnsName": "example.com",
+						"NetbiosName": "EXAMPLE"
+					},
+					"ActiveDirectoryConfig": {
+						"GroupManagedServiceAccounts": [
+							{
+								"Name": "WebApp01",
+								"Scope": "example.com"
+							}
+						],
+						"HostAccountConfig": {
+							"PluginInput": {
+								"CredentialArn": "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret"
+							}
+						}
+					}
+				}`,
+			},
+			username:      "domainless-user",
+			leaseID:       "lease456",
+			krbFilesDir:   "/tmp/krb",
+			expectedCount: 1,
+			expectedError: false,
+		},
+		{
+			name: "Duplicate service accounts",
+			credspecContents: []string{
+				`{
+					"DomainJoinConfig": {
+						"DnsName": "example.com",
+						"NetbiosName": "EXAMPLE"
+					},
+					"ActiveDirectoryConfig": {
+						"GroupManagedServiceAccounts": [
+							{
+								"Name": "WebApp01",
+								"Scope": "example.com"
+							}
+						]
+					}
+				}`,
+				`{
+					"DomainJoinConfig": {
+						"DnsName": "example.com",
+						"NetbiosName": "EXAMPLE"
+					},
+					"ActiveDirectoryConfig": {
+						"GroupManagedServiceAccounts": [
+							{
+								"Name": "WebApp01",
+								"Scope": "example.com"
+							}
+						]
+					}
+				}`,
+			},
+			username:      "",
+			leaseID:       "lease789",
+			krbFilesDir:   "/tmp/krb",
+			expectedCount: 1, // Should deduplicate
+			expectedError: false,
+		},
+		{
+			name: "Invalid credential spec",
+			credspecContents: []string{
+				`{invalid json}`,
+			},
+			username:      "",
+			leaseID:       "lease999",
+			krbFilesDir:   "/tmp/krb",
+			expectedCount: 0,
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ticketInfoList, err := ProcessCredentialSpecs(tc.credspecContents, tc.username, tc.leaseID, tc.krbFilesDir)
+
+			if tc.expectedError {
+				assert.Error(t, err, "Expected an error but got none")
+				assert.Nil(t, ticketInfoList, "Expected nil ticket info list")
+			} else {
+				assert.NoError(t, err, "Did not expect an error")
+				assert.NotNil(t, ticketInfoList, "Expected non-nil ticket info list")
+				assert.Equal(t, tc.expectedCount, len(ticketInfoList), "Unexpected number of ticket infos")
+
+				// Verify ticket info properties
+				for _, ticketInfo := range ticketInfoList {
+					assert.NotEmpty(t, ticketInfo.KrbFilePath, "Expected KrbFilePath to be set")
+					assert.NotEmpty(t, ticketInfo.ServiceAccountName, "Expected ServiceAccountName to be set")
+					assert.NotEmpty(t, ticketInfo.DomainName, "Expected DomainName to be set")
+					assert.Equal(t, tc.username, ticketInfo.DomainlessUser, "Expected DomainlessUser to match username")
+
+					// Check that the KrbFilePath is constructed correctly
+					expectedPath := filepath.Join(tc.krbFilesDir, tc.leaseID, ticketInfo.ServiceAccountName)
+					assert.Equal(t, expectedPath, ticketInfo.KrbFilePath, "Unexpected KrbFilePath")
+				}
 			}
 		})
 	}

@@ -334,40 +334,6 @@ func (c *Client) createKerberosTicket(ctx context.Context, ticketInfo *types.Tic
 	return nil
 }
 
-// CreateTicketForServiceAccount creates a Kerberos ticket for a service account
-func (c *Client) CreateTicketForServiceAccount(ctx context.Context, domain, username, password, krbFilePath string) error {
-	log.Info("Creating Kerberos ticket for service account",
-		"domain", domain,
-		"username", username,
-		"krb_file_path", krbFilePath)
-
-	// Build and execute the kinit command to create a Kerberos ticket
-	principal := fmt.Sprintf("%s@%s", username, strings.ToUpper(domain))
-
-	// Use ExecuteWithStdin to pipe the password to kinit with command-line arguments
-	output, err := c.shellExecutor.ExecuteWithStdin(
-		ctx,
-		"kinit",
-		[]byte(password+"\n"), // Add newline to simulate pressing Enter
-		"-c", krbFilePath,
-		principal,
-	)
-
-	if err != nil {
-		log.Error("Kinit command failed for service account",
-			"error", err,
-			"output", string(output),
-			"principal", principal)
-		return fmt.Errorf("failed to execute kinit command: %v: %s", err, string(output))
-	}
-
-	log.Info("Successfully created Kerberos ticket for service account",
-		"principal", principal,
-		"krb_file_path", krbFilePath)
-
-	return nil
-}
-
 // RenewKerberosTicket renews a Kerberos ticket using kinit -R
 func (c *Client) RenewKerberosTicket(ctx context.Context, krbFilePath string) error {
 	log.Info("Renewing Kerberos ticket", "krb_file_path", krbFilePath)

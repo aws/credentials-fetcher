@@ -38,6 +38,7 @@ type CredentialsFetcherServer struct {
 
 	// API handlers
 	nonDomainJoinedHandler *api.NonDomainJoinedKerberosHandler
+	domainJoinedHandler    *api.DomainJoinedKerberosLeaseHandler
 	healthCheckHandler     *api.HealthCheckHandler
 	kerberosLeaseHandler   *api.KerberosLeaseHandler
 }
@@ -61,6 +62,7 @@ var NewCredentialsFetcherServer NewCredentialsFetcherServerFunc = func(krbFilesD
 
 		// Initialize API handlers
 		nonDomainJoinedHandler: api.NewNonDomainJoinedKerberosHandler(krbFilesDir, awsSMSecretName, krbClient, ldapClient, shellExecutor),
+		domainJoinedHandler:    api.NewDomainJoinedKerberosLeaseHandler(krbFilesDir, awsSMSecretName, krbClient),
 		healthCheckHandler:     api.NewHealthCheckHandler(),
 		kerberosLeaseHandler:   api.NewKerberosLeaseHandler(krbFilesDir, krbClient),
 	}
@@ -68,12 +70,10 @@ var NewCredentialsFetcherServer NewCredentialsFetcherServerFunc = func(krbFilesD
 
 // AddKerberosLease implements the AddKerberosLease RPC method
 func (s *CredentialsFetcherServer) AddKerberosLease(ctx context.Context, req *pb.CreateKerberosLeaseRequest) (*pb.CreateKerberosLeaseResponse, error) {
-	log.Info("Received AddKerberosLease request")
-
-	return &pb.CreateKerberosLeaseResponse{
-		LeaseId:                  "",
-		CreatedKerberosFilePaths: []string{},
-	}, nil
+	log.Info("Received AddDomainJoinedKerberosLease request")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.domainJoinedHandler.AddKerberosLease(ctx, req)
 }
 
 // AddNonDomainJoinedKerberosLease implements the AddNonDomainJoinedKerberosLease RPC method

@@ -205,8 +205,8 @@ func TestParseCredSpec(t *testing.T) {
 		assert.Contains(t, err.Error(), "service account name contains invalid characters")
 	})
 
-	t.Run("Missing HostAccountConfig", func(t *testing.T) {
-		badCredSpec := `{
+	t.Run("Domain Joined Host (No HostAccountConfig)", func(t *testing.T) {
+		domainJoinedCredSpec := `{
 			"DomainJoinConfig": {
 				"DnsName": "example.com",
 				"NetbiosName": "EXAMPLE"
@@ -220,9 +220,11 @@ func TestParseCredSpec(t *testing.T) {
 				]
 			}
 		}`
-		_, err := ParseCredSpec(badCredSpec)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "missing or invalid HostAccountConfig")
+		credSpec, err := ParseCredSpec(domainJoinedCredSpec)
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", credSpec.DomainName)
+		assert.Equal(t, "WebApp01", credSpec.ServiceAccountName)
+		assert.Equal(t, "", credSpec.CredentialArn) // Empty credential ARN for domain-joined host
 	})
 
 	t.Run("Missing PluginInput", func(t *testing.T) {

@@ -2,16 +2,70 @@ package krb_utils
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
 var log = logger.GetInstance()
+
+// ProcessCredentialSpecs processes credential specs and returns ticket info list
+// If username is empty, it assumes domain-joined mode
+func ProcessCredentialSpecs(credspecContents []string, username, leaseID string, krbFilesDir string) ([]*types.TicketInfo, error) {
+	var ticketInfoList []*types.TicketInfo
+	krbFilePathSet := make(map[string]bool) // Set to track unique Kerberos file paths
+
+	for _, credspecContent := range credspecContents {
+		// Parse the credential spec
+		credSpec, err := grpc_utils.ParseCredSpec(credspecContent)
+		if err != nil {
+			log.Error("Failed to parse credential spec", "error", err)
+			return nil, fmt.Errorf("failed to parse credential spec: %v", err)
+		}
+
+		// Create the Kerberos file path
+		krbFilePath := filepath.Join(krbFilesDir, leaseID, credSpec.ServiceAccountName)
+
+		log.Info("Created Kerberos file path for lease ID ", leaseID, " Service account ", credSpec.ServiceAccountName)
+
+		// Create ticket info object and populate it with information from the credential spec
+		ticketInfo := &types.TicketInfo{
+			KrbFilePath:        krbFilePath,
+			ServiceAccountName: credSpec.ServiceAccountName,
+			DomainName:         credSpec.DomainName,
+			DomainlessUser:     username, // Assumes domain-joined mode if username is "" (empty string)
+			CredentialArn:      credSpec.CredentialArn,
+		}
+
+		// Handle duplicate service accounts
+		if _, exists := krbFilePathSet[krbFilePath]; !exists {
+			krbFilePathSet[krbFilePath] = true
+			ticketInfoList = append(ticketInfoList, ticketInfo)
+		} else {
+			log.Info("Skipping duplicate service account", "path", krbFilePath)
+		}
+	}
+	log.Info("Successfully parsed all supplied credspecs")
+
+	return ticketInfoList, nil
+}
+
+// CleanupKerberosFiles removes the Kerberos files if there's an error
+func CleanupKerberosFiles(krbFilePath string) error {
+	log.Info("Cleaning up Kerberos files", "path", krbFilePath)
+	if err := os.Remove(krbFilePath); err != nil && !os.IsNotExist(err) {
+		log.Error("Failed to remove Kerberos file", "path", krbFilePath, "error", err)
+		return fmt.Errorf("failed to remove Kerberos file: %v", err)
+	}
+	return nil
+}
 
 // ParseKlistOutput parses the output of klist command to populate both Ticket and TicketInfo structs
 func ParseKlistOutput(output string, path string) (*types.Ticket, *types.TicketInfo, error) {

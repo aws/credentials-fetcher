@@ -13,6 +13,7 @@ import (
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/config"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/krb_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
@@ -149,39 +150,7 @@ func (h *NonDomainJoinedKerberosHandler) ValidateCredentials(username, password,
 
 // ProcessCredentialSpecs processes the credential specs and returns a list of ticket info objects
 func (h *NonDomainJoinedKerberosHandler) ProcessCredentialSpecs(credspecContents []string, username, leaseID string) ([]*types.TicketInfo, error) {
-	var ticketInfoList []*types.TicketInfo
-	krbFilePathSet := make(map[string]bool) // Set to track unique Kerberos file paths
-
-	for _, credspecContent := range credspecContents {
-		// Parse the credential spec
-		credSpec, err := grpc_utils.ParseCredSpec(credspecContent)
-		if err != nil {
-			log.Error("Failed to parse credential spec", "error", err)
-			return nil, fmt.Errorf("failed to parse credential spec: %v", err)
-		}
-
-		// Create the Kerberos file path similar to C++ implementation
-		krbFilePath := filepath.Join(h.krbFilesDir, leaseID, credSpec.ServiceAccountName)
-
-		// Create ticket info object and populate it with information from the credential spec
-		ticketInfo := &types.TicketInfo{
-			KrbFilePath:        krbFilePath,
-			ServiceAccountName: credSpec.ServiceAccountName,
-			DomainName:         credSpec.DomainName,
-			DomainlessUser:     username,
-			CredentialArn:      credSpec.CredentialArn,
-		}
-
-		// Handle duplicate service accounts (similar to C++ implementation)
-		if _, exists := krbFilePathSet[krbFilePath]; !exists {
-			krbFilePathSet[krbFilePath] = true
-			ticketInfoList = append(ticketInfoList, ticketInfo)
-		} else {
-			log.Info("Skipping duplicate service account", "path", krbFilePath)
-		}
-	}
-
-	return ticketInfoList, nil
+	return krb_utils.ProcessCredentialSpecs(credspecContents, username, leaseID, h.krbFilesDir)
 }
 
 // CreateKerberosTickets creates Kerberos tickets for each ticket info
@@ -322,10 +291,5 @@ func (h *NonDomainJoinedKerberosHandler) GetDistinguishedName(ticketInfo *types.
 
 // CleanupKerberosFiles removes the Kerberos files if there's an error
 func (h *NonDomainJoinedKerberosHandler) CleanupKerberosFiles(krbFilePath string) error {
-	log.Info("Cleaning up Kerberos files", "path", krbFilePath)
-	if err := os.Remove(krbFilePath); err != nil && !os.IsNotExist(err) {
-		log.Error("Failed to remove Kerberos file", "path", krbFilePath, "error", err)
-		return fmt.Errorf("failed to remove Kerberos file: %v", err)
-	}
-	return nil
+	return krb_utils.CleanupKerberosFiles(krbFilePath)
 }

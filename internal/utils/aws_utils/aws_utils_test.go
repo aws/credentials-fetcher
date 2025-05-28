@@ -1,90 +1,256 @@
 package aws_utils
 
 import (
-	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/aws/aws-sdk-go/service/secretsmanager/secretsmanageriface"
+	"github.com/stretchr/testify/assert"
 )
 
 // Mock Secrets Manager client
 type mockSecretsManagerClient struct {
 	secretsmanageriface.SecretsManagerAPI
-	getSecretValueOutput secretsmanager.GetSecretValueOutput
+	getSecretValueOutput *secretsmanager.GetSecretValueOutput
 	getSecretValueError  error
 }
 
 func (m *mockSecretsManagerClient) GetSecretValue(input *secretsmanager.GetSecretValueInput) (*secretsmanager.GetSecretValueOutput, error) {
-	return &m.getSecretValueOutput, m.getSecretValueError
+	return m.getSecretValueOutput, m.getSecretValueError
 }
 
-func TestGetSecretSuccess(t *testing.T) {
-	// Mock data
-	secretData := map[string]string{
-		"username": "testuser",
-		"password": "testpassword",
-	}
-	secretJSON, _ := json.Marshal(secretData)
-
-	// Mock client with successful response
-	client := &mockSecretsManagerClient{
-		getSecretValueOutput: secretsmanager.GetSecretValueOutput{
-			SecretString: aws.String(string(secretJSON)),
+func TestExtractCredentialsFromSecret(t *testing.T) {
+	tests := []struct {
+		name           string
+		secretMap      map[string]interface{}
+		wantUsername   string
+		wantPassword   string
+		wantDN         string
+		wantErr        bool
+		expectedErrMsg string
+	}{
+		{
+			name: "Valid secret with primary fields",
+			secretMap: map[string]interface{}{
+				"username":          "testuser",
+				"password":          "testpass",
+				"distinguishedName": "CN=Test,DC=example,DC=com",
+			},
+			wantUsername: "testuser",
+			wantPassword: "testpass",
+			wantDN:       "CN=Test,DC=example,DC=com",
+			wantErr:      false,
+		},
+		{
+			name: "Valid secret with alternate fields",
+			secretMap: map[string]interface{}{
+				"usernameOfStandardUserAccount": "altuser",
+				"passwordOfStandardUserAccount": "altpass",
+				"distinguishedNameOfgMSA":       "CN=AltTest,DC=example,DC=com",
+			},
+			wantUsername: "altuser",
+			wantPassword: "altpass",
+			wantDN:       "CN=AltTest,DC=example,DC=com",
+			wantErr:      false,
+		},
+		{
+			name: "Valid secret with mixed fields",
+			secretMap: map[string]interface{}{
+				"username":                      "testuser",
+				"passwordOfStandardUserAccount": "altpass",
+				"distinguishedNameOfgMSA":       "CN=MixTest,DC=example,DC=com",
+			},
+			wantUsername: "testuser",
+			wantPassword: "altpass",
+			wantDN:       "CN=MixTest,DC=example,DC=com",
+			wantErr:      false,
+		},
+		{
+			name: "Valid secret without DN",
+			secretMap: map[string]interface{}{
+				"username": "testuser",
+				"password": "testpass",
+			},
+			wantUsername: "testuser",
+			wantPassword: "testpass",
+			wantDN:       "",
+			wantErr:      false,
+		},
+		{
+			name:           "Nil secret map",
+			secretMap:      nil,
+			wantUsername:   "",
+			wantPassword:   "",
+			wantDN:         "",
+			wantErr:        true,
+			expectedErrMsg: "secret map is nil",
+		},
+		{
+			name: "Missing username",
+			secretMap: map[string]interface{}{
+				"password": "testpass",
+			},
+			wantUsername:   "",
+			wantPassword:   "",
+			wantDN:         "",
+			wantErr:        true,
+			expectedErrMsg: "username not found in secret",
+		},
+		{
+			name: "Missing password",
+			secretMap: map[string]interface{}{
+				"username": "testuser",
+			},
+			wantUsername:   "",
+			wantPassword:   "",
+			wantDN:         "",
+			wantErr:        true,
+			expectedErrMsg: "password not found in secret",
+		},
+		{
+			name: "Empty username",
+			secretMap: map[string]interface{}{
+				"username": "",
+				"password": "testpass",
+			},
+			wantUsername:   "",
+			wantPassword:   "",
+			wantDN:         "",
+			wantErr:        true,
+			expectedErrMsg: "username not found in secret",
+		},
+		{
+			name: "Empty password",
+			secretMap: map[string]interface{}{
+				"username": "testuser",
+				"password": "",
+			},
+			wantUsername:   "",
+			wantPassword:   "",
+			wantDN:         "",
+			wantErr:        true,
+			expectedErrMsg: "password not found in secret",
+		},
+		{
+			name: "Non-string username",
+			secretMap: map[string]interface{}{
+				"username": 123,
+				"password": "testpass",
+			},
+			wantUsername:   "",
+			wantPassword:   "",
+			wantDN:         "",
+			wantErr:        true,
+			expectedErrMsg: "username not found in secret",
+		},
+		{
+			name: "Non-string password",
+			secretMap: map[string]interface{}{
+				"username": "testuser",
+				"password": 123,
+			},
+			wantUsername:   "",
+			wantPassword:   "",
+			wantDN:         "",
+			wantErr:        true,
+			expectedErrMsg: "password not found in secret",
+		},
+		{
+			name: "Non-string DN",
+			secretMap: map[string]interface{}{
+				"username":          "testuser",
+				"password":          "testpass",
+				"distinguishedName": 123,
+			},
+			wantUsername: "testuser",
+			wantPassword: "testpass",
+			wantDN:       "",
+			wantErr:      false,
 		},
 	}
 
-	// Call function with mocked client
-	result, err := getSecretWithClient(client, "test-secret-arn")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			username, password, dn, err := ExtractCredentialsFromSecret(tt.secretMap)
 
-	// Verify results
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	// Check if username matches
-	username, ok := result["username"].(string)
-	if !ok || username != "testuser" {
-		t.Errorf("Expected username 'testuser', got %v", result["username"])
-	}
-}
-
-func TestGetSecretAPIError(t *testing.T) {
-	// Mock client with error response
-	client := &mockSecretsManagerClient{
-		getSecretValueError: errors.New("access denied"),
-	}
-
-	// Call function with mocked client
-	_, err := getSecretWithClient(client, "test-secret-arn")
-
-	// Verify error
-	if err == nil {
-		t.Error("Expected an error, got nil")
-	}
-	if err.Error() != "failed to get secret value: access denied" {
-		t.Errorf("Unexpected error message: %v", err)
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.expectedErrMsg != "" {
+					assert.Contains(t, err.Error(), tt.expectedErrMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantUsername, username)
+				assert.Equal(t, tt.wantPassword, password)
+				assert.Equal(t, tt.wantDN, dn)
+			}
+		})
 	}
 }
 
-func TestGetSecretInvalidJSON(t *testing.T) {
-	// Mock client with invalid JSON response
-	client := &mockSecretsManagerClient{
-		getSecretValueOutput: secretsmanager.GetSecretValueOutput{
-			SecretString: aws.String("invalid json"),
+func TestGetSecretWithClient(t *testing.T) {
+	tests := []struct {
+		name          string
+		secretArn     string
+		secretString  string
+		mockError     error
+		expectedMap   map[string]interface{}
+		expectedError bool
+	}{
+		{
+			name:         "Valid secret",
+			secretArn:    "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret",
+			secretString: `{"username":"testuser","password":"testpass"}`,
+			mockError:    nil,
+			expectedMap: map[string]interface{}{
+				"username": "testuser",
+				"password": "testpass",
+			},
+			expectedError: false,
+		},
+		{
+			name:          "API error",
+			secretArn:     "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret",
+			secretString:  "",
+			mockError:     errors.New("API error"),
+			expectedMap:   nil,
+			expectedError: true,
+		},
+		{
+			name:          "Invalid JSON",
+			secretArn:     "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret",
+			secretString:  `{"username":"testuser","password":}`, // Invalid JSON
+			mockError:     nil,
+			expectedMap:   nil,
+			expectedError: true,
 		},
 	}
 
-	// Call function with mocked client
-	_, err := getSecretWithClient(client, "test-secret-arn")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock client
+			mockClient := &mockSecretsManagerClient{
+				getSecretValueError: tt.mockError,
+			}
 
-	// Verify error
-	if err == nil {
-		t.Error("Expected an error, got nil")
-	}
-	if err.Error()[:22] != "failed to parse secret" {
-		t.Errorf("Unexpected error message: %v", err)
+			if tt.mockError == nil {
+				mockClient.getSecretValueOutput = &secretsmanager.GetSecretValueOutput{
+					SecretString: aws.String(tt.secretString),
+				}
+			}
+
+			// Call the function
+			result, err := getSecretWithClient(mockClient, tt.secretArn)
+
+			// Check results
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedMap, result)
+			}
+		})
 	}
 }

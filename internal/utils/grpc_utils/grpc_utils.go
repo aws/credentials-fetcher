@@ -170,6 +170,8 @@ func validateCredSpecFields(domainName, serviceAccountName string) error {
 }
 
 // extractCredentialArn extracts the credential ARN from the credential spec
+// For domain-joined hosts, HostAccountConfig may not be present, in which case
+// an empty string is returned without error
 func extractCredentialArn(root map[string]interface{}) (string, error) {
 	log := logger.GetInstance()
 
@@ -179,10 +181,11 @@ func extractCredentialArn(root map[string]interface{}) (string, error) {
 		return "", fmt.Errorf("missing or invalid ActiveDirectoryConfig in credential spec")
 	}
 
+	// Check if HostAccountConfig exists - if not, this is likely a domain-joined host
 	hostAccountConfig, ok := activeDirectoryConfig["HostAccountConfig"].(map[string]interface{})
 	if !ok {
-		log.Error("Missing or invalid HostAccountConfig in credential spec")
-		return "", fmt.Errorf("missing or invalid HostAccountConfig in credential spec")
+		log.Info("HostAccountConfig not found in credential spec, assuming domain-joined host")
+		return "", nil // Return empty string without error for domain-joined hosts
 	}
 
 	pluginInput, ok := hostAccountConfig["PluginInput"].(map[string]interface{})

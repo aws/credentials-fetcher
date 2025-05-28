@@ -279,8 +279,7 @@ func TestCreateTicketForServiceAccount(t *testing.T) {
 				mock.Anything,            // context
 				"kinit",                  // command
 				[]byte(tc.password+"\n"), // stdin
-				"-c", tc.krbFilePath,     // args
-				expectedPrincipal, // args
+				expectedPrincipal,        // args
 			).Return(tc.mockOutput, tc.mockErr)
 
 			// Create a client with the mock executor
@@ -288,9 +287,8 @@ func TestCreateTicketForServiceAccount(t *testing.T) {
 				shellExecutor: mockExecutor,
 			}
 
-			// Call CreateTicketForServiceAccount
-			ctx := context.Background()
-			err := client.CreateTicketForServiceAccount(ctx, tc.domain, tc.username, tc.password, tc.krbFilePath)
+			// Call CreateTicketUsingUsernamePassword
+			err := client.CreateTicketUsingUsernamePassword(tc.domain, tc.username, tc.password)
 
 			// Check results
 			if tc.expectedError {

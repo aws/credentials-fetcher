@@ -30,7 +30,7 @@ const (
 	KlistDateTimeFormat = "01/02/2006 15:04:05"
 
 	// Default Secret for user principal
-	DefaultAWSSecretName = "aws/directoryservice/contoso/gmsa"
+	DefaultAWSSecretName = "" // TODO: parameterize this
 )
 
 // Credential-related constants

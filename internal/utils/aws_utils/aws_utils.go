@@ -50,3 +50,74 @@ func getSecretWithClient(svc secretsmanageriface.SecretsManagerAPI, secretArn st
 
 	return secretMap, nil
 }
+
+// ExtractCredentialsFromSecret extracts username, password, and distinguished name from the secret map
+func ExtractCredentialsFromSecret(secretMap map[string]interface{}) (string, string, string, error) {
+	if secretMap == nil {
+		return "", "", "", fmt.Errorf("secret map is nil")
+	}
+
+	// Try to get username from the secret
+	var username string
+	if usernameVal, ok := secretMap["username"]; ok && usernameVal != nil {
+		if usernameStr, ok := usernameVal.(string); ok && usernameStr != "" {
+			username = usernameStr
+		}
+	}
+
+	// Try alternate username field if primary is not found
+	if username == "" {
+		if usernameVal, ok := secretMap["usernameOfStandardUserAccount"]; ok && usernameVal != nil {
+			if usernameStr, ok := usernameVal.(string); ok {
+				username = usernameStr
+			}
+		}
+	}
+
+	// Get password from the secret - similar pattern
+	var password string
+	if passwordVal, ok := secretMap["password"]; ok && passwordVal != nil {
+		if passwordStr, ok := passwordVal.(string); ok && passwordStr != "" {
+			password = passwordStr
+		}
+	}
+
+	if password == "" {
+		if passwordVal, ok := secretMap["passwordOfStandardUserAccount"]; ok && passwordVal != nil {
+			if passwordStr, ok := passwordVal.(string); ok {
+				password = passwordStr
+			}
+		}
+	}
+
+	// Extract distinguished name if available
+	var dn string
+	if dnVal, ok := secretMap["distinguishedName"]; ok && dnVal != nil {
+		if dnStr, ok := dnVal.(string); ok && dnStr != "" {
+			dn = dnStr
+		}
+	}
+
+	if dn == "" {
+		if dnVal, ok := secretMap["distinguishedNameOfgMSA"]; ok && dnVal != nil {
+			if dnStr, ok := dnVal.(string); ok {
+				dn = dnStr
+			}
+		}
+	}
+
+	if dn != "" {
+		log.Info("Found Optional DN from Secrets Manager", "dn", dn)
+	}
+
+	// Validate required fields
+	if username == "" {
+		return "", "", "", fmt.Errorf("username not found in secret")
+	}
+
+	if password == "" {
+		return "", "", "", fmt.Errorf("password not found in secret")
+	}
+
+	return username, password, dn, nil
+}

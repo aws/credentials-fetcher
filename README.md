@@ -33,7 +33,12 @@ brazil-build
 The following dependencies are needed on the instance
 
 ```
-dnf install openldap-clients krb5-workstation sssd
+dnf install openldap-clients krb5-workstation sssd 
+```
+
+For domain joined mode, the following additional dependencies are needed to domain join the instance to the realm
+```
+dnf install realmd oddjob oddjob-mkhomedir adcli
 ```
 
 ### Development and Testing
