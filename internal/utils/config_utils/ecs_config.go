@@ -1,4 +1,4 @@
-package config
+package config_utils
 
 import (
 	"bufio"

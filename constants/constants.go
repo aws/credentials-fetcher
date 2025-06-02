@@ -23,7 +23,7 @@ const (
 
 // Application configuration constants
 const (
-	// NumberofWaitGroups for watchdog and gRPC server
+	// NumberofWaitGroups for watchdog, gRPC server and renewal cron job
 	NumberofWaitGroups = 2
 
 	// KlistDateTimeFormat is the standard date time format used for parsing Kerberos klist output

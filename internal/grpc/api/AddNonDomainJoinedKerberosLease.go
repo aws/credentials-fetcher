@@ -6,12 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/config_utils"
+
 	"golang.a2z.com/CredentialsFetcherV2/constants"
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap"
 	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
-	"golang.a2z.com/CredentialsFetcherV2/internal/utils/config"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/krb_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils"
@@ -264,7 +265,7 @@ func (h *NonDomainJoinedKerberosHandler) SetupKerberosFileForTicket(ticketInfo *
 // GetDistinguishedName gets the distinguished name from ECS config or secrets manager
 func (h *NonDomainJoinedKerberosHandler) GetDistinguishedName(ticketInfo *types.TicketInfo) (string, error) {
 	// Get distinguished name from ECS config
-	distinguishedName, err := config.RetrieveVariableFromECSConfig(constants.EnvCFDistinguishedName)
+	distinguishedName, err := config_utils.RetrieveVariableFromECSConfig(constants.EnvCFDistinguishedName)
 	if err != nil {
 		log.Error("Failed to retrieve distinguished name from ECS config", "error", err)
 		return "", fmt.Errorf("failed to retrieve distinguished name from ECS config: %v", err)

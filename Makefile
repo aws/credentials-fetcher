@@ -87,6 +87,7 @@ $(BIN_DIR)/credentials-fetcherd:
 cf-install:: build cf-create-service
 	sudo install -m 755 $(BIN_DIR)/credentials-fetcherd /usr/sbin/
 	sudo install -m 644 $(BUILD_DIR)/credentials-fetcher.service /usr/lib/systemd/system/
+	sudo install -m 644 config/credentials-fetcher.conf /etc/
 	sudo systemctl daemon-reload
 
 # Create systemd service file

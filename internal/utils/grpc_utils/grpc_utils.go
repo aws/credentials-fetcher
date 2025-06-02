@@ -8,11 +8,12 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/config_utils"
+
 	"golang.a2z.com/CredentialsFetcherV2/constants"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/aws_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
-	"golang.a2z.com/CredentialsFetcherV2/internal/utils/config"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
@@ -343,7 +344,7 @@ func GetFQDNList(domainName string) ([]string, error) {
 
 	// Check for domain controller in environment variable
 	domainControllerEnvVar := "CF_DOMAIN_CONTROLLER"
-	fqdnFromEnvVar, err := config.RetrieveVariableFromECSConfig(domainControllerEnvVar)
+	fqdnFromEnvVar, err := config_utils.RetrieveVariableFromECSConfig(domainControllerEnvVar)
 	if err != nil {
 		log.Warn("Failed to retrieve domain controller from ECS config", "error", err)
 		// Continue with DNS lookup even if there's an error reading the config
