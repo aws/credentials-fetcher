@@ -33,6 +33,29 @@ func createTempConfigFile(t *testing.T, content string) (string, func()) {
 	return tempConfigPath, cleanup
 }
 
+// Create a temporary credentials-fetcher.conf file for testing
+func createTempCredentialsFetcherConfFile(t *testing.T, content string) (string, func()) {
+	// Create a temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "credentials_fetcher_conf_test")
+	require.NoError(t, err)
+
+	// Create a temporary credentials-fetcher.conf file
+	tempConfigPath := filepath.Join(tempDir, "credentials-fetcher.conf")
+	err = os.WriteFile(tempConfigPath, []byte(content), 0644) /* #nosec */
+	require.NoError(t, err)
+
+	// Return the path and a cleanup function
+	cleanup := func() {
+		err := os.RemoveAll(tempDir)
+		if err != nil {
+			fmt.Printf("%s", err.Error())
+			return
+		}
+	}
+
+	return tempConfigPath, cleanup
+}
+
 func TestRetrieveVariableFromECSConfig(t *testing.T) {
 	// Save the original function and restore it after tests
 	originalOpen := osOpen
@@ -171,5 +194,239 @@ func TestGetConfigValue(t *testing.T) {
 		_, err := GetConfigValue("ANY_KEY")
 		assert.Error(t, err)
 		assert.Equal(t, os.ErrNotExist, err)
+	})
+}
+
+func TestGetValueFromCredentialsFetcherConf(t *testing.T) {
+	// Save the original values and restore them after the test
+	originalPath := credentialsFetcherConfPath
+	originalOpen := osOpen
+	defer func() {
+		credentialsFetcherConfPath = originalPath
+		osOpen = originalOpen
+	}()
+
+	t.Run("Config file exists with variables", func(t *testing.T) {
+		// Create a test config file
+		configContent := `
+# Credentials Fetcher Configuration File
+
+# Run renewal for non-domain joined instances
+RunRenewalNonDomainJoined = true
+
+# gMSA Secret Name in AWS Secrets Manager
+CFGmsaSecretName = "aws/contoso/gmsa"
+
+# Empty value
+EmptyValue = 
+
+# Quoted value with spaces
+QuotedValue = "this is a quoted value"
+`
+		configPath, cleanup := createTempCredentialsFetcherConfFile(t, configContent)
+		defer cleanup()
+
+		// Set the path to our test file
+		credentialsFetcherConfPath = configPath
+
+		// Test retrieving existing variables
+		value := GetValueFromCredentialsFetcherConf("RunRenewalNonDomainJoined")
+		assert.Equal(t, "true", value)
+
+		value = GetValueFromCredentialsFetcherConf("CFGmsaSecretName")
+		assert.Equal(t, "aws/contoso/gmsa", value)
+
+		// Test retrieving empty value
+		value = GetValueFromCredentialsFetcherConf("EmptyValue")
+		assert.Equal(t, "", value)
+
+		// Test retrieving quoted value
+		value = GetValueFromCredentialsFetcherConf("QuotedValue")
+		assert.Equal(t, "this is a quoted value", value)
+
+		// Test retrieving non-existent variable
+		value = GetValueFromCredentialsFetcherConf("NonExistentKey")
+		assert.Equal(t, "", value)
+	})
+
+	t.Run("Config file with invalid format", func(t *testing.T) {
+		// Create a test config file with invalid format
+		configContent := `
+ValidKey = ValidValue
+InvalidLineNoEquals
+AnotherValidKey = AnotherValue
+`
+		configPath, cleanup := createTempCredentialsFetcherConfFile(t, configContent)
+		defer cleanup()
+
+		// Set the path to our test file
+		credentialsFetcherConfPath = configPath
+
+		// Test retrieving variables from file with invalid lines
+		value := GetValueFromCredentialsFetcherConf("ValidKey")
+		assert.Equal(t, "ValidValue", value)
+
+		value = GetValueFromCredentialsFetcherConf("AnotherValidKey")
+		assert.Equal(t, "AnotherValue", value)
+	})
+
+	t.Run("Config file does not exist", func(t *testing.T) {
+		// Set the path to a non-existent file
+		credentialsFetcherConfPath = "/non/existent/path/credentials-fetcher.conf"
+
+		// Test retrieving variable when file doesn't exist
+		value := GetValueFromCredentialsFetcherConf("AnyKey")
+		assert.Equal(t, "", value)
+	})
+
+	t.Run("Error opening config file", func(t *testing.T) {
+		// Set the path to any file
+		credentialsFetcherConfPath = "/tmp/credentials-fetcher.conf"
+
+		// Mock osOpen to return an error
+		osOpen = func(name string) (*os.File, error) {
+			return nil, fmt.Errorf("permission denied")
+		}
+
+		// Test retrieving variable when file can't be opened
+		value := GetValueFromCredentialsFetcherConf("AnyKey")
+		assert.Equal(t, "", value)
+	})
+}
+
+func TestGetSecretNameFromConf(t *testing.T) {
+	// Save the original values
+	originalPath := credentialsFetcherConfPath
+	originalOpen := osOpen
+
+	// Restore the original values after the test
+	defer func() {
+		credentialsFetcherConfPath = originalPath
+		osOpen = originalOpen
+	}()
+
+	t.Run("Secret name exists", func(t *testing.T) {
+		// Create a test config file
+		configContent := `
+# Credentials Fetcher Configuration File
+CFGmsaSecretName = "aws/test/secret"
+`
+		configPath, cleanup := createTempCredentialsFetcherConfFile(t, configContent)
+		defer cleanup()
+
+		// Set the path to our test file
+		credentialsFetcherConfPath = configPath
+
+		// Test retrieving the secret name
+		secretName := GetSecretNameFromConf()
+		assert.Equal(t, "aws/test/secret", secretName)
+	})
+
+	t.Run("Secret name does not exist", func(t *testing.T) {
+		// Create a test config file without the secret name
+		configContent := `
+# Credentials Fetcher Configuration File
+SomeOtherKey = "some value"
+`
+		configPath, cleanup := createTempCredentialsFetcherConfFile(t, configContent)
+		defer cleanup()
+
+		// Set the path to our test file
+		credentialsFetcherConfPath = configPath
+
+		// Test retrieving non-existent secret name
+		secretName := GetSecretNameFromConf()
+		assert.Equal(t, "", secretName)
+	})
+}
+
+func TestIsRunRenewalNonDomainJoinedEnabled(t *testing.T) {
+	// Save the original values
+	originalPath := credentialsFetcherConfPath
+	originalOpen := osOpen
+
+	// Restore the original values after the test
+	defer func() {
+		credentialsFetcherConfPath = originalPath
+		osOpen = originalOpen
+	}()
+
+	testCases := []struct {
+		name           string
+		configContent  string
+		expectedResult bool
+	}{
+		{
+			name: "Value is true",
+			configContent: `
+# Credentials Fetcher Configuration File
+RunRenewalNonDomainJoined = true
+`,
+			expectedResult: true,
+		},
+		{
+			name: "Value is TRUE (uppercase)",
+			configContent: `
+# Credentials Fetcher Configuration File
+RunRenewalNonDomainJoined = TRUE
+`,
+			expectedResult: true,
+		},
+		{
+			name: "Value is True (mixed case)",
+			configContent: `
+# Credentials Fetcher Configuration File
+RunRenewalNonDomainJoined = True
+`,
+			expectedResult: true,
+		},
+		{
+			name: "Value is false",
+			configContent: `
+# Credentials Fetcher Configuration File
+RunRenewalNonDomainJoined = false
+`,
+			expectedResult: false,
+		},
+		{
+			name: "Value is something else",
+			configContent: `
+# Credentials Fetcher Configuration File
+RunRenewalNonDomainJoined = yes
+`,
+			expectedResult: false,
+		},
+		{
+			name: "Key does not exist",
+			configContent: `
+# Credentials Fetcher Configuration File
+SomeOtherKey = value
+`,
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a test config file
+			configPath, cleanup := createTempCredentialsFetcherConfFile(t, tc.configContent)
+			defer cleanup()
+
+			// Set the path to our test file
+			credentialsFetcherConfPath = configPath
+
+			// Test the function
+			result := IsRunRenewalNonDomainJoinedEnabled()
+			assert.Equal(t, tc.expectedResult, result)
+		})
+	}
+
+	t.Run("Config file does not exist", func(t *testing.T) {
+		// Set the path to a non-existent file
+		credentialsFetcherConfPath = "/non/existent/path/credentials-fetcher.conf"
+
+		// Test the function when file doesn't exist
+		result := IsRunRenewalNonDomainJoinedEnabled()
+		assert.False(t, result)
 	})
 }

@@ -9,8 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/config_utils"
+
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/aws_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/krb_utils"
@@ -446,6 +449,242 @@ func (c *Client) removeTicketFromMetadata(metadataPath, krbFilePath string) erro
 			return fmt.Errorf("failed to write updated metadata file: %w", err)
 		}
 	}
+
+	return nil
+}
+
+// CheckAndRenewTicket checks if a ticket needs renewal and renews it if necessary.
+// It follows the same logic as the C++ implementation in renewal.cpp.
+func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.TicketInfo) error {
+	log.Info("Checking ticket for renewal",
+		"path", ticketInfo.KrbFilePath,
+		"service_account", ticketInfo.ServiceAccountName)
+
+	// Get the ticket information
+	ticket, _, err := c.GetTicket(ticketInfo.KrbFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to get ticket information: %w", err)
+	}
+
+	domainlessUser := ticketInfo.DomainlessUser
+
+	// Check if the ticket is ready for renewal and either:
+	// 1. Not a domainless user (empty string), OR
+	// 2. A domainless user created using the Domain Joined API
+	isNotDomainlessUser := domainlessUser == ""
+	isDomainlessUserWithSecret := strings.Contains(domainlessUser, "awsdomainlessusersecret")
+	isDomainlessUserStandalone := config_utils.IsRunRenewalNonDomainJoinedEnabled()
+
+	if (isDomainlessUserStandalone || isNotDomainlessUser || isDomainlessUserWithSecret) && krb_utils.IsTicketReadyForRenewal(ticket) {
+		log.Info("Ticket is ready for renewal",
+			"path", ticketInfo.KrbFilePath,
+			"principal", ticket.Principal,
+			"expiry", ticket.ExpirationTime.Format(time.RFC3339))
+
+		// Number of retries for creating the ticket
+		const numRetries = 1
+
+		// Try to recreate the ticket with retries
+		if err := c.recreateTicketWithRetries(ctx, ticketInfo, numRetries, isDomainlessUserStandalone); err != nil {
+			return fmt.Errorf("failed to recreate ticket after %d retries: %w", numRetries+1, err)
+		}
+	} else {
+		log.Info("Ticket does not need renewal yet",
+			"path", ticketInfo.KrbFilePath,
+			"principal", ticket.Principal,
+			"expiry", ticket.ExpirationTime.Format(time.RFC3339))
+	}
+
+	return nil
+}
+
+// recreateTicketWithRetries attempts to recreate a Kerberos ticket with the specified number of retries.
+func (c *Client) recreateTicketWithRetries(ctx context.Context, ticketInfo *types.TicketInfo, numRetries int, isDomainlessUserStandalone bool) error {
+	domainlessUser := ticketInfo.DomainlessUser
+
+	for i := 0; i <= numRetries; i++ {
+		// Try to recreate the ticket using gMSA password
+		if err := c.CreateTicketForGMSA(ticketInfo); err == nil {
+			// Success - break out of the retry loop
+			log.Info("Direct renewal of the GMSA ticket successful")
+			return nil
+		} else {
+			log.Error("Cannot get gMSA krb ticket using account",
+				"service_account", ticketInfo.ServiceAccountName,
+				"error", err,
+				"attempt", i+1,
+				"max_attempts", numRetries+1)
+
+			// Try alternative methods based on user type
+			if err := c.tryAlternativeTicketCreation(ctx, ticketInfo, domainlessUser, isDomainlessUserStandalone); err == nil {
+				// Success with alternative method
+				log.Info("Renewal successful after recreating user principal or machine principal Kerberos ticket")
+				return nil
+			}
+		}
+	}
+
+	// If we get here, all retries failed
+	return fmt.Errorf("all attempts to recreate ticket failed")
+}
+
+// tryAlternativeTicketCreation attempts to create a ticket using alternative methods
+// based on the user type (domainless with secret or machine keytab).
+func (c *Client) tryAlternativeTicketCreation(ctx context.Context, ticketInfo *types.TicketInfo, domainlessUser string, isDomainlessUserStandalone bool) error {
+	// If this is a domainless user with secret support
+	if strings.Contains(domainlessUser, "awsdomainlessusersecret") || isDomainlessUserStandalone {
+		log.Info("")
+		return c.createTicketForDomainlessUser(ctx, ticketInfo, domainlessUser, isDomainlessUserStandalone)
+	}
+
+	// For regular users, use machine keytab
+	return c.GenerateKrbTicketFromMachineKeytab(ctx, ticketInfo.DomainName)
+}
+
+// createTicketForDomainlessUser creates a ticket for a domainless user using AWS Secrets Manager.
+func (c *Client) createTicketForDomainlessUser(ctx context.Context, ticketInfo *types.TicketInfo, domainlessUser string, isDomainlessUserStandalone bool) error {
+	log.Info("Attempting to recreate Domainless user Kerberos ticket")
+	var secretName = ""
+	if isDomainlessUserStandalone {
+		secretName = config_utils.GetSecretNameFromConf()
+		if secretName == "" {
+			log.Info("Secret name not found in credentials-fetcher.conf, trying ECS config file")
+			// Try to get the secret name from the ECS config file
+			configSecretName, err := config_utils.GetConfigValue("CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA")
+			if err == nil && configSecretName != "" {
+				secretName = configSecretName
+				log.Debug("Using secret name from ECS config file", "secretName", secretName)
+			} else {
+				log.Error("CFGmsaSecretName variable not found in any config file")
+				return fmt.Errorf("CFGmsaSecretName variable not found in any config file")
+			}
+		}
+	}
+	// Check if domainlessUser contains "awsdomainlessusersecret:" and extract the secret name
+	if strings.Contains(domainlessUser, "awsdomainlessusersecret:") {
+		// Extract the string after "awsdomainlessusersecret:"
+		parts := strings.SplitN(domainlessUser, "awsdomainlessusersecret:", 2)
+		if len(parts) == 2 {
+			secretName = strings.TrimSpace(parts[1])
+			log.Info("Found secret name from supplied parameter")
+		}
+	}
+	// Use the GenerateKrbTicketUsingSecretVault function directly
+	if secretName != "" {
+		if err := c.GenerateKrbTicketUsingSecretVault(ctx, ticketInfo.DomainName, secretName); err != nil {
+			log.Error("Cannot get ticket using secret vault",
+				"domain", ticketInfo.DomainName,
+				"secret_name", secretName,
+				"error", err)
+			return err
+		}
+	} else {
+		log.Error("Could not find secret name for domainless user",
+			"domain", ticketInfo.DomainName,
+			"domainlessUser", domainlessUser)
+		return fmt.Errorf("could not find secret name. Please supply parameter or update credentials-fetcher.conf ")
+	}
+
+	return nil
+}
+
+// ProcessAllTicketsForRenewal processes all tickets in the Kerberos directory for renewal
+func (c *Client) ProcessAllTicketsForRenewal(ctx context.Context, krbFilesDir string) error {
+	log.Info("Processing all tickets for renewal", "directory", krbFilesDir)
+
+	// Get all metadata files in the Kerberos directory
+	metadataFiles, err := metadata_utils.GetMetadataFilePaths(krbFilesDir)
+	if err != nil {
+		return fmt.Errorf("failed to get metadata files: %w", err)
+	}
+
+	if len(metadataFiles) == 0 {
+		log.Info("No metadata files found, nothing to renew")
+		return nil
+	}
+
+	log.Info("Found metadata files", "count", len(metadataFiles))
+
+	// Process each metadata file
+	for _, metadataPath := range metadataFiles {
+		if err := c.processMetadataFileForRenewal(ctx, metadataPath); err != nil {
+			log.Error("Failed to process metadata file", "path", metadataPath, "error", err)
+			// Continue with other files even if one fails
+			continue
+		}
+	}
+
+	return nil
+}
+
+// processMetadataFileForRenewal processes a single metadata file and renews tickets as needed
+func (c *Client) processMetadataFileForRenewal(ctx context.Context, metadataPath string) error {
+	log.Info("Processing metadata file for renewal", "path", metadataPath)
+
+	// Read ticket info from metadata file
+	ticketInfoList, err := metadata_utils.ReadMetadataJSON(metadataPath)
+	if err != nil {
+		return fmt.Errorf("failed to read metadata file: %w", err)
+	}
+
+	if len(ticketInfoList) == 0 {
+		log.Warn("No ticket information found in metadata file", "path", metadataPath)
+		return nil
+	}
+
+	// Check each ticket in the metadata file
+	for _, ticketInfo := range ticketInfoList {
+		if err := c.CheckAndRenewTicket(ctx, ticketInfo); err != nil {
+			log.Error("Failed to check/renew ticket",
+				"path", ticketInfo.KrbFilePath,
+				"service_account", ticketInfo.ServiceAccountName,
+				"error", err)
+			// Continue with other tickets even if one fails
+			continue
+		}
+	}
+
+	return nil
+}
+
+// GenerateKrbTicketUsingSecretVault generates a Kerberos ticket using credentials from AWS Secrets Manager.
+// This function retrieves credentials from AWS Secrets Manager and uses them to create a Kerberos ticket.
+func (c *Client) GenerateKrbTicketUsingSecretVault(ctx context.Context, domain, secretName string) error {
+	log.Info("Generating Kerberos ticket using Secret Vault",
+		"domain", domain,
+		"secret_name", secretName)
+
+	// Retrieve the secret from AWS Secrets Manager
+	secretMap, err := aws_utils.GetSecretFromSecretsManager(secretName)
+	if err != nil {
+		log.Error("Failed to retrieve secret from Secrets Manager",
+			"secret_name", secretName,
+			"error", err)
+		return fmt.Errorf("failed to retrieve secret from Secrets Manager: %w", err)
+	}
+
+	// Extract username, password, and update distinguished name if available
+	username, password, _, err := aws_utils.ExtractCredentialsFromSecret(secretMap)
+	if err != nil {
+		log.Error("Failed to extract credentials from secret",
+			"secret_name", secretName,
+			"error", err)
+		return fmt.Errorf("failed to extract credentials from secret: %w", err)
+	}
+
+	// Create the Kerberos ticket using the retrieved credentials
+	err = c.CreateTicketUsingUsernamePassword(domain, username, password)
+	if err != nil {
+		log.Error("Failed to create Kerberos ticket using credentials from Secret Vault",
+			"domain", domain,
+			"username", username,
+			"error", err)
+		return fmt.Errorf("failed to create Kerberos ticket: %w", err)
+	}
+
+	log.Info("Successfully generated Kerberos ticket using Secret Vault",
+		"domain", domain,
+		"username", username)
 
 	return nil
 }

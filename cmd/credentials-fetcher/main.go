@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
+	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
 	"golang.a2z.com/CredentialsFetcherV2/internal/grpc"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 	"golang.a2z.com/CredentialsFetcherV2/internal/watchdog"
@@ -17,7 +18,7 @@ import (
 var log = logger.GetInstance()
 
 func main() {
-	log.Info("Starting Credentials Fetcher Daemon")
+	log.Info("Starting Credentials Fetcher Daemon 2.0")
 
 	// Create a context that will be canceled on termination signals
 	ctx, cancel := context.WithCancel(context.Background())
@@ -52,6 +53,9 @@ func main() {
 	// Create the gRPC server
 	server := grpc.NewCredentialsFetcherServer(constants.DefaultKrbFilesDir, constants.DefaultAWSSecretName)
 
+	// Create the Kerberos client for ticket renewal
+	krbClient := kerberos.NewClient()
+
 	var wg sync.WaitGroup
 	wg.Add(constants.NumberofWaitGroups)
 
@@ -77,6 +81,37 @@ func main() {
 			cancel()
 		}
 		log.Info("gRPC server goroutine completed")
+	}()
+
+	// Start the Kerberos ticket renewal goroutine
+	go func() {
+		defer wg.Done()
+		log.Info("Starting Kerberos ticket renewal goroutine")
+
+		// Create a ticker for periodic renewal checks
+		ticker := time.NewTicker(time.Duration(constants.KrbTicketRenewalInterval) * time.Minute)
+		defer ticker.Stop()
+
+		// Run an initial check immediately
+		if err := krbClient.ProcessAllTicketsForRenewal(ctx, constants.DefaultKrbFilesDir); err != nil {
+			log.Error("Initial ticket renewal check failed", "error", err)
+			// Continue running even if the initial check fails
+		}
+
+		// Continue checking at regular intervals
+		for {
+			select {
+			case <-ctx.Done():
+				log.Info("Kerberos ticket renewal goroutine shutting down")
+				return
+			case <-ticker.C:
+				log.Info("Running scheduled ticket renewal check")
+				if err := krbClient.ProcessAllTicketsForRenewal(ctx, constants.DefaultKrbFilesDir); err != nil {
+					log.Error("Ticket renewal check failed", "error", err)
+					// Continue running even if a check fails
+				}
+			}
+		}
 	}()
 
 	// Wait for termination signal or context cancellation

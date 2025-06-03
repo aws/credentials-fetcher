@@ -23,14 +23,20 @@ const (
 
 // Application configuration constants
 const (
-	// NumberofWaitGroups for watchdog, gRPC server and renewal cron job
-	NumberofWaitGroups = 2
+	// NumberofWaitGroups for watchdog, gRPC server, and renewal thread
+	NumberofWaitGroups = 3
 
 	// KlistDateTimeFormat is the standard date time format used for parsing Kerberos klist output
-	KlistDateTimeFormat = "01/02/2006 15:04:05"
+	KlistDateTimeFormat = "01/02/06 15:04:05"
 
 	// Default Secret for user principal
 	DefaultAWSSecretName = "" // TODO: parameterize this
+
+	// KrbTicketRenewalInterval is the interval in minutes between renewal checks
+	KrbTicketRenewalInterval = 10
+
+	// KrbTicketRenewalThreshold is the number of hours before expiry when a ticket should be renewed
+	KrbTicketRenewalThreshold = 1
 )
 
 // Credential-related constants
@@ -56,7 +62,8 @@ const (
 // ECS config constants
 const (
 	// ECSConfigFilePath is the path to the ECS configuration file
-	ECSConfigFilePath = "/etc/ecs/ecs.config"
+	ECSConfigFilePath              = "/etc/ecs/ecs.config"
+	CredentialsFetcherConfFilePath = "/etc/credentials-fetcher.conf"
 	// Environment variable names as defined in the original C++ code
 	EnvCFGmsaOU            = "CF_GMSA_OU"
 	EnvCFGmsaSecretName    = "CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA"

@@ -2,3 +2,4 @@ internal/grpc/
 tests/test_client/
 cmd/credentials-fetcher/
 internal/auth/decode/gmsa_blob_test.go
+config/

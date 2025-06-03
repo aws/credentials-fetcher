@@ -72,12 +72,12 @@ func TestParsePrincipalInfo(t *testing.T) {
 func TestDateParsing(t *testing.T) {
 	t.Run("ParseTicketLine", func(t *testing.T) {
 		ticket := &types.Ticket{}
-		line := "05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM"
+		line := "05/15/23 10:00:00  05/16/23 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM"
 
 		ParseTicketLine(line, ticket)
 
-		expectedCreationTime, _ := time.Parse(constants.KlistDateTimeFormat, "05/15/2023 10:00:00")
-		expectedExpiryTime, _ := time.Parse(constants.KlistDateTimeFormat, "05/16/2023 10:00:00")
+		expectedCreationTime, _ := time.Parse(constants.KlistDateTimeFormat, "05/15/23 10:00:00")
+		expectedExpiryTime, _ := time.Parse(constants.KlistDateTimeFormat, "05/16/23 10:00:00")
 
 		assert.Equal(t, expectedCreationTime, ticket.CreationTime, "Creation time not parsed correctly")
 		assert.Equal(t, expectedExpiryTime, ticket.ExpirationTime, "Expiry time not parsed correctly")
@@ -85,31 +85,31 @@ func TestDateParsing(t *testing.T) {
 
 	t.Run("ParseStartTime", func(t *testing.T) {
 		ticket := &types.Ticket{}
-		line := "05/15/2023 10:00:00"
+		line := "05/15/23 10:00:00"
 
 		ParseStartTime(line, ticket)
 
-		expectedTime, _ := time.Parse(constants.KlistDateTimeFormat, "05/15/2023 10:00:00")
+		expectedTime, _ := time.Parse(constants.KlistDateTimeFormat, "05/15/23 10:00:00")
 		assert.Equal(t, expectedTime, ticket.CreationTime, "Start time not parsed correctly")
 	})
 
 	t.Run("ParseExpiryTime", func(t *testing.T) {
 		ticket := &types.Ticket{}
-		line := "05/16/2023 10:00:00"
+		line := "05/16/23 10:00:00"
 
 		ParseExpiryTime(line, ticket)
 
-		expectedTime, _ := time.Parse(constants.KlistDateTimeFormat, "05/16/2023 10:00:00")
+		expectedTime, _ := time.Parse(constants.KlistDateTimeFormat, "05/16/23 10:00:00")
 		assert.Equal(t, expectedTime, ticket.ExpirationTime, "Expiry time not parsed correctly")
 	})
 
 	t.Run("ParseRenewTime", func(t *testing.T) {
 		ticket := &types.Ticket{}
-		line := "renew until 05/17/2023 10:00:00"
+		line := "renew until 05/17/23 10:00:00"
 
 		ParseRenewTime(line, ticket)
 
-		expectedTime, _ := time.Parse(constants.KlistDateTimeFormat, "05/17/2023 10:00:00")
+		expectedTime, _ := time.Parse(constants.KlistDateTimeFormat, "05/17/23 10:00:00")
 		assert.Equal(t, expectedTime, ticket.RenewUntil, "Renew time not parsed correctly")
 	})
 }
@@ -143,7 +143,7 @@ func TestIsDateFormat(t *testing.T) {
 		{
 			name:     "05/15/23",
 			input:    "05/15/23",
-			expected: false, // Wrong year format
+			expected: true, // Now this should be true since we support both formats
 		},
 		{
 			name:     "05/15/20233",
@@ -222,6 +222,7 @@ func TestValidateTicket(t *testing.T) {
 		})
 	}
 }
+
 func TestParseKlistOutput(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -235,7 +236,7 @@ func TestParseKlistOutput(t *testing.T) {
 Default principal: user123@EXAMPLE.COM
 
 Valid starting       Expires              Service principal
-05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
+05/15/23 10:00:00  05/16/23 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
 `,
 			path:          "/tmp/krb5cc_1000",
 			expectedError: false,
@@ -246,7 +247,7 @@ Valid starting       Expires              Service principal
 Default principal: machine$@EXAMPLE.COM
 
 Valid starting       Expires              Service principal
-05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
+05/15/23 10:00:00  05/16/23 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
 `,
 			path:          "/tmp/krb5cc_1000",
 			expectedError: false,
@@ -256,7 +257,7 @@ Valid starting       Expires              Service principal
 			output: `Ticket cache: FILE:/tmp/krb5cc_1000
 
 Valid starting       Expires              Service principal
-05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
+05/15/23 10:00:00  05/16/23 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
 `,
 			path:          "/tmp/krb5cc_1000",
 			expectedError: true,
@@ -294,6 +295,7 @@ invalid-date         invalid-date         krbtgt/EXAMPLE.COM@EXAMPLE.COM
 		})
 	}
 }
+
 func TestParseTicketDates(t *testing.T) {
 	testCases := []struct {
 		name           string
@@ -306,8 +308,8 @@ func TestParseTicketDates(t *testing.T) {
 			name: "Standard format with all dates",
 			lines: []string{
 				"Valid starting       Expires              Service principal",
-				"05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM",
-				"renew until 05/17/2023 10:00:00",
+				"05/15/23 10:00:00  05/16/23 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM",
+				"renew until 05/17/23 10:00:00",
 			},
 			expectCreation: true,
 			expectExpiry:   true,
@@ -317,12 +319,12 @@ func TestParseTicketDates(t *testing.T) {
 			name: "Multi-line format",
 			lines: []string{
 				"Valid starting",
-				"05/15/2023 10:00:00",
+				"05/15/23 10:00:00",
 				"Expires",
-				"05/16/2023 10:00:00",
+				"05/16/23 10:00:00",
 				"Service principal",
 				"krbtgt/EXAMPLE.COM@EXAMPLE.COM",
-				"renew until 05/17/2023 10:00:00",
+				"renew until 05/17/23 10:00:00",
 			},
 			expectCreation: true,
 			expectExpiry:   true,
@@ -332,7 +334,7 @@ func TestParseTicketDates(t *testing.T) {
 			name: "Missing expiry time",
 			lines: []string{
 				"Valid starting       Expires              Service principal",
-				"05/15/2023 10:00:00  invalid-date         krbtgt/EXAMPLE.COM@EXAMPLE.COM",
+				"05/15/23 10:00:00  invalid-date         krbtgt/EXAMPLE.COM@EXAMPLE.COM",
 			},
 			expectCreation: true,
 			expectExpiry:   true, // Should set default expiry
@@ -529,6 +531,88 @@ func TestProcessCredentialSpecs(t *testing.T) {
 					assert.Equal(t, expectedPath, ticketInfo.KrbFilePath, "Unexpected KrbFilePath")
 				}
 			}
+		})
+	}
+}
+
+// Tests for the newly added functions
+
+func TestIsTicketReadyForRenewal(t *testing.T) {
+	testCases := []struct {
+		name           string
+		ticket         *types.Ticket
+		expectedResult bool
+	}{
+		{
+			name: "Ticket ready for renewal (less than threshold)",
+			ticket: &types.Ticket{
+				ExpirationTime: time.Now().Add(30 * time.Minute), // 30 minutes before expiry
+			},
+			expectedResult: true,
+		},
+		{
+			name: "Ticket ready for renewal (exactly at threshold)",
+			ticket: &types.Ticket{
+				ExpirationTime: time.Now().Add(time.Duration(constants.KrbTicketRenewalThreshold) * time.Hour),
+			},
+			expectedResult: true,
+		},
+		{
+			name: "Ticket not ready for renewal (more than threshold)",
+			ticket: &types.Ticket{
+				ExpirationTime: time.Now().Add(time.Duration(constants.KrbTicketRenewalThreshold+2) * time.Hour),
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Ticket expired (in the past)",
+			ticket: &types.Ticket{
+				ExpirationTime: time.Now().Add(-1 * time.Hour),
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := IsTicketReadyForRenewal(tc.ticket)
+			assert.Equal(t, tc.expectedResult, result, "IsTicketReadyForRenewal returned unexpected result")
+		})
+	}
+}
+
+func TestIsDomainlessUserWithSecret(t *testing.T) {
+	testCases := []struct {
+		name           string
+		domainlessUser string
+		expectedResult bool
+	}{
+		{
+			name:           "User with secret support (exact match)",
+			domainlessUser: "awsdomainlessusersecret",
+			expectedResult: true,
+		},
+		{
+			name:           "User with secret support (contains)",
+			domainlessUser: "user:awsdomainlessusersecret",
+			expectedResult: true,
+		},
+		{
+			name:           "User without secret support",
+			domainlessUser: "regularuser",
+			expectedResult: false,
+		},
+		{
+			name:           "Empty user",
+			domainlessUser: "",
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := IsDomainlessUserWithSecret(tc.domainlessUser)
+			assert.Equal(t, tc.expectedResult, result, "IsDomainlessUserWithSecret returned unexpected result")
 		})
 	}
 }

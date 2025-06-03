@@ -16,8 +16,8 @@ var validKlistOutput = `Ticket cache: FILE:/path/to/ticket
 Default principal: user123@EXAMPLE.COM
 
 Valid starting     Expires            Service principal
-05/15/2023 09:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
-	renew until 05/22/2023 09:00:00
+05/15/23 09:00:00  05/16/23 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
+	renew until 05/22/23 09:00:00
 `
 
 var missingPrincipalOutput = `Ticket cache: FILE:/path/to/ticket
@@ -888,6 +888,64 @@ func TestGetAllTicketsFromDirectory(t *testing.T) {
 				assert.NotNil(t, ticketInfos, "TicketInfos should not be nil")
 				assert.Equal(t, tc.expectedTickets, len(tickets), "Number of tickets should match expected")
 				assert.Equal(t, tc.expectedTickets, len(ticketInfos), "Number of ticket infos should match expected")
+			}
+
+			// Verify that the mock was called as expected
+			mockExecutor.AssertExpectations(t)
+		})
+	}
+}
+
+// Test RenewKerberosTicket function
+func TestRenewKerberosTicket(t *testing.T) {
+	testCases := []struct {
+		name          string
+		krbFilePath   string
+		mockOutput    []byte
+		mockErr       error
+		expectedError bool
+	}{
+		{
+			name:          "Successfully renew ticket",
+			krbFilePath:   "/path/to/krb5cc_test",
+			mockOutput:    []byte("Ticket successfully renewed"),
+			mockErr:       nil,
+			expectedError: false,
+		},
+		{
+			name:          "Failed to renew ticket",
+			krbFilePath:   "/path/to/krb5cc_test",
+			mockOutput:    []byte("Kinit renewal failed"),
+			mockErr:       errors.New("kinit renewal command failed"),
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a mock shell executor
+			mockExecutor := new(MockExecutor)
+
+			// Set up expectations
+			mockExecutor.On("Execute",
+				mock.Anything,        // context
+				"kinit",              // command
+				"-R",                 // args
+				"-c", tc.krbFilePath, // args
+			).Return(tc.mockOutput, tc.mockErr)
+
+			// Create a client with the mock executor
+			client := &Client{
+				shellExecutor: mockExecutor,
+			}
+
+			// Call RenewKerberosTicket
+			err := client.RenewKerberosTicket(context.Background(), tc.krbFilePath)
+
+			if tc.expectedError {
+				assert.Error(t, err, "Expected an error but got none")
+			} else {
+				assert.NoError(t, err, "Did not expect an error")
 			}
 
 			// Verify that the mock was called as expected

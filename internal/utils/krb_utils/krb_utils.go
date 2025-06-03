@@ -187,16 +187,18 @@ func ParseTicketLine(line string, ticket *types.Ticket) {
 	fields := strings.Fields(line)
 	if len(fields) >= 4 {
 		// First date (fields 0-1) is start time
-		startTime, err := time.Parse(constants.KlistDateTimeFormat, fields[0]+" "+fields[1])
+		dateStr := fields[0] + " " + fields[1]
+		startTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
 		if err != nil {
 			log.Warn("Failed to parse start time from ticket line",
-				"value", fields[0]+" "+fields[1], "error", err)
+				"value", dateStr, "error", err)
 		} else {
 			ticket.CreationTime = startTime
 		}
 
 		// Second date (fields 2-3) is expiry time
-		expiryTime, err := time.Parse(constants.KlistDateTimeFormat, fields[2]+" "+fields[3])
+		dateStr = fields[2] + " " + fields[3]
+		expiryTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
 		if err != nil {
 			log.Warn("Failed to parse expiry time from ticket line",
 				"value", fields[2]+" "+fields[3], "error", err)
@@ -208,30 +210,28 @@ func ParseTicketLine(line string, ticket *types.Ticket) {
 
 // ParseDateFromFields is a helper function to parse dates from fields with appropriate logging
 func ParseDateFromFields(fields []string, logPrefix string) (time.Time, error) {
-	// Try to find date in the format MM/DD/YYYY
+	// Try to find date in the format MM/DD/YY
 	for i, field := range fields {
 		if i+1 < len(fields) && IsDateFormat(field) {
 			dateStr := field + " " + fields[i+1]
 			parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
-			if err != nil {
-				log.Warn(fmt.Sprintf("Failed to parse %s time", logPrefix),
-					"value", dateStr, "error", err)
-				continue
+			if err == nil {
+				return parsedTime, nil
 			}
-			return parsedTime, nil
+			log.Warn(fmt.Sprintf("Failed to parse %s time", logPrefix),
+				"value", dateStr, "error", err)
 		}
 	}
 
 	// Fallback: try brute force approach
-	if len(fields) >= 4 && IsDateFormat(fields[2]) {
-		dateStr := fields[2] + " " + fields[3]
+	if len(fields) >= 2 {
+		dateStr := fields[0] + " " + fields[1]
 		parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
-		if err != nil {
-			log.Warn(fmt.Sprintf("Failed to parse %s time with fallback", logPrefix),
-				"value", dateStr, "error", err)
-			return time.Time{}, err
+		if err == nil {
+			return parsedTime, nil
 		}
-		return parsedTime, nil
+		log.Warn(fmt.Sprintf("Failed to parse %s time with fallback", logPrefix),
+			"value", dateStr, "error", err)
 	}
 
 	return time.Time{}, fmt.Errorf("could not parse date")
@@ -255,19 +255,49 @@ func ParseExpiryTime(line string, ticket *types.Ticket) {
 
 // ParseRenewTime extracts and sets the ticket renewal time
 func ParseRenewTime(line string, ticket *types.Ticket) {
-	fields := strings.Fields(strings.TrimSpace(line))
+	// Remove "renew until" prefix if present
+	line = strings.TrimPrefix(line, "renew until")
+	line = strings.TrimSpace(line)
+
+	fields := strings.Fields(line)
+	if len(fields) >= 2 {
+		dateStr := fields[0] + " " + fields[1]
+		parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
+		if err == nil {
+			ticket.RenewUntil = parsedTime
+			return
+		}
+		log.Warn("Failed to parse renew time", "value", dateStr, "error", err)
+	}
+
+	// Fallback to ParseDateFromFields
+	fields = strings.Fields(strings.TrimSpace(line))
 	if parsedTime, err := ParseDateFromFields(fields, "renew"); err == nil {
 		ticket.RenewUntil = parsedTime
 	}
 }
 
-// IsDateFormat checks if a string is in date format MM/DD/YYYY
+// IsDateFormat checks if a string is in date format MM/DD/YY or MM/DD/YYYY
 func IsDateFormat(str string) bool {
-	return len(str) == 10 &&
+	// Check for MM/DD/YY format (8 chars)
+	if len(str) == 8 &&
 		str[2] == '/' &&
 		str[5] == '/' &&
 		(str[0] >= '0' && str[0] <= '1') &&
-		(str[3] >= '0' && str[3] <= '3')
+		(str[3] >= '0' && str[3] <= '3') {
+		return true
+	}
+
+	// Check for MM/DD/YYYY format (10 chars)
+	if len(str) == 10 &&
+		str[2] == '/' &&
+		str[5] == '/' &&
+		(str[0] >= '0' && str[0] <= '1') &&
+		(str[3] >= '0' && str[3] <= '3') {
+		return true
+	}
+
+	return false
 }
 
 // ValidateTicket ensures the ticket has all required fields
@@ -281,4 +311,20 @@ func ValidateTicket(ticket *types.Ticket, path string) error {
 	}
 
 	return nil
+}
+
+// IsTicketReadyForRenewal checks if a ticket is ready for renewal based on its expiration time
+func IsTicketReadyForRenewal(ticket *types.Ticket) bool {
+	// Calculate the time difference in hours
+	now := time.Now()
+	hours := ticket.ExpirationTime.Sub(now).Hours()
+
+	// Check if the ticket needs to be renewed
+	return hours <= float64(constants.KrbTicketRenewalThreshold)
+}
+
+// IsDomainlessUserWithSecret checks if a domainless user has AWS secret support
+func IsDomainlessUserWithSecret(domainlessUser string) bool {
+	return domainlessUser != "" &&
+		(strings.Contains(domainlessUser, "awsdomainlessusersecret"))
 }

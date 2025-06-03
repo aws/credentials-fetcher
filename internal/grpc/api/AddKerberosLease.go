@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
-	"golang.a2z.com/CredentialsFetcherV2/internal/utils/aws_utils"
 
 	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
@@ -29,9 +28,6 @@ type DomainJoinedKerberosTicketOperations interface {
 	// SetupKerberosFileForTicket sets up the Kerberos file for a ticket
 	SetupKerberosFileForTicket(ticketInfo *types.TicketInfo) (string, error)
 
-	// GetDistinguishedName gets the distinguished name for a service account
-	GetDistinguishedName(ticketInfo *types.TicketInfo) (string, error)
-
 	// CreateKerberosTickets creates Kerberos tickets for each ticket info in domain-joined mode
 	CreateKerberosTickets(ctx context.Context, ticketInfoList []*types.TicketInfo) ([]string, error)
 
@@ -45,7 +41,7 @@ type DomainJoinedKerberosTicketOperations interface {
 	CreateTicketForGMSA(ctx context.Context, ticketInfo *types.TicketInfo) error
 
 	// GenerateKrbTicketUsingSecretVault generates a Kerberos ticket using credentials from AWS Secrets Manager
-	GenerateKrbTicketUsingSecretVault(ctx context.Context, domain, secretName string) error
+	GenerateKrbTicketUsingSecretVault(domain, secretName string) error
 
 	// GenerateKrbTicketFromMachineKeytab generates a Kerberos ticket using the machine's keytab file
 	GenerateKrbTicketFromMachineKeytab(ctx context.Context, domain string) error
@@ -196,40 +192,8 @@ func (h *DomainJoinedKerberosLeaseHandler) CreateKerberosTickets(ctx context.Con
 
 // GenerateKrbTicketUsingSecretVault generates a Kerberos ticket using credentials from AWS Secrets Manager
 func (h *DomainJoinedKerberosLeaseHandler) GenerateKrbTicketUsingSecretVault(domain, secretName string) error {
-	log.Info("Generating Kerberos ticket using Secret Vault",
-		"domain", domain,
-		"secret name", secretName)
-
-	// Retrieve the secret from AWS Secrets Manager
-	secretMap, err := aws_utils.GetSecretFromSecretsManager(secretName)
-	if err != nil {
-		log.Error("Failed to retrieve secret from Secrets Manager",
-			"secret name ", secretName,
-			"error", err)
-		return fmt.Errorf("failed to retrieve secret from Secrets Manager: %w", err)
-	}
-
-	// Extract username, password, and update distinguished name if available
-	username, password, _, err := aws_utils.ExtractCredentialsFromSecret(secretMap)
-	if err != nil {
-		return err
-	}
-
-	// Create the Kerberos ticket using the retrieved credentials
-	err = h.krbClient.CreateTicketUsingUsernamePassword(domain, username, password)
-	if err != nil {
-		log.Error("Failed to create Kerberos ticket using credentials from Secret Vault",
-			"domain", domain,
-			"username", username,
-			"error", err)
-		return fmt.Errorf("failed to create Kerberos ticket: %w", err)
-	}
-
-	log.Info("Successfully generated Kerberos ticket using Secret Vault",
-		"domain", domain,
-		"username", username)
-
-	return nil
+	// Use the client's implementation directly
+	return h.krbClient.GenerateKrbTicketUsingSecretVault(context.Background(), domain, secretName)
 }
 
 // GenerateKrbTicketFromMachineKeytab generates a Kerberos ticket using the machine's keytab file
@@ -276,8 +240,6 @@ func (h *DomainJoinedKerberosLeaseHandler) SetupKerberosFileForTicket(ticketInfo
 // CreateTicketForGMSA creates a Kerberos ticket for a gMSA account in domain-joined mode
 func (h *DomainJoinedKerberosLeaseHandler) CreateTicketForGMSA(ctx context.Context, ticketInfo *types.TicketInfo) error {
 	// In domain-joined mode, we would use the computer account to get a ticket for the gMSA
-	// This is a placeholder implementation
-
 	log.Info("Creating Kerberos ticket for gMSA account in domain-joined mode",
 		"service_account", ticketInfo.ServiceAccountName,
 		"domain", ticketInfo.DomainName,

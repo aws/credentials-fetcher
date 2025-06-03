@@ -18,6 +18,9 @@ var osOpen = os.Open
 // For testing purposes - allows mocking of RetrieveVariableFromECSConfig
 var retrieveVariableFromECSConfig = RetrieveVariableFromECSConfig
 
+// For testing purposes - allows changing the credentials-fetcher.conf path
+var credentialsFetcherConfPath = "/etc/credentials-fetcher.conf"
+
 // RetrieveVariableFromECSConfig retrieves a variable value from the ECS config file
 // This is a Go implementation of the C++ function retrieve_variable_from_ecs_config
 func RetrieveVariableFromECSConfig(ecsVariableName string) (string, error) {
@@ -81,4 +84,75 @@ func GetConfigValue(key string) (string, error) {
 	}
 
 	return value, nil
+}
+
+// GetValueFromCredentialsFetcherConf retrieves a value for the specified key from the credentials-fetcher.conf file
+func GetValueFromCredentialsFetcherConf(key string) string {
+	// Check if config file exists
+	_, err := os.Stat(credentialsFetcherConfPath)
+	if os.IsNotExist(err) {
+		log.Debug("Credentials fetcher config file does not exist", "path", credentialsFetcherConfPath)
+		return ""
+	}
+
+	// Open the config file
+	file, err := osOpen(credentialsFetcherConfPath)
+	if err != nil {
+		log.Error("Failed to open credentials fetcher config file", "path", credentialsFetcherConfPath, "error", err)
+		return ""
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Error("Failed to close credentials fetcher config file", "path", credentialsFetcherConfPath, "error", err)
+		}
+	}()
+
+	// Read the file line by line
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip comments and empty lines
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Split the line by '='
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		// Trim whitespace from key and value
+		configKey := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		// Check if this is the key we're looking for
+		if configKey == key {
+			// Remove quotes if present
+			value = strings.Trim(value, "\"")
+			log.Debug("Found key in config file", "key", key, "value", value)
+			return value
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Error("Error reading credentials fetcher config file", "error", err)
+	}
+
+	log.Debug("Key not found in config file", "key", key)
+	return ""
+}
+
+// GetSecretNameFromConf retrieves the CFGmsaSecretName value from the credentials-fetcher.conf file
+func GetSecretNameFromConf() string {
+	return GetValueFromCredentialsFetcherConf("CFGmsaSecretName")
+}
+
+// IsRunRenewalNonDomainJoinedEnabled checks if the RunRenewalNonDomainJoined flag is set to true
+// in the credentials-fetcher.conf file
+func IsRunRenewalNonDomainJoinedEnabled() bool {
+	value := GetValueFromCredentialsFetcherConf("RunRenewalNonDomainJoined")
+	return strings.ToLower(value) == "true"
 }
