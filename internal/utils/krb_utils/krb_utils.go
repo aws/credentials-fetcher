@@ -256,7 +256,7 @@ func ParseExpiryTime(line string, ticket *types.Ticket) {
 // ParseRenewTime extracts and sets the ticket renewal time
 func ParseRenewTime(line string, ticket *types.Ticket) {
 	// Remove "renew until" prefix if present
-	line = strings.TrimPrefix(line, "renew until")
+	line = strings.Replace(line, "renew until", "", 1)
 	line = strings.TrimSpace(line)
 
 	fields := strings.Fields(line)
@@ -268,6 +268,15 @@ func ParseRenewTime(line string, ticket *types.Ticket) {
 			return
 		}
 		log.Warn("Failed to parse renew time", "value", dateStr, "error", err)
+
+		// Try alternative date format (MM/DD/YYYY)
+		altDateStr := fields[0] + " " + fields[1]
+		parsedTime, err = time.Parse("01/02/2006 15:04:05", altDateStr)
+		if err == nil {
+			ticket.RenewUntil = parsedTime
+			return
+		}
+		log.Warn("Failed to parse renew time with alternative format", "value", altDateStr, "error", err)
 	}
 
 	// Fallback to ParseDateFromFields

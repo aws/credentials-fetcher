@@ -473,7 +473,7 @@ func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.Tick
 	// 2. A domainless user created using the Domain Joined API
 	isNotDomainlessUser := domainlessUser == ""
 	isDomainlessUserWithSecret := strings.Contains(domainlessUser, "awsdomainlessusersecret")
-	isDomainlessUserStandalone := config_utils.IsRunRenewalNonDomainJoinedEnabled()
+	isDomainlessUserStandalone := config_utils.IsRunRenewalNonDomainJoinedEnabled() // TODO: don't do this check if we're domain joined
 
 	if (isDomainlessUserStandalone || isNotDomainlessUser || isDomainlessUserWithSecret) && krb_utils.IsTicketReadyForRenewal(ticket) {
 		log.Info("Ticket is ready for renewal",
