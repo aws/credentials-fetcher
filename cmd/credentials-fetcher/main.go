@@ -18,7 +18,7 @@ import (
 var log = logger.GetInstance()
 
 func main() {
-	log.Info("Starting Credentials Fetcher Daemon 2.0")
+	log.Info("Starting Credentials Fetcher Daemon", "version", constants.Version)
 
 	// Create a context that will be canceled on termination signals
 	ctx, cancel := context.WithCancel(context.Background())

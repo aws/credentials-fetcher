@@ -1,5 +1,11 @@
 package constants
 
+// Version information
+const (
+	// Version is the current version of the Credentials Fetcher daemon
+	Version = "2.0.0"
+)
+
 // LDAP-related constants
 const (
 	// LDAPSearchFilterString is the base LDAP filter for gMSA accounts

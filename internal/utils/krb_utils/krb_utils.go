@@ -57,13 +57,50 @@ func ProcessCredentialSpecs(credspecContents []string, username, leaseID string,
 	return ticketInfoList, nil
 }
 
-// CleanupKerberosFiles removes the Kerberos files if there's an error
+// CleanupKerberosFiles removes the Kerberos files and the lease ID directory if service account directory is empty
 func CleanupKerberosFiles(krbFilePath string) error {
 	log.Info("Cleaning up Kerberos files", "path", krbFilePath)
+
+	// First remove the krb5cc file
 	if err := os.Remove(krbFilePath); err != nil && !os.IsNotExist(err) {
 		log.Error("Failed to remove Kerberos file", "path", krbFilePath, "error", err)
 		return fmt.Errorf("failed to remove Kerberos file: %v", err)
 	}
+
+	// Get the service account directory (parent of krb5cc file)
+	serviceAccountDir := filepath.Dir(krbFilePath)
+
+	// Check if service account directory exists and is empty
+	if _, err := os.Stat(serviceAccountDir); err == nil {
+		entries, err := os.ReadDir(serviceAccountDir)
+		if err != nil {
+			log.Warn("Failed to read service account directory", "path", serviceAccountDir, "error", err)
+		} else if len(entries) == 0 {
+			// Service account directory exists and is empty, remove it
+			if err := os.Remove(serviceAccountDir); err != nil {
+				log.Warn("Failed to remove empty service account directory", "path", serviceAccountDir, "error", err)
+			} else {
+				log.Info("Removed empty service account directory", "path", serviceAccountDir)
+
+				// Get the lease ID directory (parent of service account directory)
+				leaseDir := filepath.Dir(serviceAccountDir)
+
+				// Remove the lease ID directory and all its contents
+				if err := os.RemoveAll(leaseDir); err != nil {
+					log.Warn("Failed to remove lease directory", "path", leaseDir, "error", err)
+				} else {
+					log.Info("Removed lease directory", "path", leaseDir)
+				}
+			}
+		} else {
+			log.Info("Service account directory is not empty, skipping removal", "path", serviceAccountDir)
+		}
+	} else if os.IsNotExist(err) {
+		log.Info("Service account directory does not exist", "path", serviceAccountDir)
+	} else {
+		log.Warn("Failed to check service account directory", "path", serviceAccountDir, "error", err)
+	}
+
 	return nil
 }
 
@@ -329,6 +366,7 @@ func IsTicketReadyForRenewal(ticket *types.Ticket) bool {
 	hours := ticket.ExpirationTime.Sub(now).Hours()
 
 	// Check if the ticket needs to be renewed
+	log.Info("Checking if ticket Expiration time is within the Renewal threshold")
 	return hours <= float64(constants.KrbTicketRenewalThreshold)
 }
 

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.a2z.com/CredentialsFetcherV2/constants"
+
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/config_utils"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/ldap"
@@ -473,7 +475,7 @@ func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.Tick
 	// 2. A domainless user created using the Domain Joined API
 	isNotDomainlessUser := domainlessUser == ""
 	isDomainlessUserWithSecret := strings.Contains(domainlessUser, "awsdomainlessusersecret")
-	isDomainlessUserStandalone := config_utils.IsRunRenewalNonDomainJoinedEnabled() // TODO: don't do this check if we're domain joined
+	isDomainlessUserStandalone := config_utils.IsRunRenewalNonDomainJoinedEnabled()
 
 	if (isDomainlessUserStandalone || isNotDomainlessUser || isDomainlessUserWithSecret) && krb_utils.IsTicketReadyForRenewal(ticket) {
 		log.Info("Ticket is ready for renewal",
@@ -548,16 +550,7 @@ func (c *Client) createTicketForDomainlessUser(ctx context.Context, ticketInfo *
 	if isDomainlessUserStandalone {
 		secretName = config_utils.GetSecretNameFromConf()
 		if secretName == "" {
-			log.Info("Secret name not found in credentials-fetcher.conf, trying ECS config file")
-			// Try to get the secret name from the ECS config file
-			configSecretName, err := config_utils.GetConfigValue("CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA")
-			if err == nil && configSecretName != "" {
-				secretName = configSecretName
-				log.Debug("Using secret name from ECS config file", "secretName", secretName)
-			} else {
-				log.Error("CFGmsaSecretName variable not found in any config file")
-				return fmt.Errorf("CFGmsaSecretName variable not found in any config file")
-			}
+			log.Info("Secret name not found in credentials-fetcher.conf, trying supplied parameter")
 		}
 	}
 	// Check if domainlessUser contains "awsdomainlessusersecret:" and extract the secret name
@@ -568,7 +561,19 @@ func (c *Client) createTicketForDomainlessUser(ctx context.Context, ticketInfo *
 			secretName = strings.TrimSpace(parts[1])
 			log.Info("Found secret name from supplied parameter")
 		}
+		if secretName == "" {
+			log.Info("Secret name not found in supplied parameter, trying ECS config file")
+		}
 	}
+	// Try to get the secret name from the ECS config file
+	configSecretName, err := config_utils.GetConfigValue(constants.EnvCFGmsaSecretName)
+	if err == nil && configSecretName != "" {
+		secretName = configSecretName
+		log.Debug("Using secret name from ECS config file", "secretName", secretName, "Overriding all other supplied secret names.")
+	} else {
+		log.Error("CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA variable not found in /etc/ecs/ecs.config or /etc/credentials-fetcher.conf file")
+	}
+
 	// Use the GenerateKrbTicketUsingSecretVault function directly
 	if secretName != "" {
 		if err := c.GenerateKrbTicketUsingSecretVault(ctx, ticketInfo.DomainName, secretName); err != nil {
@@ -580,9 +585,8 @@ func (c *Client) createTicketForDomainlessUser(ctx context.Context, ticketInfo *
 		}
 	} else {
 		log.Error("Could not find secret name for domainless user",
-			"domain", ticketInfo.DomainName,
-			"domainlessUser", domainlessUser)
-		return fmt.Errorf("could not find secret name. Please supply parameter or update credentials-fetcher.conf ")
+			"domain", ticketInfo.DomainName, ". Checked in supplied parameter, Environment variable, /etc/ecs/ecs.config, /etc/credentials-fetcher.conf")
+		return fmt.Errorf("could not find secret name. Please supply parameter or update /etc/credentials-fetcher.conf ")
 	}
 
 	return nil
