@@ -70,7 +70,7 @@ func NewNonDomainJoinedKerberosHandler(krbFilesDir, awsSMSecretName string, krbC
 
 // AddNonDomainJoinedKerberosLease implements the AddNonDomainJoinedKerberosLease RPC method
 func (h *NonDomainJoinedKerberosHandler) AddNonDomainJoinedKerberosLease(ctx context.Context, req *pb.CreateNonDomainJoinedKerberosLeaseRequest) (*pb.CreateNonDomainJoinedKerberosLeaseResponse, error) {
-	log.Info("Received AddNonDomainJoinedKerberosLease request")
+	log.Info("Processing AddNonDomainJoinedKerberosLease request")
 
 	// Validate request
 	if err := h.ValidateCredentials(req.Username, req.Password, req.Domain); err != nil {

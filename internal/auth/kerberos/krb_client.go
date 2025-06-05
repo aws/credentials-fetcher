@@ -668,7 +668,7 @@ func (c *Client) GenerateKrbTicketUsingSecretVault(ctx context.Context, domain, 
 	}
 
 	// Extract username, password, and update distinguished name if available
-	username, password, _, err := aws_utils.ExtractCredentialsFromSecret(secretMap)
+	username, password, _, _, err := aws_utils.ExtractCredentialsFromSecret(secretMap)
 	if err != nil {
 		log.Error("Failed to extract credentials from secret",
 			"secret_name", secretName,

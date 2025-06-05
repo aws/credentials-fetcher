@@ -3,6 +3,9 @@ package aws_utils
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -52,9 +55,9 @@ func getSecretWithClient(svc secretsmanageriface.SecretsManagerAPI, secretArn st
 }
 
 // ExtractCredentialsFromSecret extracts username, password, and distinguished name from the secret map
-func ExtractCredentialsFromSecret(secretMap map[string]interface{}) (string, string, string, error) {
+func ExtractCredentialsFromSecret(secretMap map[string]interface{}) (string, string, string, string, error) {
 	if secretMap == nil {
-		return "", "", "", fmt.Errorf("secret map is nil")
+		return "", "", "", "", fmt.Errorf("secret map is nil")
 	}
 
 	// Try to get username from the secret
@@ -107,17 +110,68 @@ func ExtractCredentialsFromSecret(secretMap map[string]interface{}) (string, str
 	}
 
 	if dn != "" {
-		log.Info("Found Optional DN from Secrets Manager", "dn", dn)
+		log.Info("Found DN from Secrets Manager", "dn", dn)
+	}
+
+	var domainName string
+	if domainNameVal, ok := secretMap["domainName"]; ok && domainNameVal != nil {
+		if domainNameStr, ok := domainNameVal.(string); ok && domainNameStr != "" {
+			domainName = domainNameStr
+		}
 	}
 
 	// Validate required fields
 	if username == "" {
-		return "", "", "", fmt.Errorf("username not found in secret")
+		return "", "", "", "", fmt.Errorf("username not found in secret")
 	}
 
 	if password == "" {
-		return "", "", "", fmt.Errorf("password not found in secret")
+		return "", "", "", "", fmt.Errorf("password not found in secret")
 	}
 
-	return username, password, dn, nil
+	return username, password, domainName, dn, nil
+}
+
+// GetSecretFromSecretsManagerWithSession retrieves a secret value from AWS Secrets Manager
+// using the provided AWS session. It returns the secret value as a JSON object (map[string]interface{}).
+func GetSecretFromSecretsManagerWithSession(sess *session.Session, secretArn string) (map[string]interface{}, error) {
+	log.Info("Retrieving secret from Secrets Manager", "secretArn", secretArn)
+
+	// Create a Secrets Manager client with the provided session
+	svc := secretsmanager.New(sess)
+
+	return getSecretWithClient(svc, secretArn)
+}
+
+// IsValidDomain checks if a domain name is valid
+func IsValidDomain(domain string) bool {
+	if domain == "" {
+		return false
+	}
+
+	// Basic domain validation - can be enhanced as needed
+	parts := strings.Split(domain, ".")
+	return len(parts) >= 2
+}
+
+// ContainsInvalidCharacters checks if a string contains invalid characters
+func ContainsInvalidCharacters(s string, logMessage string) bool {
+	log := logger.GetInstance()
+	for _, char := range types.InvalidCharacters {
+		if strings.ContainsRune(s, char) {
+			log.Error("Contains invalid credentials in ", logMessage)
+			return true
+		}
+	}
+	return false
+}
+
+// ContainsInvalidCharactersInADAccountName checks if a username contains invalid characters
+func ContainsInvalidCharactersInADAccountName(username string) bool {
+	return ContainsInvalidCharacters(username, "AD account name")
+}
+
+// ContainsInvalidCharactersInCredentialSpec checks if a string contains invalid characters
+func ContainsInvalidCharactersInCredentialSpec(s string) bool {
+	return ContainsInvalidCharacters(s, "credential spec path")
 }

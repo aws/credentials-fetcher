@@ -37,10 +37,11 @@ type CredentialsFetcherServer struct {
 	shellExecutor   cmdexec.Executor
 
 	// API handlers
-	nonDomainJoinedHandler *api.NonDomainJoinedKerberosHandler
-	domainJoinedHandler    *api.DomainJoinedKerberosLeaseHandler
-	healthCheckHandler     *api.HealthCheckHandler
-	kerberosLeaseHandler   *api.KerberosLeaseHandler
+	nonDomainJoinedHandler  *api.NonDomainJoinedKerberosHandler
+	domainJoinedHandler     *api.DomainJoinedKerberosLeaseHandler
+	healthCheckHandler      *api.HealthCheckHandler
+	kerberosLeaseHandler    *api.KerberosLeaseHandler
+	kerberosArnLeaseHandler *api.KerberosArnLeaseHandler
 }
 
 // NewCredentialsFetcherServerFunc is the function type for creating a new server
@@ -61,10 +62,11 @@ var NewCredentialsFetcherServer NewCredentialsFetcherServerFunc = func(krbFilesD
 		shellExecutor:   shellExecutor,
 
 		// Initialize API handlers
-		nonDomainJoinedHandler: api.NewNonDomainJoinedKerberosHandler(krbFilesDir, awsSMSecretName, krbClient, ldapClient, shellExecutor),
-		domainJoinedHandler:    api.NewDomainJoinedKerberosLeaseHandler(krbFilesDir, awsSMSecretName, krbClient),
-		healthCheckHandler:     api.NewHealthCheckHandler(),
-		kerberosLeaseHandler:   api.NewKerberosLeaseHandler(krbFilesDir, krbClient),
+		nonDomainJoinedHandler:  api.NewNonDomainJoinedKerberosHandler(krbFilesDir, awsSMSecretName, krbClient, ldapClient, shellExecutor),
+		domainJoinedHandler:     api.NewDomainJoinedKerberosLeaseHandler(krbFilesDir, awsSMSecretName, krbClient),
+		healthCheckHandler:      api.NewHealthCheckHandler(),
+		kerberosLeaseHandler:    api.NewKerberosLeaseHandler(krbFilesDir, krbClient),
+		kerberosArnLeaseHandler: api.NewKerberosArnLeaseHandler(krbFilesDir, krbClient, shellExecutor),
 	}
 }
 
@@ -78,6 +80,7 @@ func (s *CredentialsFetcherServer) AddKerberosLease(ctx context.Context, req *pb
 
 // AddNonDomainJoinedKerberosLease implements the AddNonDomainJoinedKerberosLease RPC method
 func (s *CredentialsFetcherServer) AddNonDomainJoinedKerberosLease(ctx context.Context, req *pb.CreateNonDomainJoinedKerberosLeaseRequest) (*pb.CreateNonDomainJoinedKerberosLeaseResponse, error) {
+	log.Info("Received AddNonDomainJoinedKerberosLease request")
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.nonDomainJoinedHandler.AddNonDomainJoinedKerberosLease(ctx, req)
@@ -85,6 +88,7 @@ func (s *CredentialsFetcherServer) AddNonDomainJoinedKerberosLease(ctx context.C
 
 // RenewNonDomainJoinedKerberosLease implements the RenewNonDomainJoinedKerberosLease RPC method
 func (s *CredentialsFetcherServer) RenewNonDomainJoinedKerberosLease(ctx context.Context, req *pb.RenewNonDomainJoinedKerberosLeaseRequest) (*pb.RenewNonDomainJoinedKerberosLeaseResponse, error) {
+	log.Info("Received RenewNonDomainJoinedKerberosLease request")
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.nonDomainJoinedHandler.RenewNonDomainJoinedKerberosLease(ctx, req)
@@ -92,6 +96,7 @@ func (s *CredentialsFetcherServer) RenewNonDomainJoinedKerberosLease(ctx context
 
 // DeleteKerberosLease implements the DeleteKerberosLease RPC method
 func (s *CredentialsFetcherServer) DeleteKerberosLease(ctx context.Context, req *pb.DeleteKerberosLeaseRequest) (*pb.DeleteKerberosLeaseResponse, error) {
+	log.Info("Received DeleteKerberosLease request")
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.kerberosLeaseHandler.DeleteKerberosLease(ctx, req)
@@ -99,16 +104,16 @@ func (s *CredentialsFetcherServer) DeleteKerberosLease(ctx context.Context, req 
 
 // HealthCheck implements the HealthCheck RPC method
 func (s *CredentialsFetcherServer) HealthCheck(ctx context.Context, req *pb.HealthCheckRequest) (*pb.HealthCheckResponse, error) {
+	log.Info("Received HealthCheck request")
 	return s.healthCheckHandler.HealthCheck(ctx, req)
 }
 
 // AddKerberosArnLease implements the AddKerberosArnLease RPC method
 func (s *CredentialsFetcherServer) AddKerberosArnLease(ctx context.Context, req *pb.KerberosArnLeaseRequest) (*pb.CreateKerberosArnLeaseResponse, error) {
 	log.Info("Received AddKerberosArnLease request")
-	return &pb.CreateKerberosArnLeaseResponse{
-		LeaseId:              "",
-		KrbTicketResponseMap: []*pb.KerberosTicketArnResponse{},
-	}, nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.kerberosArnLeaseHandler.AddKerberosArnLease(ctx, req)
 }
 
 // RenewKerberosArnLease implements the RenewKerberosArnLease RPC method

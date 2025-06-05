@@ -35,6 +35,13 @@ type TicketInfo struct {
 	CredentialArn      string
 }
 
+// KerberosTicketArnMapping contains mapping between credential spec ARN and Kerberos file path
+type KerberosTicketArnMapping struct {
+	CredentialSpecArn           string
+	KrbFilePath                 string
+	CredentialDomainlessUserArn string
+}
+
 // CredentialSpec represents a parsed credential spec
 type CredentialSpec struct {
 	DomainName         string

@@ -38,35 +38,46 @@ func GenerateLeaseID() (string, error) {
 	return leaseID.String(), nil
 }
 
-// ParseCredSpec parses a credential spec JSON string
-func ParseCredSpec(credspecData string) (*types.CredentialSpec, error) {
+// parseCredSpecCommon parses a credential spec JSON string and returns common extracted fields
+func parseCredSpecCommon(credspecData string) (map[string]interface{}, string, string, error) {
 	log := logger.GetInstance()
 
 	if credspecData == "" {
 		log.Error("Credential spec is empty")
-		return nil, fmt.Errorf("credential spec is empty")
+		return nil, "", "", fmt.Errorf("credential spec is empty")
 	}
 
 	// Parse JSON
 	root, err := parseJSON(credspecData)
 	if err != nil {
-		return nil, err
+		return nil, "", "", err
 	}
 
 	// Extract domain information
 	domainName, _, err := extractDomainInfo(root)
 	if err != nil {
-		return nil, err
+		return nil, "", "", err
 	}
 
 	// Extract service account name
 	serviceAccountName, err := extractServiceAccountName(root)
 	if err != nil {
-		return nil, err
+		return nil, "", "", err
 	}
 
 	// Validate domain and service account
 	if err := validateCredSpecFields(domainName, serviceAccountName); err != nil {
+		return nil, "", "", err
+	}
+
+	return root, domainName, serviceAccountName, nil
+}
+
+// ParseCredSpec parses a credential spec JSON string for ECS and standalone domain-joined and non-domainjoined mode
+func ParseCredSpec(credspecData string) (*types.CredentialSpec, error) {
+	// Use common parsing function
+	root, domainName, serviceAccountName, err := parseCredSpecCommon(credspecData)
+	if err != nil {
 		return nil, err
 	}
 
@@ -448,4 +459,32 @@ func parseFQDNsFromOutput(output string) []string {
 	}
 
 	return fqdns
+}
+
+// ParseCredSpecDomainless parses the credential spec JSON for Fargate non-domainjoined mode
+func ParseCredSpecDomainless(credspecData string, krbTicketInfo *types.TicketInfo, krbTicketMapping *types.KerberosTicketArnMapping) error {
+	// Use common parsing function
+	root, domainName, serviceAccountName, err := parseCredSpecCommon(credspecData)
+	if err != nil {
+		return err
+	}
+
+	log := logger.GetInstance()
+
+	// Get credentialspec arn
+	domainlessUserArn, err := extractCredentialArn(root)
+	if err != nil || domainlessUserArn == "" {
+		log.Error("Missing or invalid secrets manager ARN")
+		return fmt.Errorf("missing or invalid secrets manager ARN")
+	}
+
+	// Set values in the structures
+	krbTicketInfo.DomainName = domainName
+	krbTicketInfo.ServiceAccountName = serviceAccountName
+	krbTicketInfo.CredspecInfo = krbTicketMapping.CredentialSpecArn
+
+	krbTicketMapping.CredentialDomainlessUserArn = domainlessUserArn
+	krbTicketMapping.KrbFilePath = krbTicketInfo.KrbFilePath
+
+	return nil
 }

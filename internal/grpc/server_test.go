@@ -186,10 +186,10 @@ func TestCredentialsFetcherServer_AddKerberosArnLease(t *testing.T) {
 	}
 	resp, err := client.AddKerberosArnLease(context.Background(), req)
 
-	// Verify response
-	assert.NoError(t, err)
-	assert.Equal(t, "", resp.LeaseId)
-	assert.Empty(t, resp.KrbTicketResponseMap)
+	// Verify response - we expect an error since the ARN is not valid
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "credentialspec arn is not valid")
+	assert.Nil(t, resp)
 }
 
 func TestCredentialsFetcherServer_RenewKerberosArnLease(t *testing.T) {
