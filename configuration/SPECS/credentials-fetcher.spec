@@ -1,15 +1,22 @@
 %global debug_package %{nil}
 
+# Version can be overridden at build time:
+# rpmbuild -ba --define "version 2.0.1" --define "release 1" credentials-fetcher.spec
+%{!?version: %global version 2.0.0}
+%{!?release: %global release 1}
+
 Name:           credentials-fetcher
-Version:        2.0.0
-Release:        2%{?dist}
+Version:        %{version}
+Release:        %{release}%{?dist}
 Summary:        Credentials Fetcher Service for AWS
-License:        Proprietary
+License:        Apache-2.0
 URL:            https://code.amazon.com/packages/CredentialsFetcherV2
 Source0:        %{name}-%{version}.tar.gz
 
+# If systemd-rpm-macros is not available, you can create a custom package
+# See README.md for instructions on creating a custom systemd-rpm-macros package
 BuildRequires:  golang >= 1.18
-BuildRequires:  systemd-rpm-macros
+BuildRequires:  systemd-devel
 
 Requires:       openldap-clients
 Requires:       krb5-workstation
@@ -72,5 +79,6 @@ exit 0
 %dir %{_localstatedir}/credentials-fetcher/logging
 
 %changelog
-* Wed Jun 04 2025 Saksham Bhalla <sakshmb@amazon.com> - 2.0.0
+* Wed Jun 05 2025 Saksham Bhalla <sakshmb@amazon.com> - %{version}-%{release}
 - Initial RPM release of CredentialsFetcherV2
+- Support for dynamic versioning in CI/CD pipeline

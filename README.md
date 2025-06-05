@@ -66,6 +66,60 @@ sudo systemctl status credentials-fetcher.service
 sudo journalctl -u credentials-fetcher.service -f
 ```
 
+
+### Building RPM Packages
+
+The service stack includes infrastructure for building RPM packages. The spec file supports dynamic versioning for CI/CD integration.
+
+#### RPM Versioning Strategy
+
+- Production releases follow semantic versioning: `2.0.0`, `2.0.1`, etc.
+- CI builds can use build numbers or timestamps for continuous integration
+
+#### Building RPM Locally
+
+1. Install required dependencies:
+   ```bash
+   sudo yum install -y golang systemd-devel rpm-build rpmdevtools
+   ```
+
+2. Prepare the source tarball (replace VERSION with desired version):
+   ```bash
+   export VERSION=2.0.0
+   mkdir -p /tmp/credentials-fetcher-$VERSION
+   cp -r ~/workplace/CredentialsFetcherV2/src/CredentialsFetcherV2/* /tmp/credentials-fetcher-$VERSION/
+   ```
+
+3. Build the RPM with default version (2.0.0):
+   ```bash
+   mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+   cp /tmp/credentials-fetcher-$VERSION/configuration/SPECS/credentials-fetcher.spec ~/rpmbuild/SPECS/
+   tar -czf ~/rpmbuild/SOURCES/credentials-fetcher-$VERSION.tar.gz -C /tmp credentials-fetcher-$VERSION
+   rpmbuild -ba ~/rpmbuild/SPECS/credentials-fetcher.spec
+   ```
+
+4. Build with custom version and release number:
+   ```bash
+   # For production releases (e.g., 2.0.1)
+   rpmbuild -ba ~/rpmbuild/SPECS/credentials-fetcher.spec --define "version 2.0.1" --define "release 1"
+   
+   # For CI builds (using timestamp or build number)
+   rpmbuild -ba ~/rpmbuild/SPECS/credentials-fetcher.spec --define "version 2.0.0" --define "release 0.$(date +%Y%m%d%H%M)"
+   ```
+
+5. The built RPM will be available at:
+   ```
+   ~/rpmbuild/RPMS/x86_64/credentials-fetcher-<version>-<release>.<arch>.rpm
+   ```
+
+#### CI/CD Integration
+
+For CI/CD pipelines, you can automatically generate version numbers:
+
+- Production releases: Increment the last number (2.0.0 → 2.0.1 → 2.0.2)
+- Development builds: Use timestamp or CI build number as release (2.0.0-0.20250605.1)
+
+
 ### ECS
 1. To see credentials-fetcher in action in ECS, run `systemctl restart ecs`
 2. Launch a new task from the AWS console
