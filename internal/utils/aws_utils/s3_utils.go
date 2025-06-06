@@ -1,25 +1,25 @@
 package aws_utils
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"regexp"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 )
 
-// For testing - allows us to mock the s3.New function
-var s3New = func(sess *session.Session) *s3.S3 {
-	return s3.New(sess)
+// For testing - allows us to mock the s3.NewFromConfig function
+var s3NewFromConfig = func(cfg aws.Config) *s3.Client {
+	return s3.NewFromConfig(cfg)
 }
 
 // CheckFileSizeS3 checks if the S3 object is valid
-func CheckFileSizeS3(sess *session.Session, s3ARN string) (bool, error) {
+func CheckFileSizeS3(ctx context.Context, cfg aws.Config, s3ARN string) (bool, error) {
 	log := logger.GetInstance()
 	log.Info("Checking S3 object size", "arn", s3ARN)
 
@@ -30,10 +30,10 @@ func CheckFileSizeS3(sess *session.Session, s3ARN string) (bool, error) {
 	}
 
 	// Create S3 client
-	s3Client := s3New(sess)
+	s3Client := s3NewFromConfig(cfg)
 
 	// Get object metadata
-	headObj, err := s3Client.HeadObject(&s3.HeadObjectInput{
+	headObj, err := s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
@@ -53,7 +53,7 @@ func CheckFileSizeS3(sess *session.Session, s3ARN string) (bool, error) {
 
 // RetrieveCredSpecFromS3 retrieves credential spec from S3
 // Example ARN format: arn:aws:s3:::gmsacredspec/gmsa-cred-spec.json
-func RetrieveCredSpecFromS3(sess *session.Session, s3ARN string) (string, error) {
+func RetrieveCredSpecFromS3(ctx context.Context, cfg aws.Config, s3ARN string) (string, error) {
 	log := logger.GetInstance()
 	log.Info("Retrieving credential spec from S3", "arn", s3ARN)
 
@@ -65,10 +65,10 @@ func RetrieveCredSpecFromS3(sess *session.Session, s3ARN string) (string, error)
 	}
 
 	// Create S3 client
-	s3Client := s3New(sess)
+	s3Client := s3NewFromConfig(cfg)
 
 	// Get object
-	getObj, err := s3Client.GetObject(&s3.GetObjectInput{
+	getObj, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})

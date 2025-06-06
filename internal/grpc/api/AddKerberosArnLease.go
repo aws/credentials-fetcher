@@ -9,9 +9,9 @@ import (
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
 	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
@@ -23,6 +23,50 @@ import (
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
+
+// KerberosArnLeaseInterface extends KerberosArnTicketOperations with Add-specific operations
+type KerberosArnLeaseInterface interface {
+	KerberosArnTicketOperations
+
+	// AddKerberosArnLease implements the AddKerberosArnLease RPC method
+	AddKerberosArnLease(ctx context.Context, req *pb.KerberosArnLeaseRequest) (*pb.CreateKerberosArnLeaseResponse, error)
+}
+
+// KerberosArnTicketOperations defines operations for managing Kerberos tickets using ARNs
+type KerberosArnTicketOperations interface {
+	// validateRequest validates the Kerberos ARN lease request
+	validateRequest(req *pb.KerberosArnLeaseRequest) error
+
+	// createAWSConfig creates an AWS config with the provided credentials
+	createAWSConfig(ctx context.Context, req *pb.KerberosArnLeaseRequest) (aws.Config, error)
+
+	// processCredSpecARNs processes the credential spec ARNs and returns the lease ID and ticket info
+	processCredSpecARNs(ctx context.Context, req *pb.KerberosArnLeaseRequest, cfg aws.Config) (string, []*types.TicketInfo, []*types.KerberosTicketArnMapping, error)
+
+	// createDummyFiles creates dummy files for test invocations
+	createDummyFiles(mountPath string) error
+
+	// processRealCredentialSpec processes a real (non-test) credential spec
+	processRealCredentialSpec(ctx context.Context, cfg aws.Config, parts []string, leaseID string) (*types.TicketInfo, *types.KerberosTicketArnMapping, error)
+
+	// createTicketResponseMap creates the response map for the gRPC response
+	createTicketResponseMap(ticketArnMappings []*types.KerberosTicketArnMapping) []*pb.KerberosTicketArnResponse
+
+	// createKerberosTickets creates Kerberos tickets for the provided ticket info list
+	createKerberosTickets(ctx context.Context, cfg aws.Config, krbTicketInfoList []*types.TicketInfo, leaseID string) error
+
+	// createCredentialCacheFile creates the Kerberos credential cache file
+	createCredentialCacheFile(krbTicket *types.TicketInfo, krbCCNameStr string) error
+
+	// cleanupKerberosFiles cleans up Kerberos files on failure
+	cleanupKerberosFiles(krbTicketInfoList []*types.TicketInfo)
+
+	// isTestInvocationForUnitTests checks if this is a test invocation
+	isTestInvocationForUnitTests(arn string) bool
+
+	// validateCredentials checks if a username, password and domain are valid
+	validateCredentials(username, password, domain string) bool
+}
 
 // KerberosArnLeaseHandler handles operations related to Kerberos ARN leases
 type KerberosArnLeaseHandler struct {
@@ -50,14 +94,14 @@ func (h *KerberosArnLeaseHandler) AddKerberosArnLease(ctx context.Context, req *
 		return nil, err
 	}
 
-	// Create AWS session
-	sess, err := h.createAWSSession(req)
+	// Create AWS config
+	cfg, err := h.createAWSConfig(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	// Process credential spec ARNs
-	leaseID, ticketInfoList, ticketArnMappings, err := h.processCredSpecARNs(ctx, req, sess)
+	leaseID, ticketInfoList, ticketArnMappings, err := h.processCredSpecARNs(ctx, req, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +113,7 @@ func (h *KerberosArnLeaseHandler) AddKerberosArnLease(ctx context.Context, req *
 
 	// If there were no errors and this is not a test, create the Kerberos tickets
 	if len(req.CredspecArns) > 0 && !h.isTestInvocationForUnitTests(req.CredspecArns[0]) {
-		if err := h.createKerberosTickets(ctx, sess, ticketInfoList, leaseID); err != nil {
+		if err := h.createKerberosTickets(ctx, cfg, ticketInfoList, leaseID); err != nil {
 			return nil, err
 		}
 
@@ -92,28 +136,34 @@ func (h *KerberosArnLeaseHandler) validateRequest(req *pb.KerberosArnLeaseReques
 	return nil
 }
 
-// createAWSSession creates an AWS session with the provided credentials
-func (h *KerberosArnLeaseHandler) createAWSSession(req *pb.KerberosArnLeaseRequest) (*session.Session, error) {
+// createAWSConfig creates an AWS config with the provided credentials
+func (h *KerberosArnLeaseHandler) createAWSConfig(ctx context.Context, req *pb.KerberosArnLeaseRequest) (aws.Config, error) {
 	log := logger.GetInstance()
 
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(req.Region),
-		Credentials: credentials.NewStaticCredentials(
-			req.AccessKeyId,
-			req.SecretAccessKey,
-			req.SessionToken,
-		),
-	})
+	// Create static credentials provider
+	credProvider := credentials.NewStaticCredentialsProvider(
+		req.AccessKeyId,
+		req.SecretAccessKey,
+		req.SessionToken,
+	)
+
+	// Load the configuration with the custom credentials
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(req.Region),
+		config.WithCredentialsProvider(credProvider),
+	)
+
 	if err != nil {
-		log.Error("Failed to create AWS session", "error", err)
-		return nil, fmt.Errorf("failed to create AWS session: %v", err)
+		log.Error("Failed to create AWS config", "error", err)
+		return aws.Config{}, fmt.Errorf("failed to create AWS config: %v", err)
 	}
-	log.Info("Successfully created AWS session and retrieved credentials")
-	return sess, nil
+
+	log.Info("Successfully created AWS config and retrieved credentials")
+	return cfg, nil
 }
 
 // processCredSpecARNs processes the credential spec ARNs and returns the lease ID and ticket info
-func (h *KerberosArnLeaseHandler) processCredSpecARNs(ctx context.Context, req *pb.KerberosArnLeaseRequest, sess *session.Session) (string, []*types.TicketInfo, []*types.KerberosTicketArnMapping, error) {
+func (h *KerberosArnLeaseHandler) processCredSpecARNs(ctx context.Context, req *pb.KerberosArnLeaseRequest, cfg aws.Config) (string, []*types.TicketInfo, []*types.KerberosTicketArnMapping, error) {
 
 	var leaseID string
 	krbTicketInfoList := make([]*types.TicketInfo, 0)
@@ -153,7 +203,7 @@ func (h *KerberosArnLeaseHandler) processCredSpecARNs(ctx context.Context, req *
 			}
 		} else {
 			// Process real credential spec
-			ticketInfo, ticketArn, err := h.processRealCredentialSpec(ctx, sess, parts, pathParts[0])
+			ticketInfo, ticketArn, err := h.processRealCredentialSpec(ctx, cfg, parts, pathParts[0])
 			if err != nil {
 				return "", nil, nil, err
 			}
@@ -199,17 +249,17 @@ func (h *KerberosArnLeaseHandler) createDummyFiles(mountPath string) error {
 }
 
 // processRealCredentialSpec processes a real (non-test) credential spec
-func (h *KerberosArnLeaseHandler) processRealCredentialSpec(ctx context.Context, sess *session.Session, parts []string, leaseID string) (*types.TicketInfo, *types.KerberosTicketArnMapping, error) {
+func (h *KerberosArnLeaseHandler) processRealCredentialSpec(ctx context.Context, cfg aws.Config, parts []string, leaseID string) (*types.TicketInfo, *types.KerberosTicketArnMapping, error) {
 
 	// Check if the S3 object is valid
-	isObjectValid, err := aws_utils.CheckFileSizeS3(sess, parts[0])
+	isObjectValid, err := aws_utils.CheckFileSizeS3(ctx, cfg, parts[0])
 	if err != nil || !isObjectValid {
 		log.Error("Invalid object for credentialspec in S3")
 		return nil, nil, fmt.Errorf("invalid object for credentialspec in S3")
 	}
 
 	// Retrieve credential spec from S3
-	credSpecContent, err := aws_utils.RetrieveCredSpecFromS3(sess, parts[0])
+	credSpecContent, err := aws_utils.RetrieveCredSpecFromS3(ctx, cfg, parts[0])
 	if err != nil || credSpecContent == "" {
 		log.Error("Credentialspec cannot be retrieved from S3")
 		return nil, nil, fmt.Errorf("credentialspec cannot be retrieved from S3")
@@ -251,7 +301,7 @@ func (h *KerberosArnLeaseHandler) createTicketResponseMap(ticketArnMappings []*t
 }
 
 // createKerberosTickets creates Kerberos tickets for the provided ticket info list
-func (h *KerberosArnLeaseHandler) createKerberosTickets(ctx context.Context, sess *session.Session, krbTicketInfoList []*types.TicketInfo, leaseID string) error {
+func (h *KerberosArnLeaseHandler) createKerberosTickets(ctx context.Context, cfg aws.Config, krbTicketInfoList []*types.TicketInfo, leaseID string) error {
 	for _, krbTicket := range krbTicketInfoList {
 		// Retrieve and validate credentials from Secrets Manager
 		secretsArn := krbTicket.CredspecInfo
@@ -261,7 +311,7 @@ func (h *KerberosArnLeaseHandler) createKerberosTickets(ctx context.Context, ses
 		}
 
 		// Retrieve credentials from Secrets Manager
-		secretMap, err := aws_utils.GetSecretFromSecretsManagerWithSession(sess, secretsArn)
+		secretMap, err := aws_utils.GetSecretFromSecretsManagerWithConfig(ctx, cfg, secretsArn)
 		if err != nil {
 			log.Error("Failed to retrieve credentials from secrets manager", "error", err)
 			return fmt.Errorf("failed to retrieve credentials from secrets manager: %w", err)

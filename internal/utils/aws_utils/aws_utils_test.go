@@ -1,23 +1,22 @@
 package aws_utils
 
 import (
+	"context"
 	"errors"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
-	"github.com/aws/aws-sdk-go/service/secretsmanager/secretsmanageriface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/stretchr/testify/assert"
 )
 
 // Mock Secrets Manager client
 type mockSecretsManagerClient struct {
-	secretsmanageriface.SecretsManagerAPI
 	getSecretValueOutput *secretsmanager.GetSecretValueOutput
 	getSecretValueError  error
 }
 
-func (m *mockSecretsManagerClient) GetSecretValue(input *secretsmanager.GetSecretValueInput) (*secretsmanager.GetSecretValueOutput, error) {
+func (m *mockSecretsManagerClient) GetSecretValue(ctx context.Context, input *secretsmanager.GetSecretValueInput, optFns ...func(*secretsmanager.Options)) (*secretsmanager.GetSecretValueOutput, error) {
 	return m.getSecretValueOutput, m.getSecretValueError
 }
 
@@ -243,7 +242,7 @@ func TestGetSecretWithClient(t *testing.T) {
 			}
 
 			// Call the function
-			result, err := getSecretWithClient(mockClient, tt.secretArn)
+			result, err := getSecretWithClient(context.Background(), mockClient, tt.secretArn)
 
 			// Check results
 			if tt.expectedError {

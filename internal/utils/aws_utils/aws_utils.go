@@ -1,46 +1,58 @@
 package aws_utils
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
-	"github.com/aws/aws-sdk-go/service/secretsmanager/secretsmanageriface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
 var log = logger.GetInstance()
 
+// secretsManagerClient is an interface for AWS Secrets Manager client
+type secretsManagerClient interface {
+	GetSecretValue(ctx context.Context, input *secretsmanager.GetSecretValueInput, optFns ...func(*secretsmanager.Options)) (*secretsmanager.GetSecretValueOutput, error)
+}
+
 // GetSecretFromSecretsManager retrieves a secret value from AWS Secrets Manager
 // given a secretArn. It returns the secret value as a JSON object (map[string]interface{}).
+// This is a backward compatible function that uses context.Background()
 func GetSecretFromSecretsManager(secretArn string) (map[string]interface{}, error) {
-	// Create a new AWS session
-	sess, err := session.NewSession()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create AWS session: %v", err)
-	}
-	log.Info("Created AWS session to retrieve secret from Secrets Manager", "secretArn", secretArn)
-	// Create a Secrets Manager client
-	svc := secretsmanager.New(sess)
+	return GetSecretFromSecretsManagerWithContext(context.Background(), secretArn)
+}
 
-	return getSecretWithClient(svc, secretArn)
+// GetSecretFromSecretsManagerWithContext retrieves a secret value from AWS Secrets Manager
+// given a secretArn and context. It returns the secret value as a JSON object (map[string]interface{}).
+func GetSecretFromSecretsManagerWithContext(ctx context.Context, secretArn string) (map[string]interface{}, error) {
+	// Create a new AWS config
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AWS config: %v", err)
+	}
+
+	// Create Secrets Manager client
+	svc := secretsmanager.NewFromConfig(cfg)
+	log.Info("Created AWS config to retrieve secret from Secrets Manager", "secretArn", secretArn)
+
+	return getSecretWithClient(ctx, svc, secretArn)
 }
 
 // getSecretWithClient is a helper function that uses the provided Secrets Manager client
 // to retrieve a secret. This function is used by both the main code and tests.
-func getSecretWithClient(svc secretsmanageriface.SecretsManagerAPI, secretArn string) (map[string]interface{}, error) {
+func getSecretWithClient(ctx context.Context, svc secretsManagerClient, secretArn string) (map[string]interface{}, error) {
 	// Create the input for GetSecretValue
 	input := &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretArn),
 	}
 
 	// Call GetSecretValue API
-	result, err := svc.GetSecretValue(input)
+	result, err := svc.GetSecretValue(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get secret value: %v", err)
 	}
@@ -132,15 +144,15 @@ func ExtractCredentialsFromSecret(secretMap map[string]interface{}) (string, str
 	return username, password, domainName, dn, nil
 }
 
-// GetSecretFromSecretsManagerWithSession retrieves a secret value from AWS Secrets Manager
-// using the provided AWS session. It returns the secret value as a JSON object (map[string]interface{}).
-func GetSecretFromSecretsManagerWithSession(sess *session.Session, secretArn string) (map[string]interface{}, error) {
+// GetSecretFromSecretsManagerWithConfig retrieves a secret value from AWS Secrets Manager
+// using the provided AWS config. It returns the secret value as a JSON object (map[string]interface{}).
+func GetSecretFromSecretsManagerWithConfig(ctx context.Context, cfg aws.Config, secretArn string) (map[string]interface{}, error) {
 	log.Info("Retrieving secret from Secrets Manager", "secretArn", secretArn)
 
-	// Create a Secrets Manager client with the provided session
-	svc := secretsmanager.New(sess)
+	// Create a Secrets Manager client with the provided config
+	svc := secretsmanager.NewFromConfig(cfg)
 
-	return getSecretWithClient(svc, secretArn)
+	return getSecretWithClient(ctx, svc, secretArn)
 }
 
 // IsValidDomain checks if a domain name is valid
