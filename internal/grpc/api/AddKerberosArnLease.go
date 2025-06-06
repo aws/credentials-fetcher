@@ -113,7 +113,7 @@ func (h *KerberosArnLeaseHandler) AddKerberosArnLease(ctx context.Context, req *
 
 	// If there were no errors and this is not a test, create the Kerberos tickets
 	if len(req.CredspecArns) > 0 && !h.isTestInvocationForUnitTests(req.CredspecArns[0]) {
-		if err := h.createKerberosTickets(ctx, cfg, ticketInfoList, leaseID); err != nil {
+		if err := h.createKerberosTickets(ctx, cfg, ticketInfoList, ticketArnMappings, leaseID); err != nil {
 			return nil, err
 		}
 
@@ -301,10 +301,18 @@ func (h *KerberosArnLeaseHandler) createTicketResponseMap(ticketArnMappings []*t
 }
 
 // createKerberosTickets creates Kerberos tickets for the provided ticket info list
-func (h *KerberosArnLeaseHandler) createKerberosTickets(ctx context.Context, cfg aws.Config, krbTicketInfoList []*types.TicketInfo, leaseID string) error {
+func (h *KerberosArnLeaseHandler) createKerberosTickets(ctx context.Context, cfg aws.Config, krbTicketInfoList []*types.TicketInfo, krbTicketArnMappings []*types.KerberosTicketArnMapping, leaseID string) error {
 	for _, krbTicket := range krbTicketInfoList {
 		// Retrieve and validate credentials from Secrets Manager
-		secretsArn := krbTicket.CredspecInfo
+		secretsArn := ""
+		// Find the matching krbTicketMapping where KrbFilePath matches the current krbTicket's KrbFilePath
+		for _, mapping := range krbTicketArnMappings {
+			if mapping.KrbFilePath == krbTicket.KrbFilePath {
+				secretsArn = mapping.CredentialDomainlessUserArn
+				log.Info("Found the Secret Manager ARN for this credspec")
+				break
+			}
+		}
 		if secretsArn == "" {
 			log.Error("Invalid Secrets Manager ARN")
 			return fmt.Errorf("invalid secrets manager ARN")
