@@ -279,7 +279,7 @@ func (h *KerberosArnLeaseHandler) processRealCredentialSpec(ctx context.Context,
 
 	// Create the Kerberos files path
 	krbFilesPath := filepath.Join(h.krbFilesDir, parts[1])
-
+	log.Info("setting krb files path", krbFilesPath, "parts ", parts[1])
 	krbTicketInfo.KrbFilePath = krbFilesPath
 	krbTicketArn.KrbFilePath = krbFilesPath
 
@@ -349,16 +349,27 @@ func (h *KerberosArnLeaseHandler) createKerberosTickets(ctx context.Context, cfg
 		krbTicket.DomainName = domain
 
 		// Create directories for the Kerberos ticket
+		// Use the full path instead of just the parent directory
+		dirPath := krbTicket.KrbFilePath
+		log.Info("Creating directory for Kerberos ticket", "directory", dirPath)
 		// #nosec G301
-		if err := os.MkdirAll(filepath.Dir(krbTicket.KrbFilePath), 0755); err != nil { /* #nosec G301 */
-			log.Error("Failed to create directory", "path", krbTicket.KrbFilePath, "error", err)
+		if err := os.MkdirAll(dirPath, 0755); err != nil { /* #nosec G301 */
+			log.Error("Failed to create directory", "path", dirPath, "error", err)
 			// Clean up on failure
 			h.cleanupKerberosFiles(krbTicketInfoList)
-			return fmt.Errorf("failed to create directory %s: %v", krbTicket.KrbFilePath, err)
+			return fmt.Errorf("failed to create directory %s: %v", dirPath, err)
 		}
 
+		// Verify directory was created
+		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+			log.Error("Directory was not created despite no error", "path", dirPath)
+			h.cleanupKerberosFiles(krbTicketInfoList)
+			return fmt.Errorf("directory was not created: %s", dirPath)
+		}
+		log.Info("Successfully created directory", "path", dirPath)
+
 		// Create the Kerberos credential cache file
-		krbCCNameStr := filepath.Join(filepath.Dir(krbTicket.KrbFilePath), "krb5cc")
+		krbCCNameStr := filepath.Join(dirPath, "krb5cc")
 		if err := h.createCredentialCacheFile(krbTicket, krbCCNameStr); err != nil {
 			h.cleanupKerberosFiles(krbTicketInfoList)
 			return err
@@ -413,6 +424,7 @@ func (h *KerberosArnLeaseHandler) createCredentialCacheFile(krbTicket *types.Tic
 		}()
 
 		krbTicket.KrbFilePath = krbCCNameStr
+		log.Info("Setting krbf file path to krbccname str", krbTicket.KrbFilePath)
 	}
 
 	return nil
