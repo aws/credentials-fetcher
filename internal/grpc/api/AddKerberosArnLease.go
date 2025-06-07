@@ -279,7 +279,6 @@ func (h *KerberosArnLeaseHandler) processRealCredentialSpec(ctx context.Context,
 
 	// Create the Kerberos files path
 	krbFilesPath := filepath.Join(h.krbFilesDir, parts[1])
-	log.Info("setting krb files path", krbFilesPath, "parts ", parts[1])
 	krbTicketInfo.KrbFilePath = krbFilesPath
 	krbTicketArn.KrbFilePath = krbFilesPath
 
