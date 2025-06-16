@@ -28,3 +28,10 @@ source .venv/bin/activate
 pip install grpcio-tools
 python3 -m grpc_tools.protoc -I/home/ec2-user/credentials-fetcher/protos --python_out=. --grpc_python_out=. credentialsfetcher.proto
 ```
+
+- To test the arn lease APIs, set the AWS environment temporary credentials
+```
+export AWS_ACCESS_KEY_ID = ""
+export AWS_SECRET_ACCESS_KEY = ""
+export AWS_SESSION_TOKEN = ""
+```
