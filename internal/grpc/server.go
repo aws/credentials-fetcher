@@ -119,9 +119,9 @@ func (s *CredentialsFetcherServer) AddKerberosArnLease(ctx context.Context, req 
 // RenewKerberosArnLease implements the RenewKerberosArnLease RPC method
 func (s *CredentialsFetcherServer) RenewKerberosArnLease(ctx context.Context, req *pb.RenewKerberosArnLeaseRequest) (*pb.RenewKerberosArnLeaseResponse, error) {
 	log.Info("Received RenewKerberosArnLease request")
-	return &pb.RenewKerberosArnLeaseResponse{
-		Status: "OK",
-	}, nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.kerberosArnLeaseHandler.RenewKerberosArnLease(ctx, req)
 }
 
 // RunServer starts the gRPC server

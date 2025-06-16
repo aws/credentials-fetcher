@@ -30,6 +30,9 @@ type KerberosArnLeaseInterface interface {
 
 	// AddKerberosArnLease implements the AddKerberosArnLease RPC method
 	AddKerberosArnLease(ctx context.Context, req *pb.KerberosArnLeaseRequest) (*pb.CreateKerberosArnLeaseResponse, error)
+
+	// RenewKerberosArnLease implements the RenewKerberosArnLease RPC method
+	RenewKerberosArnLease(ctx context.Context, req *pb.RenewKerberosArnLeaseRequest) (*pb.RenewKerberosArnLeaseResponse, error)
 }
 
 // KerberosArnTicketOperations defines operations for managing Kerberos tickets using ARNs
@@ -87,15 +90,20 @@ func NewKerberosArnLeaseHandler(krbFilesDir string, krbClient *kerberos.Client, 
 // AddKerberosArnLease creates Kerberos tickets using credential spec ARNs
 func (h *KerberosArnLeaseHandler) AddKerberosArnLease(ctx context.Context, req *pb.KerberosArnLeaseRequest) (*pb.CreateKerberosArnLeaseResponse, error) {
 	log := logger.GetInstance()
-	log.Info("Processing AddKerberosArnLease request")
+	log.Info("Processing AddKerberosArnLease Fargate request")
 
 	// Validate request
-	if err := h.validateRequest(req); err != nil {
+	if err := h.validateRequest(req.AccessKeyId, req.SecretAccessKey, req.SessionToken, req.Region); err != nil {
 		return nil, err
 	}
 
+	if len(req.CredspecArns) == 0 {
+		log.Error("No Credspec arn provided")
+		return nil, fmt.Errorf("no credspec arn provided")
+	}
+
 	// Create AWS config
-	cfg, err := h.createAWSConfig(ctx, req)
+	cfg, err := h.createAWSConfig(ctx, req.AccessKeyId, req.SecretAccessKey, req.SessionToken, req.Region)
 	if err != nil {
 		return nil, err
 	}
@@ -126,30 +134,30 @@ func (h *KerberosArnLeaseHandler) AddKerberosArnLease(ctx context.Context, req *
 }
 
 // validateRequest validates the request parameters
-func (h *KerberosArnLeaseHandler) validateRequest(req *pb.KerberosArnLeaseRequest) error {
-	if req.AccessKeyId == "" || req.SecretAccessKey == "" ||
-		req.SessionToken == "" || req.Region == "" || len(req.CredspecArns) == 0 {
-		log.Error("Access credentials should not be empty or no credential spec ARNs provided")
-		return fmt.Errorf("access credentials should not be empty or no credential spec ARNs provided")
+func (h *KerberosArnLeaseHandler) validateRequest(accessKeyId, secretAccessKey, sessionToken, region string) error {
+	if accessKeyId == "" || secretAccessKey == "" ||
+		sessionToken == "" || region == "" {
+		log.Error("Access credentials should not be empty ")
+		return fmt.Errorf("access credentials should not be empty ")
 	}
 
 	return nil
 }
 
 // createAWSConfig creates an AWS config with the provided credentials
-func (h *KerberosArnLeaseHandler) createAWSConfig(ctx context.Context, req *pb.KerberosArnLeaseRequest) (aws.Config, error) {
+func (h *KerberosArnLeaseHandler) createAWSConfig(ctx context.Context, accessKeyId, secretAccessKey, sessionToken, region string) (aws.Config, error) {
 	log := logger.GetInstance()
 
 	// Create static credentials provider
 	credProvider := credentials.NewStaticCredentialsProvider(
-		req.AccessKeyId,
-		req.SecretAccessKey,
-		req.SessionToken,
+		accessKeyId,
+		secretAccessKey,
+		sessionToken,
 	)
 
 	// Load the configuration with the custom credentials
 	cfg, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(req.Region),
+		config.WithRegion(region),
 		config.WithCredentialsProvider(credProvider),
 	)
 
