@@ -21,6 +21,7 @@ package.CredentialsFetcherV2 = {
         1.0 = {
             # Needed for emitting EMF metrics.
             GoAmzn-Metrics = 1.0;
+            CopySrcBuild = 1.0;
         };
     };
 };
