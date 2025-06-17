@@ -225,21 +225,45 @@ func ParseTicketLine(line string, ticket *types.Ticket) {
 	if len(fields) >= 4 {
 		// First date (fields 0-1) is start time
 		dateStr := fields[0] + " " + fields[1]
+
+		// Try MM/DD/YY format first
 		startTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
 		if err != nil {
-			log.Warn("Failed to parse start time from ticket line",
-				"value", dateStr, "error", err)
+			// If that fails, try MM/DD/YYYY format
+			startTime, err = time.Parse(constants.KlistDateTimeFormatLong, dateStr)
+			if err != nil {
+				log.Warn("Failed to parse start time from ticket line - tried both MM/DD/YY and MM/DD/YYYY formats",
+					"value", dateStr)
+			} else {
+				log.Info("Successfully parsed start time using MM/DD/YYYY format",
+					"value", dateStr)
+				ticket.CreationTime = startTime
+			}
 		} else {
+			log.Info("Successfully parsed start time using MM/DD/YY format",
+				"value", dateStr)
 			ticket.CreationTime = startTime
 		}
 
 		// Second date (fields 2-3) is expiry time
 		dateStr = fields[2] + " " + fields[3]
+
+		// Try MM/DD/YY format first
 		expiryTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
 		if err != nil {
-			log.Warn("Failed to parse expiry time from ticket line",
-				"value", fields[2]+" "+fields[3], "error", err)
+			// If that fails, try MM/DD/YYYY format
+			expiryTime, err = time.Parse(constants.KlistDateTimeFormatLong, dateStr)
+			if err != nil {
+				log.Warn("Failed to parse expiry time from ticket line - tried both MM/DD/YY and MM/DD/YYYY formats",
+					"value", dateStr)
+			} else {
+				log.Info("Successfully parsed expiry time using MM/DD/YYYY format",
+					"value", dateStr)
+				ticket.ExpirationTime = expiryTime
+			}
 		} else {
+			log.Info("Successfully parsed expiry time using MM/DD/YY format",
+				"value", dateStr)
 			ticket.ExpirationTime = expiryTime
 		}
 	}
@@ -247,28 +271,54 @@ func ParseTicketLine(line string, ticket *types.Ticket) {
 
 // ParseDateFromFields is a helper function to parse dates from fields with appropriate logging
 func ParseDateFromFields(fields []string, logPrefix string) (time.Time, error) {
-	// Try to find date in the format MM/DD/YY
+	// Try to find date in the format MM/DD/YY or MM/DD/YYYY
 	for i, field := range fields {
 		if i+1 < len(fields) && IsDateFormat(field) {
 			dateStr := field + " " + fields[i+1]
+
+			// Try MM/DD/YY format first
 			parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
 			if err == nil {
+				log.Info(fmt.Sprintf("Successfully parsed %s time using MM/DD/YY format", logPrefix),
+					"value", dateStr)
 				return parsedTime, nil
 			}
-			log.Warn(fmt.Sprintf("Failed to parse %s time", logPrefix),
-				"value", dateStr, "error", err)
+
+			// If that fails, try MM/DD/YYYY format
+			parsedTime, err = time.Parse(constants.KlistDateTimeFormatLong, dateStr)
+			if err == nil {
+				log.Info(fmt.Sprintf("Successfully parsed %s time using MM/DD/YYYY format", logPrefix),
+					"value", dateStr)
+				return parsedTime, nil
+			}
+
+			log.Warn(fmt.Sprintf("Failed to parse %s time - tried both MM/DD/YY and MM/DD/YYYY formats", logPrefix),
+				"value", dateStr)
 		}
 	}
 
 	// Fallback: try brute force approach
 	if len(fields) >= 2 {
 		dateStr := fields[0] + " " + fields[1]
+
+		// Try MM/DD/YY format first
 		parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
 		if err == nil {
+			log.Info(fmt.Sprintf("Successfully parsed %s time using MM/DD/YY format (fallback)", logPrefix),
+				"value", dateStr)
 			return parsedTime, nil
 		}
-		log.Warn(fmt.Sprintf("Failed to parse %s time with fallback", logPrefix),
-			"value", dateStr, "error", err)
+
+		// If that fails, try MM/DD/YYYY format
+		parsedTime, err = time.Parse(constants.KlistDateTimeFormatLong, dateStr)
+		if err == nil {
+			log.Info(fmt.Sprintf("Successfully parsed %s time using MM/DD/YYYY format (fallback)", logPrefix),
+				"value", dateStr)
+			return parsedTime, nil
+		}
+
+		log.Warn(fmt.Sprintf("Failed to parse %s time with fallback - tried both MM/DD/YY and MM/DD/YYYY formats", logPrefix),
+			"value", dateStr)
 	}
 
 	return time.Time{}, fmt.Errorf("could not parse date")
@@ -299,21 +349,24 @@ func ParseRenewTime(line string, ticket *types.Ticket) {
 	fields := strings.Fields(line)
 	if len(fields) >= 2 {
 		dateStr := fields[0] + " " + fields[1]
+
+		// Try MM/DD/YY format first
 		parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
 		if err == nil {
+			log.Info("Successfully parsed renew time using MM/DD/YY format", "value", dateStr)
 			ticket.RenewUntil = parsedTime
 			return
 		}
-		log.Warn("Failed to parse renew time", "value", dateStr, "error", err)
 
-		// Try alternative date format (MM/DD/YYYY)
-		altDateStr := fields[0] + " " + fields[1]
-		parsedTime, err = time.Parse("01/02/2006 15:04:05", altDateStr)
+		// If that fails, try MM/DD/YYYY format
+		parsedTime, err = time.Parse(constants.KlistDateTimeFormatLong, dateStr)
 		if err == nil {
+			log.Info("Successfully parsed renew time using MM/DD/YYYY format", "value", dateStr)
 			ticket.RenewUntil = parsedTime
 			return
 		}
-		log.Warn("Failed to parse renew time with alternative format", "value", altDateStr, "error", err)
+
+		log.Warn("Failed to parse renew time - tried both MM/DD/YY and MM/DD/YYYY formats", "value", dateStr)
 	}
 
 	// Fallback to ParseDateFromFields

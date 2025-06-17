@@ -70,7 +70,7 @@ func TestParsePrincipalInfo(t *testing.T) {
 }
 
 func TestDateParsing(t *testing.T) {
-	t.Run("ParseTicketLine", func(t *testing.T) {
+	t.Run("ParseTicketLine with MM/DD/YY format", func(t *testing.T) {
 		ticket := &types.Ticket{}
 		line := "05/15/23 10:00:00  05/16/23 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM"
 
@@ -83,7 +83,20 @@ func TestDateParsing(t *testing.T) {
 		assert.Equal(t, expectedExpiryTime, ticket.ExpirationTime, "Expiry time not parsed correctly")
 	})
 
-	t.Run("ParseStartTime", func(t *testing.T) {
+	t.Run("ParseTicketLine with MM/DD/YYYY format", func(t *testing.T) {
+		ticket := &types.Ticket{}
+		line := "05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM"
+
+		ParseTicketLine(line, ticket)
+
+		expectedCreationTime, _ := time.Parse(constants.KlistDateTimeFormatLong, "05/15/2023 10:00:00")
+		expectedExpiryTime, _ := time.Parse(constants.KlistDateTimeFormatLong, "05/16/2023 10:00:00")
+
+		assert.Equal(t, expectedCreationTime, ticket.CreationTime, "Creation time not parsed correctly")
+		assert.Equal(t, expectedExpiryTime, ticket.ExpirationTime, "Expiry time not parsed correctly")
+	})
+
+	t.Run("ParseStartTime with MM/DD/YY format", func(t *testing.T) {
 		ticket := &types.Ticket{}
 		line := "05/15/23 10:00:00"
 
@@ -93,7 +106,17 @@ func TestDateParsing(t *testing.T) {
 		assert.Equal(t, expectedTime, ticket.CreationTime, "Start time not parsed correctly")
 	})
 
-	t.Run("ParseExpiryTime", func(t *testing.T) {
+	t.Run("ParseStartTime with MM/DD/YYYY format", func(t *testing.T) {
+		ticket := &types.Ticket{}
+		line := "05/15/2023 10:00:00"
+
+		ParseStartTime(line, ticket)
+
+		expectedTime, _ := time.Parse(constants.KlistDateTimeFormatLong, "05/15/2023 10:00:00")
+		assert.Equal(t, expectedTime, ticket.CreationTime, "Start time not parsed correctly")
+	})
+
+	t.Run("ParseExpiryTime with MM/DD/YY format", func(t *testing.T) {
 		ticket := &types.Ticket{}
 		line := "05/16/23 10:00:00"
 
@@ -103,13 +126,33 @@ func TestDateParsing(t *testing.T) {
 		assert.Equal(t, expectedTime, ticket.ExpirationTime, "Expiry time not parsed correctly")
 	})
 
-	t.Run("ParseRenewTime", func(t *testing.T) {
+	t.Run("ParseExpiryTime with MM/DD/YYYY format", func(t *testing.T) {
+		ticket := &types.Ticket{}
+		line := "05/16/2023 10:00:00"
+
+		ParseExpiryTime(line, ticket)
+
+		expectedTime, _ := time.Parse(constants.KlistDateTimeFormatLong, "05/16/2023 10:00:00")
+		assert.Equal(t, expectedTime, ticket.ExpirationTime, "Expiry time not parsed correctly")
+	})
+
+	t.Run("ParseRenewTime with MM/DD/YY format", func(t *testing.T) {
 		ticket := &types.Ticket{}
 		line := "renew until 05/17/23 10:00:00"
 
 		ParseRenewTime(line, ticket)
 
 		expectedTime, _ := time.Parse(constants.KlistDateTimeFormat, "05/17/23 10:00:00")
+		assert.Equal(t, expectedTime, ticket.RenewUntil, "Renew time not parsed correctly")
+	})
+
+	t.Run("ParseRenewTime with MM/DD/YYYY format", func(t *testing.T) {
+		ticket := &types.Ticket{}
+		line := "renew until 05/17/2023 10:00:00"
+
+		ParseRenewTime(line, ticket)
+
+		expectedTime, _ := time.Parse(constants.KlistDateTimeFormatLong, "05/17/2023 10:00:00")
 		assert.Equal(t, expectedTime, ticket.RenewUntil, "Renew time not parsed correctly")
 	})
 }
@@ -231,12 +274,34 @@ func TestParseKlistOutput(t *testing.T) {
 		expectedError bool
 	}{
 		{
-			name: "Valid klist output",
+			name: "Valid klist output with MM/DD/YY format",
 			output: `Ticket cache: FILE:/tmp/krb5cc_1000
 Default principal: user123@EXAMPLE.COM
 
 Valid starting       Expires              Service principal
 05/15/23 10:00:00  05/16/23 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
+`,
+			path:          "/tmp/krb5cc_1000",
+			expectedError: false,
+		},
+		{
+			name: "Valid klist output with MM/DD/YYYY format",
+			output: `Ticket cache: FILE:/tmp/krb5cc_1000
+Default principal: user123@EXAMPLE.COM
+
+Valid starting       Expires              Service principal
+05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
+`,
+			path:          "/tmp/krb5cc_1000",
+			expectedError: false,
+		},
+		{
+			name: "Valid klist output with mixed date formats",
+			output: `Ticket cache: FILE:/tmp/krb5cc_1000
+Default principal: user123@EXAMPLE.COM
+
+Valid starting       Expires              Service principal
+05/15/23 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
 `,
 			path:          "/tmp/krb5cc_1000",
 			expectedError: false,
@@ -305,7 +370,7 @@ func TestParseTicketDates(t *testing.T) {
 		expectRenew    bool
 	}{
 		{
-			name: "Standard format with all dates",
+			name: "Standard format with all dates (MM/DD/YY)",
 			lines: []string{
 				"Valid starting       Expires              Service principal",
 				"05/15/23 10:00:00  05/16/23 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM",
@@ -316,7 +381,29 @@ func TestParseTicketDates(t *testing.T) {
 			expectRenew:    true,
 		},
 		{
-			name: "Multi-line format",
+			name: "Standard format with all dates (MM/DD/YYYY)",
+			lines: []string{
+				"Valid starting       Expires              Service principal",
+				"05/15/2023 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM",
+				"renew until 05/17/2023 10:00:00",
+			},
+			expectCreation: true,
+			expectExpiry:   true,
+			expectRenew:    true,
+		},
+		{
+			name: "Mixed date formats",
+			lines: []string{
+				"Valid starting       Expires              Service principal",
+				"05/15/23 10:00:00  05/16/2023 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM",
+				"renew until 05/17/2023 10:00:00",
+			},
+			expectCreation: true,
+			expectExpiry:   true,
+			expectRenew:    true,
+		},
+		{
+			name: "Multi-line format (MM/DD/YY)",
 			lines: []string{
 				"Valid starting",
 				"05/15/23 10:00:00",
@@ -325,6 +412,21 @@ func TestParseTicketDates(t *testing.T) {
 				"Service principal",
 				"krbtgt/EXAMPLE.COM@EXAMPLE.COM",
 				"renew until 05/17/23 10:00:00",
+			},
+			expectCreation: true,
+			expectExpiry:   true,
+			expectRenew:    true,
+		},
+		{
+			name: "Multi-line format (MM/DD/YYYY)",
+			lines: []string{
+				"Valid starting",
+				"05/15/2023 10:00:00",
+				"Expires",
+				"05/16/2023 10:00:00",
+				"Service principal",
+				"krbtgt/EXAMPLE.COM@EXAMPLE.COM",
+				"renew until 05/17/2023 10:00:00",
 			},
 			expectCreation: true,
 			expectExpiry:   true,

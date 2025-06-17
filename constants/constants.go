@@ -32,8 +32,11 @@ const (
 	// NumberofWaitGroups for watchdog, gRPC server, and renewal thread
 	NumberofWaitGroups = 3
 
-	// KlistDateTimeFormat is the standard date time format used for parsing Kerberos klist output
+	// KlistDateTimeFormat is the standard date time format used for parsing Kerberos klist output (MM/DD/YY)
 	KlistDateTimeFormat = "01/02/06 15:04:05"
+
+	// KlistDateTimeFormatLong is the alternative date time format used for parsing Kerberos klist output (MM/DD/YYYY)
+	KlistDateTimeFormatLong = "01/02/2006 15:04:05"
 
 	// Default Secret for user principal
 	DefaultAWSSecretName = "" // TODO: parameterize this
