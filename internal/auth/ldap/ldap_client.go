@@ -12,6 +12,7 @@ import (
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/decode"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
@@ -138,6 +139,11 @@ func extractManagedPassword(output []byte) ([]byte, error) {
 
 	// Convert output to string for easier processing
 	outputStr := string(output)
+	defer func() {
+		// Securely clear the output string containing sensitive data
+		outputStrPtr := &outputStr
+		grpc_utils.SecureClearString(outputStrPtr)
+	}()
 
 	// Look for the msDS-ManagedPassword attribute
 	const passwordPrefix = "msDS-ManagedPassword::"
@@ -163,6 +169,14 @@ func extractManagedPassword(output []byte) ([]byte, error) {
 			}
 		}
 	}
+
+	// Securely clear the encoded password when we're done with it
+	defer func() {
+		if encodedPassword != "" {
+			encodedPasswordPtr := &encodedPassword
+			grpc_utils.SecureClearString(encodedPasswordPtr)
+		}
+	}()
 
 	if !passwordFound {
 		log.Error("msDS-ManagedPassword attribute not found in LDAP response")

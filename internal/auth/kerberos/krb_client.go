@@ -178,6 +178,8 @@ func (c *Client) CreateTicketUsingUsernamePassword(domain, username, password st
 		return fmt.Errorf("failed to execute kinit command: %v: %s", err, string(output))
 	}
 
+	grpc_utils.SecureClearString(&password)
+
 	log.Info("Successfully created Kerberos ticket", "principal", principal)
 	return nil
 }
@@ -214,6 +216,12 @@ func (c *Client) CreateTicketForGMSA(ticketInfo *types.TicketInfo) error {
 	if err != nil {
 		return err
 	}
+
+	// Ensure we securely clear the password when we're done
+	defer func() {
+		// Use the SecureClearBytes function to clear the password
+		grpc_utils.SecureClearBytes(password)
+	}()
 
 	// 5. Create the Kerberos ticket
 	return c.createKerberosTicket(ctx, ticketInfo, password)
@@ -301,6 +309,7 @@ func (c *Client) findGMSAPassword(ctx context.Context, ticketInfo *types.TicketI
 			"service_account", ticketInfo.ServiceAccountName,
 			"fqdn", fqdn)
 
+		// We'll securely clear the password after it's used in createKerberosTicket
 		return password, nil
 	}
 
@@ -675,6 +684,11 @@ func (c *Client) GenerateKrbTicketUsingSecretVault(ctx context.Context, domain, 
 			"error", err)
 		return fmt.Errorf("failed to extract credentials from secret: %w", err)
 	}
+
+	// Ensure we securely clear the password when we're done
+	defer func() {
+		grpc_utils.SecureClearString(&password)
+	}()
 
 	// Create the Kerberos ticket using the retrieved credentials
 	err = c.CreateTicketUsingUsernamePassword(domain, username, password)

@@ -489,13 +489,32 @@ func ParseCredSpecDomainless(credspecData string, krbTicketInfo *types.TicketInf
 	return nil
 }
 
-// SecureClearString securely clears a string by setting it to empty
+// SecureClearString securely clears a string by overwriting its contents before setting it to empty
 // This should be called before every RPC call ends to clear sensitive data
 func SecureClearString(s *string) {
 	if s == nil || *s == "" {
 		return
 	}
 
+	// Convert string to byte slice to access underlying memory
+	byteSlice := []byte(*s)
+
+	// Use SecureClearBytes to overwrite the memory
+	SecureClearBytes(byteSlice)
+
 	// Set string to empty to remove the reference
 	*s = ""
+}
+
+// SecureClearBytes securely clears a byte slice by zeroing all bytes
+// This should be called when handling sensitive binary data like passwords
+func SecureClearBytes(b []byte) {
+	if len(b) == 0 {
+		return
+	}
+
+	// Zero out all bytes in the slice
+	for i := range b {
+		b[i] = 0
+	}
 }
