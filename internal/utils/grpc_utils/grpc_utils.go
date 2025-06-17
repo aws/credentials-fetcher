@@ -488,3 +488,14 @@ func ParseCredSpecDomainless(credspecData string, krbTicketInfo *types.TicketInf
 
 	return nil
 }
+
+// SecureClearString securely clears a string by setting it to empty
+// This should be called before every RPC call ends to clear sensitive data
+func SecureClearString(s *string) {
+	if s == nil || *s == "" {
+		return
+	}
+
+	// Set string to empty to remove the reference
+	*s = ""
+}

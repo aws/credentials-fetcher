@@ -621,3 +621,20 @@ _ldap._tcp.dc._msdcs.example.com  service = 0 100 389 dc2.example.com`,
 		})
 	}
 }
+
+func TestSecureClearString(t *testing.T) {
+	// Test with a non-empty string
+	sensitiveData := "sensitive-password"
+	SecureClearString(&sensitiveData)
+	assert.Equal(t, "", sensitiveData, "String should be empty after secure clearing")
+
+	// Test with an empty string
+	emptyString := ""
+	SecureClearString(&emptyString)
+	assert.Equal(t, "", emptyString, "Empty string should remain empty after secure clearing")
+
+	// Test with a nil pointer (should not panic)
+	assert.NotPanics(t, func() {
+		SecureClearString(nil)
+	}, "SecureClearString should not panic with nil input")
+}

@@ -92,6 +92,13 @@ func (h *KerberosArnLeaseHandler) AddKerberosArnLease(ctx context.Context, req *
 	log := logger.GetInstance()
 	log.Info("Processing AddKerberosArnLease Fargate request")
 
+	// Defer credential clearing to ensure it happens even on early returns
+	defer func() {
+		grpc_utils.SecureClearString(&req.AccessKeyId)
+		grpc_utils.SecureClearString(&req.SecretAccessKey)
+		grpc_utils.SecureClearString(&req.SessionToken)
+	}()
+
 	// Validate request
 	if err := h.validateRequest(req.AccessKeyId, req.SecretAccessKey, req.SessionToken, req.Region); err != nil {
 		return nil, err
@@ -401,6 +408,10 @@ func (h *KerberosArnLeaseHandler) createKerberosTickets(ctx context.Context, cfg
 		}
 
 		log.Info("Successfully created Kerberos ticket for", "user", krbTicket.DomainlessUser)
+
+		grpc_utils.SecureClearString(&username)
+		grpc_utils.SecureClearString(&password)
+
 	}
 
 	// Write metadata to file

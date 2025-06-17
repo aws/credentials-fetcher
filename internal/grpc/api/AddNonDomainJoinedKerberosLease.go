@@ -72,6 +72,12 @@ func NewNonDomainJoinedKerberosHandler(krbFilesDir, awsSMSecretName string, krbC
 func (h *NonDomainJoinedKerberosHandler) AddNonDomainJoinedKerberosLease(ctx context.Context, req *pb.CreateNonDomainJoinedKerberosLeaseRequest) (*pb.CreateNonDomainJoinedKerberosLeaseResponse, error) {
 	log.Info("Processing AddNonDomainJoinedKerberosLease request")
 
+	// Defer credential clearing to ensure it happens even on early returns
+	defer func() {
+		grpc_utils.SecureClearString(&req.Username)
+		grpc_utils.SecureClearString(&req.Password)
+	}()
+
 	// Validate request
 	if err := h.ValidateCredentials(req.Username, req.Password, req.Domain); err != nil {
 		return nil, err

@@ -18,6 +18,13 @@ func (h *KerberosArnLeaseHandler) RenewKerberosArnLease(ctx context.Context, req
 	log := logger.GetInstance()
 	log.Info("Processing RenewKerberosArnLease Fargate request")
 
+	// Defer credential clearing to ensure it happens even on early returns
+	defer func() {
+		grpc_utils.SecureClearString(&req.AccessKeyId)
+		grpc_utils.SecureClearString(&req.SecretAccessKey)
+		grpc_utils.SecureClearString(&req.SessionToken)
+	}()
+
 	// Create response object
 	response := &pb.RenewKerberosArnLeaseResponse{}
 
@@ -132,6 +139,9 @@ func (h *KerberosArnLeaseHandler) processTicket(ctx context.Context, cfg aws.Con
 		"user", username,
 		"service_account", ticketInfo.ServiceAccountName,
 		"krb_file_path", ticketInfo.KrbFilePath)
+
+	grpc_utils.SecureClearString(&username)
+	grpc_utils.SecureClearString(&password)
 
 	return nil
 }

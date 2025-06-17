@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
+
 	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
@@ -20,6 +22,12 @@ type RenewNonDomainJoinedKerberosLeaseInterface interface {
 // RenewNonDomainJoinedKerberosLease implements the RenewNonDomainJoinedKerberosLease RPC method
 func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx context.Context, req *pb.RenewNonDomainJoinedKerberosLeaseRequest) (*pb.RenewNonDomainJoinedKerberosLeaseResponse, error) {
 	log.Info("Received RenewNonDomainJoinedKerberosLease request")
+
+	// Defer credential clearing to ensure it happens even on early returns
+	defer func() {
+		grpc_utils.SecureClearString(&req.Username)
+		grpc_utils.SecureClearString(&req.Password)
+	}()
 
 	// Validate request
 	if err := h.ValidateCredentials(req.Username, req.Password, req.Domain); err != nil {
