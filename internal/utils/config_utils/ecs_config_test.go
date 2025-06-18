@@ -57,9 +57,13 @@ func createTempCredentialsFetcherConfFile(t *testing.T, content string) (string,
 }
 
 func TestRetrieveVariableFromECSConfig(t *testing.T) {
-	// Save the original function and restore it after tests
+	// Save the original functions and restore them after tests
 	originalOpen := osOpen
-	defer func() { osOpen = originalOpen }()
+	originalStat := osStat
+	defer func() {
+		osOpen = originalOpen
+		osStat = originalStat
+	}()
 
 	t.Run("Valid config file with variables", func(t *testing.T) {
 		// Create a test config file with variables
@@ -78,6 +82,11 @@ SPACED_VAR = spaced value
 		// Mock the os.Open function to use our test file
 		osOpen = func(name string) (*os.File, error) {
 			return os.Open(configPath)
+		}
+
+		// Mock the os.Stat function to indicate the file exists
+		osStat = func(name string) (os.FileInfo, error) {
+			return os.Stat(configPath)
 		}
 
 		// Test retrieving existing variables
@@ -129,6 +138,11 @@ ANOTHER_VALID_VAR=another_value
 			return os.Open(configPath)
 		}
 
+		// Mock the os.Stat function to indicate the file exists
+		osStat = func(name string) (os.FileInfo, error) {
+			return os.Stat(configPath)
+		}
+
 		// Test retrieving variables from file with invalid lines
 		value, err := RetrieveVariableFromECSConfig("VALID_VAR")
 		assert.NoError(t, err)
@@ -145,10 +159,14 @@ ANOTHER_VALID_VAR=another_value
 			return nil, os.ErrNotExist
 		}
 
+		// Mock the os.Stat function to indicate the file doesn't exist
+		osStat = func(name string) (os.FileInfo, error) {
+			return nil, os.ErrNotExist
+		}
+
 		// Test retrieving variable from non-existent file
 		_, err := RetrieveVariableFromECSConfig("ANY_VAR")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to open ECS config file")
+		assert.NoError(t, err) // We expect no error because the function handles this case gracefully
 	})
 }
 
@@ -201,9 +219,11 @@ func TestGetValueFromCredentialsFetcherConf(t *testing.T) {
 	// Save the original values and restore them after the test
 	originalPath := credentialsFetcherConfPath
 	originalOpen := osOpen
+	originalStat := osStat
 	defer func() {
 		credentialsFetcherConfPath = originalPath
 		osOpen = originalOpen
+		osStat = originalStat
 	}()
 
 	t.Run("Config file exists with variables", func(t *testing.T) {
@@ -228,6 +248,16 @@ QuotedValue = "this is a quoted value"
 
 		// Set the path to our test file
 		credentialsFetcherConfPath = configPath
+
+		// Mock the os.Stat function to indicate the file exists
+		osStat = func(name string) (os.FileInfo, error) {
+			return os.Stat(configPath)
+		}
+
+		// Mock the os.Open function to use our test file
+		osOpen = func(name string) (*os.File, error) {
+			return os.Open(configPath)
+		}
 
 		// Test retrieving existing variables
 		value := GetValueFromCredentialsFetcherConf("RunRenewalNonDomainJoined")
@@ -262,6 +292,16 @@ AnotherValidKey = AnotherValue
 		// Set the path to our test file
 		credentialsFetcherConfPath = configPath
 
+		// Mock the os.Stat function to indicate the file exists
+		osStat = func(name string) (os.FileInfo, error) {
+			return os.Stat(configPath)
+		}
+
+		// Mock the os.Open function to use our test file
+		osOpen = func(name string) (*os.File, error) {
+			return os.Open(configPath)
+		}
+
 		// Test retrieving variables from file with invalid lines
 		value := GetValueFromCredentialsFetcherConf("ValidKey")
 		assert.Equal(t, "ValidValue", value)
@@ -273,6 +313,11 @@ AnotherValidKey = AnotherValue
 	t.Run("Config file does not exist", func(t *testing.T) {
 		// Set the path to a non-existent file
 		credentialsFetcherConfPath = "/non/existent/path/credentials-fetcher.conf"
+
+		// Mock the os.Stat function to indicate the file doesn't exist
+		osStat = func(name string) (os.FileInfo, error) {
+			return nil, os.ErrNotExist
+		}
 
 		// Test retrieving variable when file doesn't exist
 		value := GetValueFromCredentialsFetcherConf("AnyKey")
@@ -298,11 +343,13 @@ func TestGetSecretNameFromConf(t *testing.T) {
 	// Save the original values
 	originalPath := credentialsFetcherConfPath
 	originalOpen := osOpen
+	originalStat := osStat
 
 	// Restore the original values after the test
 	defer func() {
 		credentialsFetcherConfPath = originalPath
 		osOpen = originalOpen
+		osStat = originalStat
 	}()
 
 	t.Run("Secret name exists", func(t *testing.T) {
@@ -316,6 +363,16 @@ CFGmsaSecretName = "aws/test/secret"
 
 		// Set the path to our test file
 		credentialsFetcherConfPath = configPath
+
+		// Mock the os.Stat function to indicate the file exists
+		osStat = func(name string) (os.FileInfo, error) {
+			return os.Stat(configPath)
+		}
+
+		// Mock the os.Open function to use our test file
+		osOpen = func(name string) (*os.File, error) {
+			return os.Open(configPath)
+		}
 
 		// Test retrieving the secret name
 		secretName := GetSecretNameFromConf()
@@ -334,6 +391,19 @@ SomeOtherKey = "some value"
 		// Set the path to our test file
 		credentialsFetcherConfPath = configPath
 
+		// Mock the os.Stat function to indicate the file exists
+		osStat = func(name string) (os.FileInfo, error) {
+			return os.Stat(configPath)
+		}
+
+		// Mock the os.Open function to use our test file
+		osOpen = func(name string) (*os.File, error) {
+			return os.Open(configPath)
+		}
+
+		// Set the path to our test file
+		credentialsFetcherConfPath = configPath
+
 		// Test retrieving non-existent secret name
 		secretName := GetSecretNameFromConf()
 		assert.Equal(t, "", secretName)
@@ -344,11 +414,13 @@ func TestIsRunRenewalNonDomainJoinedEnabled(t *testing.T) {
 	// Save the original values
 	originalPath := credentialsFetcherConfPath
 	originalOpen := osOpen
+	originalStat := osStat
 
 	// Restore the original values after the test
 	defer func() {
 		credentialsFetcherConfPath = originalPath
 		osOpen = originalOpen
+		osStat = originalStat
 	}()
 
 	testCases := []struct {
@@ -415,6 +487,16 @@ SomeOtherKey = value
 			// Set the path to our test file
 			credentialsFetcherConfPath = configPath
 
+			// Mock the os.Stat function to indicate the file exists
+			osStat = func(name string) (os.FileInfo, error) {
+				return os.Stat(configPath)
+			}
+
+			// Mock the os.Open function to use our test file
+			osOpen = func(name string) (*os.File, error) {
+				return os.Open(configPath)
+			}
+
 			// Test the function
 			result := IsRunRenewalNonDomainJoinedEnabled()
 			assert.Equal(t, tc.expectedResult, result)
@@ -424,6 +506,11 @@ SomeOtherKey = value
 	t.Run("Config file does not exist", func(t *testing.T) {
 		// Set the path to a non-existent file
 		credentialsFetcherConfPath = "/non/existent/path/credentials-fetcher.conf"
+
+		// Mock the os.Stat function to indicate the file doesn't exist
+		osStat = func(name string) (os.FileInfo, error) {
+			return nil, os.ErrNotExist
+		}
 
 		// Test the function when file doesn't exist
 		result := IsRunRenewalNonDomainJoinedEnabled()

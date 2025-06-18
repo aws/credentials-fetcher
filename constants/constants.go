@@ -73,6 +73,7 @@ const (
 	// ECSConfigFilePath is the path to the ECS configuration file
 	ECSConfigFilePath              = "/etc/ecs/ecs.config"
 	CredentialsFetcherConfFilePath = "/etc/credentials-fetcher.conf"
+
 	// Environment variable names as defined in the original C++ code
 	EnvCFGmsaOU            = "CF_GMSA_OU"
 	EnvCFGmsaSecretName    = "CREDENTIALS_FETCHER_SECRET_NAME_FOR_DOMAINLESS_GMSA"

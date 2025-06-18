@@ -253,8 +253,9 @@ func (c *Client) prepareGMSALDAPParameters(ticketInfo *types.TicketInfo) (string
 	}
 
 	// Check for environment variable override for DN
-	if ticketInfo.DistinguishedName == "" && os.Getenv("CF_GMSA_OU") != "" {
-		ticketInfo.DistinguishedName = os.Getenv("CF_GMSA_OU")
+	if ticketInfo.DistinguishedName == "" && os.Getenv(constants.EnvCFGmsaOU) != "" {
+		ticketInfo.DistinguishedName = os.Getenv(constants.EnvCFGmsaOU)
+		log.Info("Found Distinguished name as CF_GMSA_OU environment variable")
 	}
 
 	return baseDN, fqdnList, nil

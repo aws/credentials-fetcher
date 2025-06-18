@@ -328,6 +328,7 @@ func GetBaseDnFromSecret(secretArn string) (string, error) {
 // GetBaseDnFromDomain converts a domain name (e.g., "contoso.com") to a base DN format (e.g., "DC=contoso,DC=com")
 // Returns the base DN string and an error if the operation fails
 func GetBaseDnFromDomain(domainName string) (string, error) {
+	log := logger.GetInstance()
 	if domainName == "" {
 		return "", fmt.Errorf("domain name cannot be empty")
 	}
@@ -335,6 +336,7 @@ func GetBaseDnFromDomain(domainName string) (string, error) {
 	// Split domain name by dots
 	parts := strings.Split(domainName, ".")
 
+	log.Info("Creating Base DN from Domain name")
 	// Build the base DN string
 	var baseDn strings.Builder
 	for i, part := range parts {
@@ -354,8 +356,7 @@ func GetFQDNList(domainName string) ([]string, error) {
 	log := logger.GetInstance()
 
 	// Check for domain controller in environment variable
-	domainControllerEnvVar := "CF_DOMAIN_CONTROLLER"
-	fqdnFromEnvVar, err := config_utils.RetrieveVariableFromECSConfig(domainControllerEnvVar)
+	fqdnFromEnvVar, err := config_utils.RetrieveVariableFromECSConfig(constants.EnvCFDomainController)
 	if err != nil {
 		log.Warn("Failed to retrieve domain controller from ECS config", "error", err)
 		// Continue with DNS lookup even if there's an error reading the config
@@ -377,6 +378,7 @@ func GetFQDNList(domainName string) ([]string, error) {
 		}
 	} else {
 		// Use the domain controller from environment variable
+		log.Info("Found variable DOMAIN_CONTROLLER_GMSA defined in ECS Config or environment")
 		fqdnList = append(fqdnList, fqdnFromEnvVar)
 	}
 

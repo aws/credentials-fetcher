@@ -15,15 +15,24 @@ var log = logger.GetInstance()
 // For testing purposes - allows mocking of os.Open
 var osOpen = os.Open
 
+// For testing purposes - allows mocking of os.Stat
+var osStat = os.Stat
+
 // For testing purposes - allows mocking of RetrieveVariableFromECSConfig
 var retrieveVariableFromECSConfig = RetrieveVariableFromECSConfig
 
 // For testing purposes - allows changing the credentials-fetcher.conf path
-var credentialsFetcherConfPath = "/etc/credentials-fetcher.conf"
+var credentialsFetcherConfPath = constants.CredentialsFetcherConfFilePath
 
 // RetrieveVariableFromECSConfig retrieves a variable value from the ECS config file
-// This is a Go implementation of the C++ function retrieve_variable_from_ecs_config
+// or from environment variables if not found in the config file
 func RetrieveVariableFromECSConfig(ecsVariableName string) (string, error) {
+	// Check if ECS config file exists
+	if _, err := osStat(constants.ECSConfigFilePath); os.IsNotExist(err) {
+		log.Info("ECS config file not found. Not operating in ECS mode.", "path", constants.ECSConfigFilePath)
+		return "", nil // Return empty string but no error to continue function
+	}
+
 	// Open the ECS config file
 	file, err := osOpen(constants.ECSConfigFilePath)
 	if err != nil {
@@ -89,7 +98,7 @@ func GetConfigValue(key string) (string, error) {
 // GetValueFromCredentialsFetcherConf retrieves a value for the specified key from the credentials-fetcher.conf file
 func GetValueFromCredentialsFetcherConf(key string) string {
 	// Check if config file exists
-	_, err := os.Stat(credentialsFetcherConfPath)
+	_, err := osStat(credentialsFetcherConfPath)
 	if os.IsNotExist(err) {
 		log.Debug("Credentials fetcher config file does not exist", "path", credentialsFetcherConfPath)
 		return ""
