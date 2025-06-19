@@ -27,7 +27,6 @@ var (
 
 type Watchdog struct {
 	watchdogInterval         time.Duration
-	totalNotifications       int
 	notificationsPerInterval int // Number of times to notify within each interval
 }
 
@@ -79,7 +78,7 @@ func (w *Watchdog) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info("Stopping watchdog", "total_notifications", w.totalNotifications)
+			log.Info("Stopping watchdog...")
 			return nil
 		case <-ticker.C:
 			if err := w.notify(); err != nil {
@@ -94,7 +93,6 @@ func (w *Watchdog) notify() error {
 	if ok, err := daemon.SdNotify(false, daemon.SdNotifyWatchdog); !ok || err != nil {
 		return fmt.Errorf("failed to notify systemd watchdog: %v", err)
 	}
-	w.totalNotifications++
-	log.Debug("Watchdog notified", "total_notifications", w.totalNotifications)
+	log.Debug("Watchdog notified. Interval: ", w.watchdogInterval.String())
 	return nil
 }
