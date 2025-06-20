@@ -34,6 +34,7 @@ with open('../data.json', 'r') as file:
     
 TEST_REGION = data["aws_region"]
 
+
 # AWS credentials from environment variables
 TEST_ACCESS_KEY_ID = get_env_var("AWS_ACCESS_KEY_ID")
 TEST_SECRET_ACCESS_KEY = get_env_var("AWS_SECRET_ACCESS_KEY")
