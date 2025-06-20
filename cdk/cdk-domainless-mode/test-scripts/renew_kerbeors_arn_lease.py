@@ -28,8 +28,11 @@ def get_env_var(var_name):
         sys.exit(1)
     return value
 
-# Test region
-TEST_REGION = "us-west-2"
+with open('../data.json', 'r') as file:
+    # Load the JSON data
+    data = json.load(file)
+    
+TEST_REGION = data["aws_region"]
 
 # AWS credentials from environment variables
 TEST_ACCESS_KEY_ID = get_env_var("AWS_ACCESS_KEY_ID")

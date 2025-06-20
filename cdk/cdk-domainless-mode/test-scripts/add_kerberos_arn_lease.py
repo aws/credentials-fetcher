@@ -28,9 +28,14 @@ def get_env_var(var_name):
         sys.exit(1)
     return value
 
+with open('../data.json', 'r') as file:
+    # Load the JSON data
+    data = json.load(file)
+
 # Hardcoded test value
-TEST_CREDSPEC_ARN = "arn:aws:s3:::muskanl-credentials-fetcher-pre-created-bucket/WebApp01_credspec.json"
-TEST_REGION = "us-west-2"
+# Example: arn:aws:s3:::s3-bucket-name/WebApp01_credspec.json
+TEST_CREDSPEC_ARN = get_env_var("CREDSPEC_ARN")
+TEST_REGION = data["aws_region"]
 
 # AWS credentials from environment variables
 TEST_ACCESS_KEY_ID = get_env_var("AWS_ACCESS_KEY_ID")
