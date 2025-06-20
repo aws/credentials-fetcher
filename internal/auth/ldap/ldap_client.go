@@ -18,8 +18,13 @@ import (
 
 var log = logger.GetInstance()
 
-// LDAP search base arguments
-var ldapSearchBaseArgs = []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-H"}
+// LDAP search base arguments used for all ldapsearch commands
+// -o ldif_wrap=no: Disables line wrapping in LDIF output to prevent multi-line attribute values
+// -LLL: Enables LDIF output format with minimal additional information (no comments, no version)
+// -Y GSSAPI: Specifies SASL mechanism for authentication using Kerberos/GSSAPI
+// -l 2: Sets the time limit for the search operation to 2 seconds
+// -H: Indicates that the next argument will be the LDAP server URI (ldap://hostname)
+var ldapSearchBaseArgs = []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "2", "-H"}
 
 type Client struct{}
 
@@ -78,12 +83,26 @@ func (e *DefaultLdapsearchExecutor) ExecuteLdapsearchWithFilter(ctx context.Cont
 	// Execute the command with separate command and arguments to prevent command injection
 	output, err := e.shellExecutor.Execute(ctx, command, args...)
 	if err != nil {
-		log.Error("Custom ldapsearch failed",
-			"error", err,
-			"output", string(output),
-			"base_dn", baseDN,
-			"fqdn", fqdn,
-			"filter", searchFilter)
+		// Check if the error is due to timeout
+		errorStr := strings.ToLower(err.Error())
+		outputStr := strings.ToLower(string(output))
+		if strings.Contains(errorStr, "time limit exceeded") || 
+		   strings.Contains(outputStr, "time limit exceeded") ||
+		   strings.Contains(errorStr, "timeout") ||
+		   strings.Contains(outputStr, "timeout") {
+			log.Warn("LDAP search timed out after 2 seconds",
+				"base_dn", baseDN,
+				"fqdn", fqdn,
+				"filter", searchFilter,
+				"error", err)
+		} else {
+			log.Error("Custom ldapsearch failed",
+				"error", err,
+				"output", string(output),
+				"base_dn", baseDN,
+				"fqdn", fqdn,
+				"filter", searchFilter)
+		}
 		return nil, fmt.Errorf("custom ldapsearch failed: %w: %s", err, string(output))
 	}
 	log.Debug("Custom ldapsearch completed successfully", "output_size", len(output))

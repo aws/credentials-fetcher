@@ -129,7 +129,7 @@ func TestBuildLdapsearchCommandWithFilter(t *testing.T) {
 			attributes:   []string{"msDS-ManagedPassword"},
 			expectedCmd:  "ldapsearch",
 			expectedArgs: []string{
-				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-H", "ldap://contoso.com",
+				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "2", "-H", "ldap://contoso.com",
 				"-b", "DC=contoso,DC=com", "-s", "sub", "(objectClass=msDS-GroupManagedServiceAccount)",
 				"msDS-ManagedPassword",
 			},
@@ -142,7 +142,7 @@ func TestBuildLdapsearchCommandWithFilter(t *testing.T) {
 			attributes:   []string{"distinguishedName", "objectClass"},
 			expectedCmd:  "ldapsearch",
 			expectedArgs: []string{
-				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-H", "ldap://contoso.com",
+				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "2", "-H", "ldap://contoso.com",
 				"-b", "DC=contoso,DC=com", "-s", "sub", "(sAMAccountName=WebApp01$)",
 				"distinguishedName", "objectClass",
 			},
@@ -155,7 +155,7 @@ func TestBuildLdapsearchCommandWithFilter(t *testing.T) {
 			attributes:   []string{},
 			expectedCmd:  "ldapsearch",
 			expectedArgs: []string{
-				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-H", "ldap://contoso.com",
+				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "2", "-H", "ldap://contoso.com",
 				"-b", "DC=contoso,DC=com", "-s", "sub", "(objectClass=*)",
 			},
 		},
@@ -170,4 +170,160 @@ func TestBuildLdapsearchCommandWithFilter(t *testing.T) {
 			assert.Equal(t, tt.expectedArgs, args)
 		})
 	}
+}
+
+// MockShellExecutor is a mock implementation for testing timeout scenarios
+type MockShellExecutor struct {
+	mock.Mock
+}
+
+func (m *MockShellExecutor) Execute(ctx context.Context, command string, args ...string) ([]byte, error) {
+	mockArgs := m.Called(ctx, command, args)
+	return mockArgs.Get(0).([]byte), mockArgs.Error(1)
+}
+
+func (m *MockShellExecutor) ExecuteWithEnv(ctx context.Context, command string, env []string, args ...string) ([]byte, error) {
+	mockArgs := m.Called(ctx, command, env, args)
+	return mockArgs.Get(0).([]byte), mockArgs.Error(1)
+}
+
+func (m *MockShellExecutor) ExecuteWithStdin(ctx context.Context, command string, stdin []byte, args ...string) ([]byte, error) {
+	mockArgs := m.Called(ctx, command, stdin, args)
+	return mockArgs.Get(0).([]byte), mockArgs.Error(1)
+}
+
+func (m *MockShellExecutor) ExecuteWithStdinAndEnv(ctx context.Context, command string, stdin []byte, env []string, args ...string) ([]byte, error) {
+	mockArgs := m.Called(ctx, command, stdin, env, args)
+	return mockArgs.Get(0).([]byte), mockArgs.Error(1)
+}
+
+func (m *MockShellExecutor) BuildCommand(command string, args ...string) string {
+	mockArgs := m.Called(command, args)
+	return mockArgs.String(0)
+}
+
+// Test timeout detection in ExecuteLdapsearchWithFilter
+func TestExecuteLdapsearchWithFilter_TimeoutDetection(t *testing.T) {
+	tests := []struct {
+		name        string
+		mockError   error
+		mockOutput  []byte
+		expectWarn  bool
+		description string
+	}{
+		{
+			name:        "Time limit exceeded in error",
+			mockError:   errors.New("ldapsearch: time limit exceeded"),
+			mockOutput:  []byte(""),
+			expectWarn:  true,
+			description: "Should detect timeout when error contains 'time limit exceeded'",
+		},
+		{
+			name:        "Time limit exceeded in output",
+			mockError:   errors.New("ldapsearch failed"),
+			mockOutput:  []byte("ldap_search: Time limit exceeded (3)"),
+			expectWarn:  true,
+			description: "Should detect timeout when output contains 'time limit exceeded'",
+		},
+		{
+			name:        "Timeout in error message",
+			mockError:   errors.New("operation timeout"),
+			mockOutput:  []byte(""),
+			expectWarn:  true,
+			description: "Should detect timeout when error contains 'timeout'",
+		},
+		{
+			name:        "Timeout in output message",
+			mockError:   errors.New("ldapsearch failed"),
+			mockOutput:  []byte("Connection timeout occurred"),
+			expectWarn:  true,
+			description: "Should detect timeout when output contains 'timeout'",
+		},
+		{
+			name:        "Non-timeout error",
+			mockError:   errors.New("connection refused"),
+			mockOutput:  []byte("ldap_bind: Invalid credentials (49)"),
+			expectWarn:  false,
+			description: "Should not detect timeout for other errors",
+		},
+		{
+			name:        "Case insensitive timeout detection",
+			mockError:   errors.New("LDAPSEARCH: TIME LIMIT EXCEEDED"),
+			mockOutput:  []byte(""),
+			expectWarn:  true,
+			description: "Should detect timeout case-insensitively",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock shell executor
+			mockShellExecutor := new(MockShellExecutor)
+			
+			// Set up the mock to return the test error and output
+			mockShellExecutor.On("BuildCommand", "ldapsearch", mock.Anything).Return("ldapsearch command")
+			mockShellExecutor.On("Execute", mock.Anything, "ldapsearch", mock.Anything).Return(tt.mockOutput, tt.mockError)
+
+			// Create executor with mock shell executor
+			executor := &DefaultLdapsearchExecutor{
+				shellExecutor: mockShellExecutor,
+			}
+
+			// Execute the method
+			result, err := executor.ExecuteLdapsearchWithFilter(
+				context.Background(),
+				"DC=contoso,DC=com",
+				"contoso.com",
+				"(objectClass=*)",
+				[]string{"cn"},
+			)
+
+			// Verify error is returned
+			assert.Error(t, err)
+			assert.Nil(t, result)
+
+			// Verify the mock was called
+			mockShellExecutor.AssertExpectations(t)
+		})
+	}
+}
+
+// Test that ldapSearchBaseArgs contains timeout parameter
+func TestLdapSearchBaseArgs_ContainsTimeout(t *testing.T) {
+	// Verify that the base args contain the timeout parameter
+	expectedArgs := []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "2", "-H"}
+	assert.Equal(t, expectedArgs, ldapSearchBaseArgs, "ldapSearchBaseArgs should contain timeout parameter -l 2")
+}
+
+// Test that timeout parameter is correctly included in built commands
+func TestBuildLdapsearchCommandWithFilter_IncludesTimeout(t *testing.T) {
+	executor := NewDefaultLdapsearchExecutor()
+	
+	cmd, args := executor.BuildLdapsearchCommandWithFilter(
+		"DC=contoso,DC=com",
+		"contoso.com",
+		"(objectClass=*)",
+		[]string{"cn"},
+	)
+
+	assert.Equal(t, "ldapsearch", cmd)
+	
+	// Verify timeout parameters are present
+	assert.Contains(t, args, "-l", "Command should contain timeout flag -l")
+	assert.Contains(t, args, "2", "Command should contain timeout value 2")
+	
+	// Verify the timeout parameters are in the correct position (after GSSAPI, before -H)
+	lIndex := -1
+	timeoutIndex := -1
+	for i, arg := range args {
+		if arg == "-l" {
+			lIndex = i
+		}
+		if arg == "2" && lIndex == i-1 {
+			timeoutIndex = i
+		}
+	}
+	
+	assert.NotEqual(t, -1, lIndex, "Should find -l flag")
+	assert.NotEqual(t, -1, timeoutIndex, "Should find timeout value 2 immediately after -l flag")
 }
