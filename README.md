@@ -47,7 +47,7 @@ It is recommended to develop on AL (ex: cloud desktop). To test any changes, an 
 1. Setup the cdk stack according to the instructions [here](https://github.com/aws/credentials-fetcher/blob/dc5c2caec5e78052327b39cf2528eea7b2f45c91/cdk/cdk-domainless-mode/README.md).
 2. Create a binary with the latest changes using `brazil-build`.
 3. The binary is created at `bin/credentials-fetcherd`
-3. `scp` this binary to the EC2 instance setup above, along with the `service/credentials-fetcher.service` file
+3. `scp` this binary to the EC2 instance setup above, along with the `configuration/bin/credentials-fetcher.service` file
 4. SSH into the EC2 instance and run the following
 ```
 sudo cp credentials-fetcherd /usr/local/bin
@@ -90,4 +90,3 @@ The task should successfully run and you should see the logs in the EC2 instance
 - [CredentialsFetcherV2Tests](https://code.amazon.com/packages/CredentialsFetcherV2Tests/trees/mainline#)
 - [CredentialsFetcherV2CDK](https://code.amazon.com/packages/CredentialsFetcherV2CDK/trees/mainline)
 - [CredentialsFetcherCanariesCDK](https://code.amazon.com/packages/CredentialsFetcherCanariesCDK/trees/mainline#)
-
