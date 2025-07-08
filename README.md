@@ -45,23 +45,18 @@ dnf install realmd oddjob oddjob-mkhomedir adcli
 
 It is recommended to develop on AL (ex: cloud desktop). To test any changes, an EC2 instance with Active Directory setup is a requirement.
 1. Setup the cdk stack according to the instructions [here](https://github.com/aws/credentials-fetcher/blob/dc5c2caec5e78052327b39cf2528eea7b2f45c91/cdk/cdk-domainless-mode/README.md).
-2. Create a binary with the latest changes using `brazil-build`.
-3. The binary is created at `bin/credentials-fetcherd`
-3. `scp` this binary to the EC2 instance setup above, along with the `configuration/bin/credentials-fetcher.service` file
-4. SSH into the EC2 instance and run the following
-```
-sudo cp credentials-fetcherd /usr/local/bin
-sudo chmod +x /usr/local/bin/credentials-fetcher
-sudo cp credentials-fetcher.service /etc/systemd/system/
-```
-5. Start the service
+2. Merge a code change
+3. The pipeline will build a complete .rpm, grab it from [here](https://tiny.amazon.com/rplyv8em/IsenLink)
+4. On the EC2 instance setup above, uninstall the existing CF daemon: `sudo dnf remove credentials-fetcher`
+5. SCP the new `.rpm` to the EC2 Instance and install it using `sudo dnf install path/to/rpm`
+6. Start the service
 ```
 sudo systemctl daemon-reload
 sudo systemctl enable credentials-fetcher.service
 sudo systemctl start credentials-fetcher.service
 sudo systemctl status credentials-fetcher.service
 ```
-6. To tail the logs
+7. To tail the logs
 ```
 sudo journalctl -u credentials-fetcher.service -f
 ```
