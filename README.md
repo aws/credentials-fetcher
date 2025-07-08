@@ -44,11 +44,11 @@ dnf install realmd oddjob oddjob-mkhomedir adcli
 ### Development and Testing
 
 It is recommended to develop on AL (ex: cloud desktop). To test any changes, an EC2 instance with Active Directory setup is a requirement.
-1. Setup the cdk stack according to the instructions [here](https://github.com/aws/credentials-fetcher/blob/dc5c2caec5e78052327b39cf2528eea7b2f45c91/cdk/cdk-domainless-mode/README.md).
+1. Setup the V1 CDK stack according to the instructions [here](https://github.com/aws/credentials-fetcher/blob/dc5c2caec5e78052327b39cf2528eea7b2f45c91/cdk/cdk-domainless-mode/README.md). *Note*: This CDK Setup is temporary until migration to V2 CDK is complete. 
 2. Merge a code change
-3. The pipeline will build a complete .rpm, grab it from [here](https://tiny.amazon.com/rplyv8em/IsenLink)
-4. On the EC2 instance setup above, uninstall the existing CF daemon: `sudo dnf remove credentials-fetcher`
-5. Upload the new `.rpm` to the Linux EC2 Instance. You can use an intermediate S3 bucket, or SCP the new `.rpm` to the EC2 Instance
+3. The pipeline will build a complete .rpm, download it from [here](https://tiny.amazon.com/rplyv8em/IsenLink)
+4. On the Linux EC2 instance setup above, uninstall the existing CF daemon: `sudo dnf remove credentials-fetcher`
+5. Upload the new `.rpm` to the EC2 Instance. You can upload it to an intermediate S3 bucket and copy it to the Instance or directly SCP the new `.rpm` to the Instance (not recommended)
 6. Install the new `.rpm`: `sudo dnf install path/to/rpm`
 7. Start the service
 ```
