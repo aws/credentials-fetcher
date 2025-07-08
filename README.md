@@ -48,17 +48,26 @@ It is recommended to develop on AL (ex: cloud desktop). To test any changes, an 
 2. Merge a code change
 3. The pipeline will build a complete .rpm, grab it from [here](https://tiny.amazon.com/rplyv8em/IsenLink)
 4. On the EC2 instance setup above, uninstall the existing CF daemon: `sudo dnf remove credentials-fetcher`
-5. SCP the new `.rpm` to the EC2 Instance and install it using `sudo dnf install path/to/rpm`
-6. Start the service
+5. Upload the new `.rpm` to the Linux EC2 Instance. You can use an intermediate S3 bucket, or SCP the new `.rpm` to the EC2 Instance
+6. Install the new `.rpm`: `sudo dnf install path/to/rpm`
+7. Start the service
 ```
 sudo systemctl daemon-reload
 sudo systemctl enable credentials-fetcher.service
 sudo systemctl start credentials-fetcher.service
 sudo systemctl status credentials-fetcher.service
+sudo systemctl restart ecs
 ```
-7. To tail the logs
+
+### Logs 
+
+#### To tail the logs: 
 ```
 sudo journalctl -u credentials-fetcher.service -f
+```
+#### To view logs from a timestamp:
+```
+journalctl --since "2025-01-08 21:00:00" | grep "credentials-fetcherd"
 ```
 
 ### ECS
