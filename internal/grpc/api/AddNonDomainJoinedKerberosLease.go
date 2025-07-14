@@ -274,7 +274,7 @@ func (h *NonDomainJoinedKerberosHandler) GetDistinguishedName(ticketInfo *types.
 	distinguishedName, err := config_utils.RetrieveVariableFromECSConfig(constants.EnvCFDistinguishedName)
 	if err != nil {
 		log.Error("Failed to retrieve distinguished name from ECS config", "error", err)
-		return "", fmt.Errorf("failed to retrieve distinguished name from ECS config: %v", err)
+		return "", nil
 	}
 
 	if distinguishedName == "" {
@@ -282,7 +282,7 @@ func (h *NonDomainJoinedKerberosHandler) GetDistinguishedName(ticketInfo *types.
 		secretDn, err := grpc_utils.GetBaseDnFromSecret(ticketInfo.CredentialArn)
 		if err != nil {
 			log.Error("Failed to get distinguished name from secret", "error", err)
-			return "", fmt.Errorf("failed to get distinguished name from secret: %v", err)
+			return "", nil
 		}
 
 		if secretDn != "" {
