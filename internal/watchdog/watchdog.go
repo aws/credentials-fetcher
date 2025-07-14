@@ -93,6 +93,6 @@ func (w *Watchdog) notify() error {
 	if ok, err := daemon.SdNotify(false, daemon.SdNotifyWatchdog); !ok || err != nil {
 		return fmt.Errorf("failed to notify systemd watchdog: %v", err)
 	}
-	log.Debug("Watchdog notified. Interval: ", w.watchdogInterval.String())
+	log.Debug("Watchdog notified. Interval: " + w.watchdogInterval.String())
 	return nil
 }
