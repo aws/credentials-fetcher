@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
@@ -157,6 +158,15 @@ func GetValueFromCredentialsFetcherConf(key string) string {
 // GetSecretNameFromConf retrieves the CFGmsaSecretName value from the credentials-fetcher.conf file
 func GetSecretNameFromConf() string {
 	return GetValueFromCredentialsFetcherConf("CFGmsaSecretName")
+}
+
+// GetLdapTimeoutFromConf retrieves the LDAP Search Timeout Interval value from from the credentials-fetcher.conf file
+func GetLdapTimeoutFromConf() string {
+	interval := GetValueFromCredentialsFetcherConf("LDAPSearchTimeout")
+	if _, err := strconv.Atoi(interval); err != nil {
+		return constants.LDAPDefaultSearchTimeout
+	}
+	return interval
 }
 
 // IsRunRenewalNonDomainJoinedEnabled checks if the RunRenewalNonDomainJoined flag is set to true

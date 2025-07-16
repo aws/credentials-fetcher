@@ -16,6 +16,9 @@ const (
 
 	// LDAPDistinguishedNameSearchFilter is the filter used to search for distinguished names
 	LDAPDistinguishedNameSearchFilter = "(CN=%s)"
+
+	// LDAPDefaultSearchTimeout is the timeout for LDAP searches in seconds
+	LDAPDefaultSearchTimeout = "5"
 )
 
 // Directory and file path constants

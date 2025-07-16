@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.a2z.com/CredentialsFetcherV2/constants"
 )
 
 // Mock the file operations for testing
@@ -237,6 +238,9 @@ RunRenewalNonDomainJoined = true
 # gMSA Secret Name in AWS Secrets Manager
 CFGmsaSecretName = "aws/contoso/gmsa"
 
+# LDAP Search Timeout Interval
+LDAPSearchTimeout = 30
+
 # Empty value
 EmptyValue = 
 
@@ -265,6 +269,9 @@ QuotedValue = "this is a quoted value"
 
 		value = GetValueFromCredentialsFetcherConf("CFGmsaSecretName")
 		assert.Equal(t, "aws/contoso/gmsa", value)
+
+		value = GetValueFromCredentialsFetcherConf("LDAPSearchTimeout")
+		assert.Equal(t, "30", value)
 
 		// Test retrieving empty value
 		value = GetValueFromCredentialsFetcherConf("EmptyValue")
@@ -407,6 +414,107 @@ SomeOtherKey = "some value"
 		// Test retrieving non-existent secret name
 		secretName := GetSecretNameFromConf()
 		assert.Equal(t, "", secretName)
+	})
+}
+
+func TestGetLdapTimeoutFromConf(t *testing.T) {
+	// Save the original values
+	originalPath := credentialsFetcherConfPath
+	originalOpen := osOpen
+	originalStat := osStat
+
+	// Restore the original values after the test
+	defer func() {
+		credentialsFetcherConfPath = originalPath
+		osOpen = originalOpen
+		osStat = originalStat
+	}()
+
+	t.Run("Timeout variable exists and is a number", func(t *testing.T) {
+		// Create a test config file
+		configContent := `
+# Credentials Fetcher Configuration File
+LDAPSearchTimeout = "30"
+`
+		configPath, cleanup := createTempCredentialsFetcherConfFile(t, configContent)
+		defer cleanup()
+
+		// Set the path to our test file
+		credentialsFetcherConfPath = configPath
+
+		// Mock the os.Stat function to indicate the file exists
+		osStat = func(name string) (os.FileInfo, error) {
+			return os.Stat(configPath)
+		}
+
+		// Mock the os.Open function to use our test file
+		osOpen = func(name string) (*os.File, error) {
+			return os.Open(configPath)
+		}
+
+		// Test retrieving the timeout value
+		timeout := GetLdapTimeoutFromConf()
+		assert.Equal(t, "30", timeout)
+	})
+
+	t.Run("Timeout variable does not exist", func(t *testing.T) {
+		// Create a test config file without the secret name
+		configContent := `
+# Credentials Fetcher Configuration File
+SomeOtherKey = "some value"
+`
+		configPath, cleanup := createTempCredentialsFetcherConfFile(t, configContent)
+		defer cleanup()
+
+		// Set the path to our test file
+		credentialsFetcherConfPath = configPath
+
+		// Mock the os.Stat function to indicate the file exists
+		osStat = func(name string) (os.FileInfo, error) {
+			return os.Stat(configPath)
+		}
+
+		// Mock the os.Open function to use our test file
+		osOpen = func(name string) (*os.File, error) {
+			return os.Open(configPath)
+		}
+
+		// Set the path to our test file
+		credentialsFetcherConfPath = configPath
+
+		// Test retrieving non-existent timeout value
+		timeout := GetLdapTimeoutFromConf()
+		assert.Equal(t, constants.LDAPDefaultSearchTimeout, timeout)
+	})
+
+	t.Run("Timeout variableexists and is malformed", func(t *testing.T) {
+		// Create a test config file without the secret name
+		configContent := `
+# Credentials Fetcher Configuration File
+LDAPSearchTimeout = "some value"
+`
+		configPath, cleanup := createTempCredentialsFetcherConfFile(t, configContent)
+		defer cleanup()
+
+		// Set the path to our test file
+		credentialsFetcherConfPath = configPath
+
+		// Mock the os.Stat function to indicate the file exists
+		osStat = func(name string) (os.FileInfo, error) {
+			return os.Stat(configPath)
+		}
+
+		// Mock the os.Open function to use our test file
+		osOpen = func(name string) (*os.File, error) {
+			return os.Open(configPath)
+		}
+
+		// Set the path to our test file
+		credentialsFetcherConfPath = configPath
+
+		// Test retrieving malformed timeout value
+		timeout := GetLdapTimeoutFromConf()
+		assert.Equal(t, constants.LDAPDefaultSearchTimeout, timeout)
 	})
 }
 

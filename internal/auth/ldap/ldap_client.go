@@ -12,19 +12,25 @@ import (
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/decode"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/config_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
 var log = logger.GetInstance()
 
+// For testing purposes - allows mocking of config_utils.GetLdapTimeoutFromConf
+var getLdapTimeoutFromConf = config_utils.GetLdapTimeoutFromConf
+
 // LDAP search base arguments used for all ldapsearch commands
 // -o ldif_wrap=no: Disables line wrapping in LDIF output to prevent multi-line attribute values
 // -LLL: Enables LDIF output format with minimal additional information (no comments, no version)
 // -Y GSSAPI: Specifies SASL mechanism for authentication using Kerberos/GSSAPI
-// -l 2: Sets the time limit for the search operation to 2 seconds
+// -l interval: Sets the time limit for the search operation to value in config file, or 5 seconds as a fallback
 // -H: Indicates that the next argument will be the LDAP server URI (ldap://hostname)
-var ldapSearchBaseArgs = []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "2", "-H"}
+func getLdapSearchBaseArgs() []string {
+	return []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", getLdapTimeoutFromConf(), "-H"}
+}
 
 type Client struct{}
 
@@ -52,6 +58,7 @@ func (e *DefaultLdapsearchExecutor) BuildLdapsearchCommandWithFilter(baseDN, fqd
 	log.Debug("LDAP search with custom filter", "filter", searchFilter, "base_dn", baseDN)
 
 	command := constants.LDAPSearchCommand
+	ldapSearchBaseArgs := getLdapSearchBaseArgs()
 
 	// Start with base arguments
 	args := make([]string, len(ldapSearchBaseArgs))
@@ -90,7 +97,7 @@ func (e *DefaultLdapsearchExecutor) ExecuteLdapsearchWithFilter(ctx context.Cont
 		   strings.Contains(outputStr, "time limit exceeded") ||
 		   strings.Contains(errorStr, "timeout") ||
 		   strings.Contains(outputStr, "timeout") {
-			log.Warn("LDAP search timed out after 2 seconds",
+			log.Warn("LDAP search timed out after "+getLdapTimeoutFromConf()+"seconds",
 				"base_dn", baseDN,
 				"fqdn", fqdn,
 				"filter", searchFilter,
