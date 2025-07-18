@@ -161,12 +161,29 @@ func GetSecretNameFromConf() string {
 }
 
 // GetLdapTimeoutFromConf retrieves the LDAP Search Timeout Interval value from from the credentials-fetcher.conf file
-func GetLdapTimeoutFromConf() string {
-	interval := GetValueFromCredentialsFetcherConf("LDAPSearchTimeout")
-	if _, err := strconv.Atoi(interval); err != nil {
-		return constants.LDAPDefaultSearchTimeout
+func GetLdapTimeoutFromConf() (string, error) {
+	intervalStr := GetValueFromCredentialsFetcherConf("LDAPSearchTimeout")
+	interval, err := strconv.Atoi(intervalStr)
+	if err != nil {
+		log.Error("non-integer LDAPSearchTimeout value",
+			"value", intervalStr)
+		return "", err
 	}
-	return interval
+
+	if interval < 0 {
+		log.Error("LDAPSearchTimeout value cannot be negative",
+			"value", interval)
+		return "", fmt.Errorf("negative LDAPSearchTimeout value: %d", interval)
+	}
+
+	if interval > constants.LDAPMaxTimeoutInterval {
+		log.Error("LDAPSearchTimeout value exceeds maximum allowed",
+			"value", interval,
+			"max", constants.LDAPMaxTimeoutInterval)
+		return "", fmt.Errorf("value of LDAPSearchTimeout exceeds maximum: %d", interval)
+	}
+
+	return intervalStr, nil
 }
 
 // IsRunRenewalNonDomainJoinedEnabled checks if the RunRenewalNonDomainJoined flag is set to true

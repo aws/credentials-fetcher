@@ -28,8 +28,13 @@ var getLdapTimeoutFromConf = config_utils.GetLdapTimeoutFromConf
 // -Y GSSAPI: Specifies SASL mechanism for authentication using Kerberos/GSSAPI
 // -l interval: Sets the time limit for the search operation to value in config file, or 5 seconds as a fallback
 // -H: Indicates that the next argument will be the LDAP server URI (ldap://hostname)
-func getLdapSearchBaseArgs() []string {
-	return []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", getLdapTimeoutFromConf(), "-H"}
+func getLdapSearchBaseArgs() ([]string, error) {
+	timeout, err := getLdapTimeoutFromConf()
+	if err != nil {
+		log.Error("Failed to get LDAP timeout from config", "error", err)
+		return nil, err
+	}
+	return []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", timeout, "-H"}, nil
 }
 
 type Client struct{}
@@ -54,11 +59,15 @@ func NewDefaultLdapsearchExecutor() *DefaultLdapsearchExecutor {
 }
 
 // BuildLdapsearchCommandWithFilter creates a custom ldapsearch command with the specified filter and attributes
-func (e *DefaultLdapsearchExecutor) BuildLdapsearchCommandWithFilter(baseDN, fqdn, searchFilter string, attributes []string) (string, []string) {
+func (e *DefaultLdapsearchExecutor) BuildLdapsearchCommandWithFilter(baseDN, fqdn, searchFilter string, attributes []string) (string, []string, error) {
 	log.Debug("LDAP search with custom filter", "filter", searchFilter, "base_dn", baseDN)
 
 	command := constants.LDAPSearchCommand
-	ldapSearchBaseArgs := getLdapSearchBaseArgs()
+	ldapSearchBaseArgs, err := getLdapSearchBaseArgs()
+	if err != nil {
+		log.Error("Failed to get LDAP search base arguments", "error", err)
+		return "", nil, err
+	}
 
 	// Start with base arguments
 	args := make([]string, len(ldapSearchBaseArgs))
@@ -77,12 +86,17 @@ func (e *DefaultLdapsearchExecutor) BuildLdapsearchCommandWithFilter(baseDN, fqd
 	// Add requested attributes
 	args = append(args, attributes...)
 
-	return command, args
+	return command, args, nil
 }
 
 // ExecuteLdapsearchWithFilter executes an ldapsearch with a custom filter and attributes
 func (e *DefaultLdapsearchExecutor) ExecuteLdapsearchWithFilter(ctx context.Context, baseDN, fqdn, searchFilter string, attributes []string) ([]byte, error) {
-	command, args := e.BuildLdapsearchCommandWithFilter(baseDN, fqdn, searchFilter, attributes)
+	command, args, err := e.BuildLdapsearchCommandWithFilter(baseDN, fqdn, searchFilter, attributes)
+	if err != nil {
+		log.Error("Failed to build ldapsearch command", "error", err)
+		return nil, err
+	}
+	timeout, _ := getLdapTimeoutFromConf()
 
 	cmdString := e.shellExecutor.BuildCommand(command, args...)
 	log.Debug("Executing custom ldapsearch command", "command", cmdString)
@@ -93,11 +107,11 @@ func (e *DefaultLdapsearchExecutor) ExecuteLdapsearchWithFilter(ctx context.Cont
 		// Check if the error is due to timeout
 		errorStr := strings.ToLower(err.Error())
 		outputStr := strings.ToLower(string(output))
-		if strings.Contains(errorStr, "time limit exceeded") || 
-		   strings.Contains(outputStr, "time limit exceeded") ||
-		   strings.Contains(errorStr, "timeout") ||
-		   strings.Contains(outputStr, "timeout") {
-			log.Warn("LDAP search timed out after "+getLdapTimeoutFromConf()+"seconds",
+		if strings.Contains(errorStr, "time limit exceeded") ||
+			strings.Contains(outputStr, "time limit exceeded") ||
+			strings.Contains(errorStr, "timeout") ||
+			strings.Contains(outputStr, "timeout") {
+			log.Warn("LDAP search timed out after "+timeout+"seconds",
 				"base_dn", baseDN,
 				"fqdn", fqdn,
 				"filter", searchFilter,

@@ -163,8 +163,13 @@ func TestBuildLdapsearchCommandWithFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Mock Config File
+			originalGetLdapTimeoutFunc := getLdapTimeoutFromConf
+			defer func() { getLdapTimeoutFromConf = originalGetLdapTimeoutFunc }()
+			getLdapTimeoutFromConf = func() (string, error) { return "5", nil }
+
 			executor := NewDefaultLdapsearchExecutor()
-			cmd, args := executor.BuildLdapsearchCommandWithFilter(tt.baseDN, tt.fqdn, tt.searchFilter, tt.attributes)
+			cmd, args, _ := executor.BuildLdapsearchCommandWithFilter(tt.baseDN, tt.fqdn, tt.searchFilter, tt.attributes)
 
 			assert.Equal(t, tt.expectedCmd, cmd)
 			assert.Equal(t, tt.expectedArgs, args)
@@ -257,6 +262,11 @@ func TestExecuteLdapsearchWithFilter_TimeoutDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Mock config file
+			originalGetLdapTimeoutFunc := getLdapTimeoutFromConf
+			defer func() { getLdapTimeoutFromConf = originalGetLdapTimeoutFunc }()
+			getLdapTimeoutFromConf = func() (string, error) { return "5", nil }
+
 			// Create mock shell executor
 			mockShellExecutor := new(MockShellExecutor)
 
@@ -290,13 +300,18 @@ func TestExecuteLdapsearchWithFilter_TimeoutDetection(t *testing.T) {
 
 // Test that ldapSearchBaseArgs contains timeout parameter
 func TestLdapSearchBaseArgs_ContainsTimeout(t *testing.T) {
+	// Mock config file
+	originalGetLdapTimeoutFunc := getLdapTimeoutFromConf
+	defer func() { getLdapTimeoutFromConf = originalGetLdapTimeoutFunc }()
+	getLdapTimeoutFromConf = func() (string, error) { return "5", nil }
+
 	// Verify that the base args contain the timeout parameter
 	expectedArgs := []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "5", "-H"}
-	assert.Equal(t, expectedArgs, getLdapSearchBaseArgs(), "ldapSearchBaseArgs should contain timeout parameter -l 5")
+	args, _ := getLdapSearchBaseArgs()
+	assert.Equal(t, expectedArgs, args, "ldapSearchBaseArgs should contain timeout parameter -l 5")
 }
 
-// Test that ldapSearchBaseArgs contains timeout parameter if included in config file
-func TestLdapSearchBaseArgs_ContainsConfigTimeout(t *testing.T) {
+func TestExecuteLdapsearchWithBaseArgsError_(t *testing.T) {
 	// Save the original function
 	originalGetLdapTimeoutFunc := getLdapTimeoutFromConf
 
@@ -306,15 +321,43 @@ func TestLdapSearchBaseArgs_ContainsConfigTimeout(t *testing.T) {
 	}()
 
 	// Mock the getLdapTimeoutFromConf function to return a specific value
-	getLdapTimeoutFromConf = func() string {
-		return "30"
+	getLdapTimeoutFromConf = func() (string, error) {
+		return "", errors.New("Negative LDAPSearchTimeout value: -2")
 	}
+
+	mockShellExecutor := new(MockShellExecutor)
+
+	// Create executor with mock shell executor
+	executor := &DefaultLdapsearchExecutor{
+		shellExecutor: mockShellExecutor,
+	}
+
+	// Execute the method
+	result, err := executor.ExecuteLdapsearchWithFilter(
+		context.Background(),
+		"DC=contoso,DC=com",
+		"contoso.com",
+		"(objectClass=*)",
+		[]string{"cn"},
+	)
+
+	// Verify error is returned
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+// Test that ldapSearchBaseArgs contains timeout parameter if included in config file
+func TestLdapSearchBaseArgs_ContainsConfigTimeout(t *testing.T) {
+	// Mock config file
+	originalGetLdapTimeoutFunc := getLdapTimeoutFromConf
+	defer func() { getLdapTimeoutFromConf = originalGetLdapTimeoutFunc }()
+	getLdapTimeoutFromConf = func() (string, error) { return "30", nil }
 
 	// Create a new LDAP client executor
 	executor := NewDefaultLdapsearchExecutor()
 
 	// Test that the command includes the correct timeout
-	_, args := executor.BuildLdapsearchCommandWithFilter(
+	_, args, _ := executor.BuildLdapsearchCommandWithFilter(
 		"DC=contoso,DC=com",
 		"contoso.com",
 		"(objectClass=*)",
@@ -335,9 +378,13 @@ func TestLdapSearchBaseArgs_ContainsConfigTimeout(t *testing.T) {
 
 // Test that timeout parameter is correctly included in built commands
 func TestBuildLdapsearchCommandWithFilter_IncludesTimeout(t *testing.T) {
+	// Mock config file
+	originalGetLdapTimeoutFunc := getLdapTimeoutFromConf
+	defer func() { getLdapTimeoutFromConf = originalGetLdapTimeoutFunc }()
+	getLdapTimeoutFromConf = func() (string, error) { return "5", nil }
 	executor := NewDefaultLdapsearchExecutor()
 
-	cmd, args := executor.BuildLdapsearchCommandWithFilter(
+	cmd, args, _ := executor.BuildLdapsearchCommandWithFilter(
 		"DC=contoso,DC=com",
 		"contoso.com",
 		"(objectClass=*)",
