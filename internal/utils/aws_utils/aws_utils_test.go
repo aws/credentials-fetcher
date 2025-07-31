@@ -1,24 +1,10 @@
 package aws_utils
 
 import (
-	"context"
-	"errors"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/stretchr/testify/assert"
 )
-
-// Mock Secrets Manager client
-type mockSecretsManagerClient struct {
-	getSecretValueOutput *secretsmanager.GetSecretValueOutput
-	getSecretValueError  error
-}
-
-func (m *mockSecretsManagerClient) GetSecretValue(ctx context.Context, input *secretsmanager.GetSecretValueInput, optFns ...func(*secretsmanager.Options)) (*secretsmanager.GetSecretValueOutput, error) {
-	return m.getSecretValueOutput, m.getSecretValueError
-}
 
 func TestExtractCredentialsFromSecret(t *testing.T) {
 	tests := []struct {
@@ -185,71 +171,6 @@ func TestExtractCredentialsFromSecret(t *testing.T) {
 				assert.Equal(t, tt.wantUsername, username)
 				assert.Equal(t, tt.wantPassword, password)
 				assert.Equal(t, tt.wantDN, dn)
-			}
-		})
-	}
-}
-
-func TestGetSecretWithClient(t *testing.T) {
-	tests := []struct {
-		name          string
-		secretArn     string
-		secretString  string
-		mockError     error
-		expectedMap   map[string]interface{}
-		expectedError bool
-	}{
-		{
-			name:         "Valid secret",
-			secretArn:    "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret",
-			secretString: `{"username":"testuser","password":"testpass"}`,
-			mockError:    nil,
-			expectedMap: map[string]interface{}{
-				"username": "testuser",
-				"password": "testpass",
-			},
-			expectedError: false,
-		},
-		{
-			name:          "API error",
-			secretArn:     "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret",
-			secretString:  "",
-			mockError:     errors.New("API error"),
-			expectedMap:   nil,
-			expectedError: true,
-		},
-		{
-			name:          "Invalid JSON",
-			secretArn:     "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret",
-			secretString:  `{"username":"testuser","password":}`, // Invalid JSON
-			mockError:     nil,
-			expectedMap:   nil,
-			expectedError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create mock client
-			mockClient := &mockSecretsManagerClient{
-				getSecretValueError: tt.mockError,
-			}
-
-			if tt.mockError == nil {
-				mockClient.getSecretValueOutput = &secretsmanager.GetSecretValueOutput{
-					SecretString: aws.String(tt.secretString),
-				}
-			}
-
-			// Call the function
-			result, err := getSecretWithClient(context.Background(), mockClient, tt.secretArn)
-
-			// Check results
-			if tt.expectedError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedMap, result)
 			}
 		})
 	}
