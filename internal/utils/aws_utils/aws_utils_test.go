@@ -1,6 +1,7 @@
 package aws_utils
 
 import (
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -174,4 +175,99 @@ func TestExtractCredentialsFromSecret(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Mock command executor for testing
+type mockCommandExecutor struct {
+	output []byte
+	err    error
+}
+
+func (m *mockCommandExecutor) Output() ([]byte, error) {
+	return m.output, m.err
+}
+
+func TestExecuteSecretsManagerCLI(t *testing.T) {
+	tests := []struct {
+		name          string
+		cliOutput     string
+		expectedMap   map[string]interface{}
+		expectedError bool
+	}{
+		{
+			name:      "Valid CLI response",
+			cliOutput: `{"SecretString":"{\"username\":\"testuser\",\"password\":\"testpass\"}"}`,
+			expectedMap: map[string]interface{}{
+				"username": "testuser",
+				"password": "testpass",
+			},
+			expectedError: false,
+		},
+		{
+			name:          "Invalid JSON in CLI response",
+			cliOutput:     `{"SecretString":"invalid json"}`,
+			expectedMap:   nil,
+			expectedError: true,
+		},
+		{
+			name:          "Invalid CLI response format",
+			cliOutput:     `invalid response`,
+			expectedMap:   nil,
+			expectedError: true,
+		},
+	}
+
+	// Save original function
+	originalNewCommandExecutor := newCommandExecutor
+	defer func() {
+		newCommandExecutor = originalNewCommandExecutor
+	}()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Mock the command executor
+			newCommandExecutor = func(cmd *exec.Cmd) CommandExecutor {
+				return &mockCommandExecutor{
+					output: []byte(tt.cliOutput),
+					err:    nil,
+				}
+			}
+
+			cmd := exec.Command("aws", "secretsmanager", "get-secret-value")
+			result, err := executeSecretsManagerCLI(cmd)
+
+			if tt.expectedError {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedMap, result)
+			}
+		})
+	}
+}
+
+func TestGetSecretFromSecretsManager(t *testing.T) {
+	// Save original function
+	originalNewCommandExecutor := newCommandExecutor
+	defer func() {
+		newCommandExecutor = originalNewCommandExecutor
+	}()
+
+	// Mock successful response
+	newCommandExecutor = func(cmd *exec.Cmd) CommandExecutor {
+		return &mockCommandExecutor{
+			output: []byte(`{"SecretString":"{\"username\":\"testuser\",\"password\":\"testpass\"}"}`),
+			err:    nil,
+		}
+	}
+
+	result, err := GetSecretFromSecretsManager("test-arn")
+
+	assert.NoError(t, err)
+	expected := map[string]interface{}{
+		"username": "testuser",
+		"password": "testpass",
+	}
+	assert.Equal(t, expected, result)
 }

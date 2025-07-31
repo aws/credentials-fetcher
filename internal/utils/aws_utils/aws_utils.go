@@ -15,11 +15,30 @@ import (
 
 var log = logger.GetInstance()
 
+// CommandExecutor interface for executing commands
+type CommandExecutor interface {
+	Output() ([]byte, error)
+}
+
+// Default command executor that wraps exec.Cmd
+type DefaultCommandExecutor struct {
+	*exec.Cmd
+}
+
+func (d *DefaultCommandExecutor) Output() ([]byte, error) {
+	return d.Cmd.Output()
+}
+
+// Variable for dependency injection in tests
+var newCommandExecutor = func(cmd *exec.Cmd) CommandExecutor {
+	return &DefaultCommandExecutor{cmd}
+}
+
 // executeSecretsManagerCLI executes AWS CLI command and parses the response
 func executeSecretsManagerCLI(cmd *exec.Cmd) (map[string]interface{}, error) {
 	log.Debug("Executing AWS Secrets Manager CLI command", "command", cmd.String())
-
-	output, err := cmd.Output()
+	executor := newCommandExecutor(cmd)
+	output, err := executor.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get secret value using AWS CLI: %v", err)
 	}
@@ -43,7 +62,7 @@ func executeSecretsManagerCLI(cmd *exec.Cmd) (map[string]interface{}, error) {
 }
 
 // GetSecretFromSecretsManagerWithConfig retrieves a secret value from AWS Secrets Manager
-// using AWS CLI with credentials extracted from AWS config. It returns the secret value as a JSON object (map[string]interface{}).
+// using AWS CLI with credentials from AWS config. It returns the secret value as a JSON object (map[string]interface{}).
 func GetSecretFromSecretsManagerWithConfig(ctx context.Context, cfg aws.Config, secretArn string) (map[string]interface{}, error) {
 	// Extract credentials from AWS config
 	creds, err := cfg.Credentials.Retrieve(ctx)
@@ -51,21 +70,15 @@ func GetSecretFromSecretsManagerWithConfig(ctx context.Context, cfg aws.Config, 
 		return nil, fmt.Errorf("failed to retrieve credentials from config: %v", err)
 	}
 
-	return GetSecretFromSecretsManagerWithCredentials(ctx, secretArn, creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken, cfg.Region)
-}
-
-// GetSecretFromSecretsManagerWithCredentials retrieves a secret value from AWS Secrets Manager
-// using AWS CLI with provided credentials. It returns the secret value as a JSON object (map[string]interface{}).
-func GetSecretFromSecretsManagerWithCredentials(ctx context.Context, secretArn, accessKeyId, secretAccessKey, sessionToken, region string) (map[string]interface{}, error) {
 	// Use AWS CLI to get secret
 	cmd := exec.CommandContext(ctx, "aws", "secretsmanager", "get-secret-value", "--secret-id", secretArn, "--output", "json")
 
 	// Set AWS credentials as environment variables
 	cmd.Env = append(os.Environ(),
-		"AWS_ACCESS_KEY_ID="+accessKeyId,
-		"AWS_SECRET_ACCESS_KEY="+secretAccessKey,
-		"AWS_SESSION_TOKEN="+sessionToken,
-		"AWS_DEFAULT_REGION="+region,
+		"AWS_ACCESS_KEY_ID="+creds.AccessKeyID,
+		"AWS_SECRET_ACCESS_KEY="+creds.SecretAccessKey,
+		"AWS_SESSION_TOKEN="+creds.SessionToken,
+		"AWS_DEFAULT_REGION="+cfg.Region,
 	)
 
 	return executeSecretsManagerCLI(cmd)
@@ -73,16 +86,8 @@ func GetSecretFromSecretsManagerWithCredentials(ctx context.Context, secretArn, 
 
 // GetSecretFromSecretsManager retrieves a secret value from AWS Secrets Manager
 // given a secretArn. It returns the secret value as a JSON object (map[string]interface{}).
-// This is a backward compatible function that uses context.Background()
 func GetSecretFromSecretsManager(secretArn string) (map[string]interface{}, error) {
-	return GetSecretFromSecretsManagerWithContext(context.Background(), secretArn)
-}
-
-// GetSecretFromSecretsManagerWithContext retrieves a secret value from AWS Secrets Manager
-// given a secretArn and context using AWS CLI. It returns the secret value as a JSON object (map[string]interface{}).
-func GetSecretFromSecretsManagerWithContext(ctx context.Context, secretArn string) (map[string]interface{}, error) {
-	// Use AWS CLI to get secret
-	cmd := exec.CommandContext(ctx, "aws", "secretsmanager", "get-secret-value", "--secret-id", secretArn, "--output", "json")
+	cmd := exec.Command("aws", "secretsmanager", "get-secret-value", "--secret-id", secretArn, "--output", "json")
 	return executeSecretsManagerCLI(cmd)
 }
 
