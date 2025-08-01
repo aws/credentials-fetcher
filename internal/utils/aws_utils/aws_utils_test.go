@@ -190,6 +190,66 @@ func TestExtractCredentialsFromSecret(t *testing.T) {
 	}
 }
 
+func TestParseRegionFromARN(t *testing.T) {
+	tests := []struct {
+		name           string
+		arn            string
+		expectedRegion string
+		expectedError  bool
+	}{
+		{
+			name:           "Valid ARN with us-west-2",
+			arn:            "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret",
+			expectedRegion: "us-west-2",
+			expectedError:  false,
+		},
+		{
+			name:           "Valid ARN with us-east-1",
+			arn:            "arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret",
+			expectedRegion: "us-east-1",
+			expectedError:  false,
+		},
+		{
+			name:           "Valid ARN with eu-west-1",
+			arn:            "arn:aws:secretsmanager:eu-west-1:123456789012:secret:test-secret",
+			expectedRegion: "eu-west-1",
+			expectedError:  false,
+		},
+		{
+			name:           "Invalid ARN - too few parts",
+			arn:            "arn:aws:secretsmanager",
+			expectedRegion: "",
+			expectedError:  true,
+		},
+		{
+			name:           "Empty ARN",
+			arn:            "",
+			expectedRegion: "",
+			expectedError:  true,
+		},
+		{
+			name:           "Invalid ARN format",
+			arn:            "not-an-arn",
+			expectedRegion: "",
+			expectedError:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			region, err := parseRegionFromARN(tt.arn)
+
+			if tt.expectedError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "invalid ARN format")
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedRegion, region)
+			}
+		})
+	}
+}
+
 func TestGetSecretWithClient(t *testing.T) {
 	tests := []struct {
 		name          string

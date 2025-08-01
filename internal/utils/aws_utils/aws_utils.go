@@ -30,15 +30,22 @@ func GetSecretFromSecretsManager(secretArn string) (map[string]interface{}, erro
 // GetSecretFromSecretsManagerWithContext retrieves a secret value from AWS Secrets Manager
 // given a secretArn and context. It returns the secret value as a JSON object (map[string]interface{}).
 func GetSecretFromSecretsManagerWithContext(ctx context.Context, secretArn string) (map[string]interface{}, error) {
-	// Create a new AWS config
-	cfg, err := config.LoadDefaultConfig(ctx)
+	// Parse region from ARN
+	region, err := parseRegionFromARN(secretArn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse region from ARN: %v", err)
+	}
+	log.Debug("Parsed region from Secret ARN: ", "region", region)
+
+	// Create a new AWS config with the parsed region
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AWS config: %v", err)
 	}
 
 	// Create Secrets Manager client
 	svc := secretsmanager.NewFromConfig(cfg)
-	log.Info("Created AWS config to retrieve secret from Secrets Manager", "secretArn", secretArn)
+	log.Info("Created AWS config to retrieve secret from Secrets Manager", "secretArn", secretArn, "region", region)
 
 	return getSecretWithClient(ctx, svc, secretArn)
 }
@@ -186,4 +193,13 @@ func ContainsInvalidCharactersInADAccountName(username string) bool {
 // ContainsInvalidCharactersInCredentialSpec checks if a string contains invalid characters
 func ContainsInvalidCharactersInCredentialSpec(s string) bool {
 	return ContainsInvalidCharacters(s, "credential spec path")
+}
+
+// parseRegionFromARN extracts the region from an AWS ARN
+func parseRegionFromARN(arn string) (string, error) {
+	parts := strings.Split(arn, ":")
+	if len(parts) < 4 {
+		return "", fmt.Errorf("invalid ARN format: %s", arn)
+	}
+	return parts[3], nil
 }
