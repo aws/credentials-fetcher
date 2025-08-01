@@ -4,91 +4,66 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
 var log = logger.GetInstance()
 
-// CommandExecutor interface for executing commands
-type CommandExecutor interface {
-	Output() ([]byte, error)
-}
-
-// Default command executor that wraps exec.Cmd
-type DefaultCommandExecutor struct {
-	*exec.Cmd
-}
-
-func (d *DefaultCommandExecutor) Output() ([]byte, error) {
-	return d.Cmd.Output()
-}
-
-// Variable for dependency injection in tests
-var newCommandExecutor = func(cmd *exec.Cmd) CommandExecutor {
-	return &DefaultCommandExecutor{cmd}
-}
-
-// executeSecretsManagerCLI executes AWS CLI command and parses the response
-func executeSecretsManagerCLI(cmd *exec.Cmd) (map[string]interface{}, error) {
-	log.Debug("Executing AWS Secrets Manager CLI command", "command", cmd.String())
-	executor := newCommandExecutor(cmd)
-	output, err := executor.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get secret value using AWS CLI: %v", err)
-	}
-	log.Debug("AWS Secrets Manager CLI Command completed successfully", "output_size", len(output))
-
-	// Parse AWS CLI output
-	var cliResponse struct {
-		SecretString string `json:"SecretString"`
-	}
-	if err := json.Unmarshal(output, &cliResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse AWS CLI response: %v", err)
-	}
-
-	// Parse the secret string into a map
-	var secretMap map[string]interface{}
-	if err := json.Unmarshal([]byte(cliResponse.SecretString), &secretMap); err != nil {
-		return nil, fmt.Errorf("failed to parse secret JSON: %v", err)
-	}
-
-	return secretMap, nil
-}
-
-// GetSecretFromSecretsManagerWithConfig retrieves a secret value from AWS Secrets Manager
-// using AWS CLI with credentials from AWS config. It returns the secret value as a JSON object (map[string]interface{}).
-func GetSecretFromSecretsManagerWithConfig(ctx context.Context, cfg aws.Config, secretArn string) (map[string]interface{}, error) {
-	// Extract credentials from AWS config
-	creds, err := cfg.Credentials.Retrieve(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve credentials from config: %v", err)
-	}
-
-	// Use AWS CLI to get secret
-	cmd := exec.CommandContext(ctx, "aws", "secretsmanager", "get-secret-value", "--secret-id", secretArn, "--output", "json")
-
-	// Set AWS credentials as environment variables
-	cmd.Env = append(os.Environ(),
-		"AWS_ACCESS_KEY_ID="+creds.AccessKeyID,
-		"AWS_SECRET_ACCESS_KEY="+creds.SecretAccessKey,
-		"AWS_SESSION_TOKEN="+creds.SessionToken,
-		"AWS_DEFAULT_REGION="+cfg.Region,
-	)
-
-	return executeSecretsManagerCLI(cmd)
+// secretsManagerClient is an interface for AWS Secrets Manager client
+type secretsManagerClient interface {
+	GetSecretValue(ctx context.Context, input *secretsmanager.GetSecretValueInput, optFns ...func(*secretsmanager.Options)) (*secretsmanager.GetSecretValueOutput, error)
 }
 
 // GetSecretFromSecretsManager retrieves a secret value from AWS Secrets Manager
 // given a secretArn. It returns the secret value as a JSON object (map[string]interface{}).
+// This is a backward compatible function that uses context.Background()
 func GetSecretFromSecretsManager(secretArn string) (map[string]interface{}, error) {
-	cmd := exec.Command("aws", "secretsmanager", "get-secret-value", "--secret-id", secretArn, "--output", "json")
-	return executeSecretsManagerCLI(cmd)
+	return GetSecretFromSecretsManagerWithContext(context.Background(), secretArn)
+}
+
+// GetSecretFromSecretsManagerWithContext retrieves a secret value from AWS Secrets Manager
+// given a secretArn and context. It returns the secret value as a JSON object (map[string]interface{}).
+func GetSecretFromSecretsManagerWithContext(ctx context.Context, secretArn string) (map[string]interface{}, error) {
+	// Create a new AWS config
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AWS config: %v", err)
+	}
+
+	// Create Secrets Manager client
+	svc := secretsmanager.NewFromConfig(cfg)
+	log.Info("Created AWS config to retrieve secret from Secrets Manager", "secretArn", secretArn)
+
+	return getSecretWithClient(ctx, svc, secretArn)
+}
+
+// getSecretWithClient is a helper function that uses the provided Secrets Manager client
+// to retrieve a secret. This function is used by both the main code and tests.
+func getSecretWithClient(ctx context.Context, svc secretsManagerClient, secretArn string) (map[string]interface{}, error) {
+	// Create the input for GetSecretValue
+	input := &secretsmanager.GetSecretValueInput{
+		SecretId: aws.String(secretArn),
+	}
+
+	// Call GetSecretValue API
+	result, err := svc.GetSecretValue(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get secret value: %v", err)
+	}
+
+	// Parse the JSON string into a map
+	var secretMap map[string]interface{}
+	if err := json.Unmarshal([]byte(*result.SecretString), &secretMap); err != nil {
+		return nil, fmt.Errorf("failed to parse secret JSON: %v", err)
+	}
+
+	return secretMap, nil
 }
 
 // ExtractCredentialsFromSecret extracts username, password, and distinguished name from the secret map
@@ -167,6 +142,17 @@ func ExtractCredentialsFromSecret(secretMap map[string]interface{}) (string, str
 	}
 
 	return username, password, domainName, dn, nil
+}
+
+// GetSecretFromSecretsManagerWithConfig retrieves a secret value from AWS Secrets Manager
+// using the provided AWS config. It returns the secret value as a JSON object (map[string]interface{}).
+func GetSecretFromSecretsManagerWithConfig(ctx context.Context, cfg aws.Config, secretArn string) (map[string]interface{}, error) {
+	log.Info("Retrieving secret from Secrets Manager", "secretArn", secretArn)
+
+	// Create a Secrets Manager client with the provided config
+	svc := secretsmanager.NewFromConfig(cfg)
+
+	return getSecretWithClient(ctx, svc, secretArn)
 }
 
 // IsValidDomain checks if a domain name is valid

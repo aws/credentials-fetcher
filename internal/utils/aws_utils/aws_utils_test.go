@@ -2,12 +2,23 @@ package aws_utils
 
 import (
 	"context"
-	"os/exec"
+	"errors"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/stretchr/testify/assert"
 )
+
+// Mock Secrets Manager client
+type mockSecretsManagerClient struct {
+	getSecretValueOutput *secretsmanager.GetSecretValueOutput
+	getSecretValueError  error
+}
+
+func (m *mockSecretsManagerClient) GetSecretValue(ctx context.Context, input *secretsmanager.GetSecretValueInput, optFns ...func(*secretsmanager.Options)) (*secretsmanager.GetSecretValueOutput, error) {
+	return m.getSecretValueOutput, m.getSecretValueError
+}
 
 func TestExtractCredentialsFromSecret(t *testing.T) {
 	tests := []struct {
@@ -179,46 +190,20 @@ func TestExtractCredentialsFromSecret(t *testing.T) {
 	}
 }
 
-// Mock command executor for testing
-type mockCommandExecutor struct {
-	output []byte
-	err    error
-}
-
-func (m *mockCommandExecutor) Output() ([]byte, error) {
-	return m.output, m.err
-}
-
-// Mock credentials for testing
-type mockCredentials struct {
-	accessKey    string
-	secretKey    string
-	sessionToken string
-	shouldFail   bool
-}
-
-func (m *mockCredentials) Retrieve(ctx context.Context) (aws.Credentials, error) {
-	if m.shouldFail {
-		return aws.Credentials{}, assert.AnError
-	}
-	return aws.Credentials{
-		AccessKeyID:     m.accessKey,
-		SecretAccessKey: m.secretKey,
-		SessionToken:    m.sessionToken,
-	}, nil
-}
-
-func TestExecuteSecretsManagerCLI(t *testing.T) {
+func TestGetSecretWithClient(t *testing.T) {
 	tests := []struct {
 		name          string
-		cliOutput     string
-		cliError      error
+		secretArn     string
+		secretString  string
+		mockError     error
 		expectedMap   map[string]interface{}
 		expectedError bool
 	}{
 		{
-			name:      "Valid CLI response",
-			cliOutput: `{"SecretString":"{\"username\":\"testuser\",\"password\":\"testpass\"}"}`,
+			name:         "Valid secret",
+			secretArn:    "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret",
+			secretString: `{"username":"testuser","password":"testpass"}`,
+			mockError:    nil,
 			expectedMap: map[string]interface{}{
 				"username": "testuser",
 				"password": "testpass",
@@ -226,178 +211,42 @@ func TestExecuteSecretsManagerCLI(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			name:          "CLI command execution error",
-			cliError:      assert.AnError,
+			name:          "API error",
+			secretArn:     "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret",
+			secretString:  "",
+			mockError:     errors.New("API error"),
 			expectedMap:   nil,
 			expectedError: true,
 		},
 		{
-			name:          "Invalid JSON in CLI response",
-			cliOutput:     `{"SecretString":"invalid json"}`,
-			expectedMap:   nil,
-			expectedError: true,
-		},
-		{
-			name:          "Invalid CLI response format",
-			cliOutput:     `invalid response`,
-			expectedMap:   nil,
-			expectedError: true,
-		},
-		{
-			name:          "Missing SecretString field",
-			cliOutput:     `{"OtherField":"value"}`,
+			name:          "Invalid JSON",
+			secretArn:     "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret",
+			secretString:  `{"username":"testuser","password":}`, // Invalid JSON
+			mockError:     nil,
 			expectedMap:   nil,
 			expectedError: true,
 		},
 	}
-
-	// Save original function
-	originalNewCommandExecutor := newCommandExecutor
-	defer func() {
-		newCommandExecutor = originalNewCommandExecutor
-	}()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Mock the command executor
-			newCommandExecutor = func(cmd *exec.Cmd) CommandExecutor {
-				return &mockCommandExecutor{
-					output: []byte(tt.cliOutput),
-					err:    tt.cliError,
+			// Create mock client
+			mockClient := &mockSecretsManagerClient{
+				getSecretValueError: tt.mockError,
+			}
+
+			if tt.mockError == nil {
+				mockClient.getSecretValueOutput = &secretsmanager.GetSecretValueOutput{
+					SecretString: aws.String(tt.secretString),
 				}
 			}
 
-			cmd := exec.Command("aws", "secretsmanager", "get-secret-value")
-			result, err := executeSecretsManagerCLI(cmd)
+			// Call the function
+			result, err := getSecretWithClient(context.Background(), mockClient, tt.secretArn)
 
+			// Check results
 			if tt.expectedError {
 				assert.Error(t, err)
-				assert.Nil(t, result)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedMap, result)
-			}
-		})
-	}
-}
-
-func TestGetSecretFromSecretsManager(t *testing.T) {
-	tests := []struct {
-		name          string
-		cliOutput     string
-		cliError      error
-		expectedMap   map[string]interface{}
-		expectedError bool
-	}{
-		{
-			name:      "Success",
-			cliOutput: `{"SecretString":"{\"username\":\"testuser\",\"password\":\"testpass\"}"}`,
-			expectedMap: map[string]interface{}{
-				"username": "testuser",
-				"password": "testpass",
-			},
-			expectedError: false,
-		},
-		{
-			name:          "CLI execution error",
-			cliError:      assert.AnError,
-			expectedMap:   nil,
-			expectedError: true,
-		},
-	}
-
-	// Save original function
-	originalNewCommandExecutor := newCommandExecutor
-	defer func() {
-		newCommandExecutor = originalNewCommandExecutor
-	}()
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			newCommandExecutor = func(cmd *exec.Cmd) CommandExecutor {
-				return &mockCommandExecutor{
-					output: []byte(tt.cliOutput),
-					err:    tt.cliError,
-				}
-			}
-
-			result, err := GetSecretFromSecretsManager("test-arn")
-
-			if tt.expectedError {
-				assert.Error(t, err)
-				assert.Nil(t, result)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedMap, result)
-			}
-		})
-	}
-}
-
-func TestGetSecretFromSecretsManagerWithConfig(t *testing.T) {
-	tests := []struct {
-		name          string
-		cliOutput     string
-		cliError      error
-		credsFail     bool
-		expectedMap   map[string]interface{}
-		expectedError bool
-	}{
-		{
-			name:      "Success",
-			cliOutput: `{"SecretString":"{\"username\":\"testuser\",\"password\":\"testpass\"}"}`,
-			expectedMap: map[string]interface{}{
-				"username": "testuser",
-				"password": "testpass",
-			},
-			expectedError: false,
-		},
-		{
-			name:          "Credentials retrieval error",
-			credsFail:     true,
-			expectedMap:   nil,
-			expectedError: true,
-		},
-		{
-			name:          "CLI execution error",
-			cliError:      assert.AnError,
-			expectedMap:   nil,
-			expectedError: true,
-		},
-	}
-
-	// Save original function
-	originalNewCommandExecutor := newCommandExecutor
-	defer func() {
-		newCommandExecutor = originalNewCommandExecutor
-	}()
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			newCommandExecutor = func(cmd *exec.Cmd) CommandExecutor {
-				return &mockCommandExecutor{
-					output: []byte(tt.cliOutput),
-					err:    tt.cliError,
-				}
-			}
-
-			// Mock AWS config and credentials
-			mockCreds := &mockCredentials{
-				accessKey:    "test-key",
-				secretKey:    "test-secret",
-				sessionToken: "test-token",
-				shouldFail:   tt.credsFail,
-			}
-			cfg := aws.Config{
-				Region:      "us-west-2",
-				Credentials: mockCreds,
-			}
-
-			result, err := GetSecretFromSecretsManagerWithConfig(context.Background(), cfg, "test-arn")
-
-			if tt.expectedError {
-				assert.Error(t, err)
-				assert.Nil(t, result)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expectedMap, result)
