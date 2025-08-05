@@ -590,14 +590,12 @@ func TestCreateKerberosTicket(t *testing.T) {
 			mockExecutor := new(MockExecutor)
 
 			// Set up expectations
-			expectedPrincipal := tc.ticketInfo.ServiceAccountName + "@" + "EXAMPLE.COM"
+			expectedPrincipal := "" + tc.ticketInfo.ServiceAccountName + "$@" + "EXAMPLE.COM"
 			mockExecutor.On("ExecuteWithStdin",
-				mock.Anything,                   // context
-				"kinit",                         // command
-				tc.password,                     // stdin
-				"-c", tc.ticketInfo.KrbFilePath, // args
-				"-V",
-				expectedPrincipal,
+				mock.Anything,                                            // context
+				"kinit",                                                  // command
+				tc.password,                                              // stdin
+				"-c", tc.ticketInfo.KrbFilePath, "-V", expectedPrincipal, // args as variadic
 			).Return(tc.mockOutput, tc.mockErr)
 
 			// Create a client with the mock executor

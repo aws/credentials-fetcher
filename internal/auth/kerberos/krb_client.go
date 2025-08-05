@@ -319,19 +319,18 @@ func (c *Client) findGMSAPassword(ctx context.Context, ticketInfo *types.TicketI
 
 // createKerberosTicket creates a Kerberos ticket using kinit
 func (c *Client) createKerberosTicket(ctx context.Context, ticketInfo *types.TicketInfo, password []byte) error {
-	principal := fmt.Sprintf("%s@%s", ticketInfo.ServiceAccountName, strings.ToUpper(ticketInfo.DomainName))
+	principal := fmt.Sprintf("%s$@%s", ticketInfo.ServiceAccountName, strings.ToUpper(ticketInfo.DomainName))
 
 	log.Info("Creating Kerberos ticket for gMSA account",
 		"principal", principal,
 		"krb_file_path", ticketInfo.KrbFilePath)
 
+	args := []string{"-c", ticketInfo.KrbFilePath, "-V", principal}
 	output, err := c.shellExecutor.ExecuteWithStdin(
 		ctx,
 		"kinit",
 		password,
-		"-c", ticketInfo.KrbFilePath,
-		"-V",
-		principal,
+		args...,
 	)
 
 	if err != nil {
