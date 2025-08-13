@@ -486,7 +486,19 @@ func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.Tick
 	isDomainlessUserWithSecret := strings.Contains(domainlessUser, "awsdomainlessusersecret")
 	isDomainlessUserStandalone := config_utils.IsRunRenewalNonDomainJoinedEnabled()
 
-	if (isDomainlessUserStandalone || isNotDomainlessUser || isDomainlessUserWithSecret) && krb_utils.IsTicketReadyForRenewal(ticket) {
+	if !isDomainlessUserStandalone && !isNotDomainlessUser && !isDomainlessUserWithSecret {
+		log.Info("Skipping renewal for domainless user not created using Domain Join API",
+			"path", ticketInfo.KrbFilePath,
+			"principal", ticket.Principal,
+			"domainless_user", domainlessUser,
+			"isDomainlessUserWithSecret", isDomainlessUserWithSecret,
+			"isDomainlessUserStandalone", isDomainlessUserStandalone)
+	} else if !krb_utils.IsTicketReadyForRenewal(ticket) {
+		log.Info("Ticket does not need renewal yet",
+			"path", ticketInfo.KrbFilePath,
+			"principal", ticket.Principal,
+			"expiry", ticket.ExpirationTime.Format(time.RFC3339))
+	} else {
 		log.Info("Ticket is ready for renewal",
 			"path", ticketInfo.KrbFilePath,
 			"principal", ticket.Principal,
@@ -499,11 +511,6 @@ func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.Tick
 		if err := c.recreateTicketWithRetries(ctx, ticketInfo, numRetries, isDomainlessUserStandalone); err != nil {
 			return fmt.Errorf("failed to recreate ticket after %d retries: %w", numRetries+1, err)
 		}
-	} else {
-		log.Info("Ticket does not need renewal yet",
-			"path", ticketInfo.KrbFilePath,
-			"principal", ticket.Principal,
-			"expiry", ticket.ExpirationTime.Format(time.RFC3339))
 	}
 
 	return nil
