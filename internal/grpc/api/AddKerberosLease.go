@@ -104,6 +104,8 @@ func (h *DomainJoinedKerberosLeaseHandler) AddKerberosLease(ctx context.Context,
 		return nil, fmt.Errorf("failed to write metadata JSON: %v", err)
 	}
 
+	log.Info("Created New KerberosLease", "Lease ID: ", leaseID, "Kerberos File Paths: ", createdKrbFilePaths)
+
 	// Return the response with lease ID and created Kerberos file paths
 	return &pb.CreateKerberosLeaseResponse{
 		LeaseId:                  leaseID,
@@ -203,25 +205,25 @@ func (h *DomainJoinedKerberosLeaseHandler) GenerateKrbTicketFromMachineKeytab(ct
 
 // SetupKerberosFileForTicket sets up the Kerberos file for a ticket
 func (h *DomainJoinedKerberosLeaseHandler) SetupKerberosFileForTicket(ticketInfo *types.TicketInfo) (string, error) {
-	krbFilePath := ticketInfo.KrbFilePath
+	krbDirectoryPath := ticketInfo.KrbFilePath
 
 	// Check if krb file path directory already exists, otherwise create directory
-	if _, err := os.Stat(krbFilePath); os.IsNotExist(err) {
-		log.Info("Creating directory for Kerberos ticket", "path", krbFilePath)
-		if err := os.MkdirAll(krbFilePath, 0750); err != nil {
+	if _, err := os.Stat(krbDirectoryPath); os.IsNotExist(err) {
+		log.Info("Creating directory for Kerberos ticket", "path", krbDirectoryPath)
+		if err := os.MkdirAll(krbDirectoryPath, 0750); err != nil {
 			log.Error("Failed to create directory for Kerberos ticket", "error", err)
 			return "", fmt.Errorf("failed to create directory for Kerberos ticket: %v", err)
 		}
 	} else {
-		log.Info("Directory already exists", "path", krbFilePath)
+		log.Info("Directory already exists", "path", krbDirectoryPath)
 	}
 
-	// Create krbccname str by appending krb5cc
-	krbCCNameStr := filepath.Join(krbFilePath, "krb5cc")
+	// Create krb ticket file path by appending krb5cc
+	krbTicketFilePath := filepath.Join(krbDirectoryPath, "krb5cc")
 
 	// Create a file at krb5cc if it doesn't exist
-	if _, err := os.Stat(krbCCNameStr); os.IsNotExist(err) {
-		file, err := os.Create(krbCCNameStr) // #nosec G304
+	if _, err := os.Stat(krbTicketFilePath); os.IsNotExist(err) {
+		file, err := os.Create(krbTicketFilePath) // #nosec G304
 		if err != nil {
 			log.Error("Failed to create Kerberos credential cache file", "error", err)
 			return "", fmt.Errorf("failed to create Kerberos credential cache file: %v", err)
@@ -231,10 +233,11 @@ func (h *DomainJoinedKerberosLeaseHandler) SetupKerberosFileForTicket(ticketInfo
 		}
 
 		// Update the krb file path in the ticket info
-		ticketInfo.KrbFilePath = krbCCNameStr
+		ticketInfo.KrbFilePath = krbTicketFilePath
 	}
 
-	return krbCCNameStr, nil
+	// ECS Agent expects a directory that contains ticket
+	return krbDirectoryPath, nil
 }
 
 // CreateTicketForGMSA creates a Kerberos ticket for a gMSA account in domain-joined mode

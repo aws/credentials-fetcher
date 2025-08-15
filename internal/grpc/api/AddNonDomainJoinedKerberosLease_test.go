@@ -160,7 +160,7 @@ func TestSetupKerberosFileForTicket(t *testing.T) {
 
 	// Verify the results
 	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join(tempDir, "test-lease-id", "testaccount", "krb5cc"), krbFilePath)
+	assert.Equal(t, filepath.Join(tempDir, "test-lease-id", "testaccount"), krbFilePath)
 	assert.Equal(t, filepath.Join(tempDir, "test-lease-id", "testaccount", "krb5cc"), ticketInfo.KrbFilePath)
 
 	// Verify that the directory and file were created
