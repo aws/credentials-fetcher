@@ -69,6 +69,9 @@ const (
 
 	// DomainRegexPattern is the regex pattern for validating domain names
 	DomainRegexPattern = `^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$`
+
+	// MaxFilenameLength is the maximum filename length on Linux filesystems
+	MaxFilenameLength = 255
 )
 
 // ECS config constants

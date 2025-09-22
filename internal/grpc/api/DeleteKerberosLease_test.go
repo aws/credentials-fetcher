@@ -4,10 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"golang.a2z.com/CredentialsFetcherV2/constants"
 	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 )
 
@@ -48,6 +50,13 @@ func TestValidateDeleteRequest(t *testing.T) {
 			name: "Empty lease ID",
 			request: &pb.DeleteKerberosLeaseRequest{
 				LeaseId: "",
+			},
+			expectedError: true,
+		},
+		{
+			name: "Lease ID exceeds maximum filename length",
+			request: &pb.DeleteKerberosLeaseRequest{
+				LeaseId: strings.Repeat("a", constants.MaxFilenameLength+1),
 			},
 			expectedError: true,
 		},

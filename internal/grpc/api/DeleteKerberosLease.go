@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"golang.a2z.com/CredentialsFetcherV2/constants"
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
 	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils"
@@ -108,6 +109,12 @@ func (h *KerberosLeaseHandler) validateRequest(req *pb.DeleteKerberosLeaseReques
 	if req.LeaseId == "" {
 		log.Error("Missing lease ID in request")
 		return fmt.Errorf("lease ID is required")
+	}
+
+	// Validate lease ID length against Linux filename limit
+	if len(req.LeaseId) > constants.MaxFilenameLength {
+		log.Error("Lease ID exceeds maximum filename length", "lease_id_length", len(req.LeaseId), "max_length", constants.MaxFilenameLength)
+		return fmt.Errorf("lease ID length %d exceeds maximum filename length %d", len(req.LeaseId), constants.MaxFilenameLength)
 	}
 
 	return nil
