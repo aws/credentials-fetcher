@@ -113,10 +113,27 @@ std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket(
     std::string gmsa_account_name = "";
     std::string distinguished_name = "";
 
+    // DEBUG: Log entry into function with parameters
+    std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: fetch_gmsa_password_and_create_krb_ticket ENTRY" 
+              << " domain_name=" << domain_name << " krb_cc_name=" << krb_cc_name << std::endl;
+
     if ( krb_ticket != NULL )
     {
         gmsa_account_name = krb_ticket->service_account_name;
         distinguished_name = krb_ticket->distinguished_name;
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: gmsa_account_name=" << gmsa_account_name 
+                  << " distinguished_name=" << distinguished_name << std::endl;
+    }
+
+    // DEBUG: Set KRB5CCNAME environment variable for this process and log it
+    if (!krb_cc_name.empty()) {
+        if (setenv("KRB5CCNAME", krb_cc_name.c_str(), 1) == 0) {
+            std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Successfully set KRB5CCNAME=" 
+                      << krb_cc_name << std::endl;
+        } else {
+            std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Failed to set KRB5CCNAME=" 
+                      << krb_cc_name << std::endl;
+        }
     }
 
     if ( domain_name.empty() || gmsa_account_name.empty() )
@@ -213,10 +230,12 @@ std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket(
     std::string default_principal = "'" + gmsa_account_name + "$'" + "@" + domain_name;
 
     /* Pipe password to the utf16 decoder and kinit */
-    std::string kinit_cmd = std::string("dotnet ") + std::string( install_path_for_decode_exe ) +
+    std::string kinit_cmd = std::string( "dotnet " ) + std::string( install_path_for_decode_exe ) +
                             std::string( " | kinit " ) + std::string( " -c " ) + krb_cc_name +
                             " -V " + default_principal;
-    std::cerr << Util::getCurrentTime() << '\t' << "INFO:" << kinit_cmd << std::endl;
+    std::cerr << Util::getCurrentTime() << '\t' << "INFO: kinit command: " << kinit_cmd << std::endl;
+    std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: default_principal=" << default_principal 
+              << " target_cache=" << krb_cc_name << std::endl;
     FILE* fp = popen( kinit_cmd.c_str(), "w" );
     if ( fp == nullptr )
     {
@@ -237,6 +256,19 @@ std::pair<int, std::string> fetch_gmsa_password_and_create_krb_ticket(
                           "INFO: kinit return value = " + std::to_string( error_code );
     std::cerr << log_str << std::endl;
     cf_logger.logger( LOG_ERR, log_str.c_str() );
+
+    // DEBUG: Verify ticket creation immediately after kinit
+    if (error_code == 0) {
+        std::string klist_cmd = "klist -c " + krb_cc_name + " 2>&1";
+        std::pair<int, std::string> klist_result = Util::exec_shell_cmd(klist_cmd);
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Post-kinit klist verification: " 
+                  << klist_result.first << " output: " << klist_result.second << std::endl;
+        
+        // Also check default cache to see what's there
+        std::pair<int, std::string> klist_default = Util::exec_shell_cmd("klist 2>&1");
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Post-kinit default cache: " 
+                  << klist_default.first << " output: " << klist_default.second << std::endl;
+    }
 
     OPENSSL_cleanse( password_found_result.second, password_found_result.first );
 
@@ -356,12 +388,24 @@ std::string get_ticket_expiration( std::string klist_ticket_info, CF_logger& cf_
 bool is_ticket_ready_for_renewal( krb_ticket_info_t* krb_ticket_info, CF_logger& cf_logger )
 {
     std::string cmd = "export KRB5CCNAME=" + krb_ticket_info->krb_file_path + " &&  klist";
+
+    // DEBUG: Log renewal check details
+    std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: RENEWAL_CHECK for service_account=" 
+              << krb_ticket_info->service_account_name << " using command: " << cmd << std::endl;
+
     std::pair<int, std::string> krb_ticket_info_result = Util::exec_shell_cmd( cmd );
+    
+    // DEBUG: Log klist result
+    std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: RENEWAL_CHECK klist result: error_code=" 
+              << krb_ticket_info_result.first << " output_length=" << krb_ticket_info_result.second.length() << std::endl;
+    
     if ( krb_ticket_info_result.first != 0 )
     {
         // we need to check if meta file exists to recreate the ticket
         std::cerr << Util::getCurrentTime() << '\t' << "ERROR: klist failed for command " << cmd
                   << std::endl;
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: RENEWAL_CHECK klist error output: " 
+                  << krb_ticket_info_result.second << std::endl;
         return false;
     }
 
@@ -569,39 +613,45 @@ std::string renew_gmsa_ticket( krb_ticket_info_t* krb_ticket, std::string domain
 std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::string lease_id )
 {
     std::vector<std::string> delete_krb_ticket_paths;
-    if ( lease_id.empty() || krb_files_dir.empty() ) {
+    if ( lease_id.empty() || krb_files_dir.empty() )
+    {
         return delete_krb_ticket_paths;
     }
 
     // Normalize paths using std::filesystem
-    std::filesystem::path base_dir = std::filesystem::absolute(krb_files_dir);
+    std::filesystem::path base_dir = std::filesystem::absolute( krb_files_dir );
     std::filesystem::path target_path = base_dir / lease_id;
 
-    try {
+    try
+    {
         // Convert to canonical form (resolves ".." and symlinks)
-        std::filesystem::path canonical_base = std::filesystem::canonical(base_dir);
+        std::filesystem::path canonical_base = std::filesystem::canonical( base_dir );
 
         // Check if target path exists before canonicalization
-        if (std::filesystem::exists(target_path)) {
-            std::filesystem::path canonical_target = std::filesystem::canonical(target_path);
+        if ( std::filesystem::exists( target_path ) )
+        {
+            std::filesystem::path canonical_target = std::filesystem::canonical( target_path );
 
             // Verify target path is under base directory
             std::string base_str = canonical_base.string();
             std::string target_str = canonical_target.string();
 
-            if (target_str.compare(0, base_str.length(), base_str) != 0) {
+            if ( target_str.compare( 0, base_str.length(), base_str ) != 0 )
+            {
                 std::cerr << Util::getCurrentTime() << '\t'
-                         << "ERROR: Invalid path - attempted directory traversal"
-                         << std::endl;
+                          << "ERROR: Invalid path - attempted directory traversal" << std::endl;
                 return delete_krb_ticket_paths;
             }
         }
-    } catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << Util::getCurrentTime() << '\t' << "ERROR: Path validation failed: " << e.what() << std::endl;
+    }
+    catch ( const std::filesystem::filesystem_error& e )
+    {
+        std::cerr << Util::getCurrentTime() << '\t' << "ERROR: Path validation failed: " << e.what()
+                  << std::endl;
         return delete_krb_ticket_paths;
     }
 
-    DIR* curr_dir = opendir(target_path.c_str());
+    DIR* curr_dir = opendir( target_path.c_str() );
     struct dirent* file;
     try
     {
@@ -612,7 +662,7 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
                 std::string filename = file->d_name;
                 if ( !filename.empty() && filename.find( "_metadata" ) != std::string::npos )
                 {
-                    std::string file_path = (target_path / filename).string();
+                    std::string file_path = ( target_path / filename ).string();
                     std::list<krb_ticket_info_t*> krb_ticket_info_list =
                         read_meta_data_json( file_path );
 
@@ -643,7 +693,7 @@ std::vector<std::string> delete_krb_tickets( std::string krb_files_dir, std::str
             closedir( curr_dir );
 
             // finally delete lease file and directory
-            std::filesystem::remove_all(target_path);
+            std::filesystem::remove_all( target_path );
         }
     }
     catch ( ... )

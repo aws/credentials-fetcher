@@ -89,9 +89,13 @@ class Util
         char* cmd_str = (char*)calloc( cmd.length() + 1, sizeof( char ) );
         strncpy( cmd_str, cmd.c_str(), cmd.length() );
 
+        // DEBUG: Log the command being executed
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Executing shell command: " << cmd << std::endl;
+
         FILE* pFile = popen( cmd_str, "r" );
         if ( pFile == nullptr )
         {
+            std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: popen failed for command: " << cmd << std::endl;
             std::pair<int, std::string> result = std::make_pair( -1, std::string( "" ) );
             free( cmd_str );
             return result;
@@ -104,10 +108,42 @@ class Util
 
         int error_code = pclose( pFile );
 
+        // DEBUG: Log the result
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Command result: error_code=" 
+                  << error_code << " output_length=" << output.length() << std::endl;
+        if (error_code != 0) {
+            std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Command failed with output: " 
+                      << output << std::endl;
+        }
+
         std::pair<int, std::string> result = std::make_pair( error_code, output );
         free( cmd_str );
 
         return result;
+    }
+
+    // New function to execute shell commands with explicit KRB5CCNAME environment
+    static std::pair<int, std::string> exec_shell_cmd_with_krb_env( std::string cmd, std::string krb5ccname = "" )
+    {
+        std::string final_cmd;
+        
+        // If KRB5CCNAME is provided, prepend it to the command
+        if (!krb5ccname.empty()) {
+            final_cmd = "KRB5CCNAME=" + krb5ccname + " " + cmd;
+        } else {
+            // Check if KRB5CCNAME is already set in environment
+            const char* env_krb5ccname = getenv("KRB5CCNAME");
+            if (env_krb5ccname != nullptr) {
+                final_cmd = "KRB5CCNAME=" + std::string(env_krb5ccname) + " " + cmd;
+            } else {
+                final_cmd = cmd;
+            }
+        }
+        
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: exec_shell_cmd_with_krb_env: " 
+                  << final_cmd << std::endl;
+        
+        return exec_shell_cmd(final_cmd);
     }
 
     static std::pair<int, std::string> get_realm_name()
@@ -603,17 +639,38 @@ class Util
     {
         std::string cmd;
         std::pair<int, std::string> ldap_search_result;
+        
+        // DEBUG: Check current environment state before ldapsearch
+        std::string current_krb5ccname = getenv("KRB5CCNAME") ? getenv("KRB5CCNAME") : "NOT_SET";
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Current KRB5CCNAME before ldapsearch: " 
+                  << current_krb5ccname << std::endl;
+        
+        // DEBUG: Check if default cache exists and list its contents
+        std::pair<int, std::string> klist_default = exec_shell_cmd("klist 2>&1");
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: klist default cache result: " 
+                  << klist_default.first << " output: " << klist_default.second << std::endl;
+        
+        // DEBUG: Check if KRB5CCNAME cache exists and list its contents
+        if (current_krb5ccname != "NOT_SET") {
+            std::string klist_cmd = "KRB5CCNAME=" + current_krb5ccname + " klist 2>&1";
+            std::pair<int, std::string> klist_specific = exec_shell_cmd(klist_cmd);
+            std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: klist specific cache (" 
+                      << current_krb5ccname << ") result: " << klist_specific.first 
+                      << " output: " << klist_specific.second << std::endl;
+        }
+        
         // -N: Do not use reverse DNS to canonicalize SASL host name.
         // With this flag, ldapsearch uses the IP address directly for identification purposes, rather than trying to resolve it to a hostname.
         cmd = std::string( "ldapsearch -o ldif_wrap=no -LLL -Y GSSAPI -H ldap://" ) + fqdn;
         cmd += std::string( " -b '" ) + distinguished_name + std::string( "' " ) + search_string;
         cmd += std::string( " -N" );
-        std::cerr << Util::getCurrentTime() << '\t' << "INFO: " << cmd << std::endl;
+        std::cerr << Util::getCurrentTime() << '\t' << "INFO: ldapsearch command: " << cmd << std::endl;
         std::cerr << cmd << std::endl;
 
         for ( int i = 0; i < 2; i++ )
         {
-            ldap_search_result = Util::exec_shell_cmd( cmd );
+            // Use the environment-aware shell command execution
+            ldap_search_result = Util::exec_shell_cmd_with_krb_env( cmd );
             cmd += ldap_search_result.second;
             ldap_search_result.second = cmd;
             // Add retry, ldapsearch seems to fail and then succeed on retry
@@ -627,6 +684,13 @@ class Util
                 std::cerr << err_msg << std::endl;
                 err_msg = ldap_search_result.second + err_msg;
                 ldap_search_result.second = err_msg;
+                
+                // DEBUG: On failure, let's check what tickets are available
+                std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: ldapsearch attempt " << (i+1) 
+                          << " failed, checking available tickets:" << std::endl;
+                std::pair<int, std::string> debug_klist = exec_shell_cmd_with_krb_env("klist -l 2>&1");
+                std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: klist -l output: " 
+                          << debug_klist.second << std::endl;
             }
             else
             {
@@ -807,15 +871,23 @@ class Util
     {
         std::pair<int, std::string> result;
 
+        // DEBUG: Log entry into secret vault function
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: generate_krb_ticket_using_secret_vault ENTRY" 
+                  << " domain_name=" << domain_name << " aws_sm_secret_name=" << aws_sm_secret_name << std::endl;
+
         result = Util::check_util_binaries_permissions();
 
         if ( result.first != 0 )
         {
+            std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: check_util_binaries_permissions failed: " 
+                      << result.first << " " << result.second << std::endl;
             return result;
         }
 
         std::string username = "";
         std::string password = "";
+        
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Retrieving credentials from secrets manager" << std::endl;
         Json::Value root = Util::get_secret_from_secrets_manager( aws_sm_secret_name );
 
         std::string distinguished_name = "";
@@ -859,7 +931,31 @@ class Util
         username = username + "@" + domain_name;
         kinit_argv[1] = (char*)username.c_str();
         kinit_argv[2] = (char*)password.c_str();
+        
+        // DEBUG: Log kinit execution details (but not password)
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Executing my_kinit_main for principal: " 
+                  << username << std::endl;
+        
+        // Check current environment before kinit
+        std::string current_krb5ccname = getenv("KRB5CCNAME") ? getenv("KRB5CCNAME") : "NOT_SET";
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: KRB5CCNAME before my_kinit_main: " 
+                  << current_krb5ccname << std::endl;
+        
         int ret = my_kinit_main( 2, kinit_argv );
+        
+        // DEBUG: Log kinit result and verify tickets
+        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: my_kinit_main returned: " << ret << std::endl;
+        
+        if (ret == 0) {
+            // Check what tickets are available after kinit
+            std::pair<int, std::string> post_kinit_klist = exec_shell_cmd("klist -l 2>&1");
+            std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Post-kinit klist -l: " 
+                      << post_kinit_klist.second << std::endl;
+            
+            std::pair<int, std::string> post_kinit_default = exec_shell_cmd("klist 2>&1");
+            std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: Post-kinit default cache: " 
+                      << post_kinit_default.second << std::endl;
+        }
 #if 0
     /* The old way */
     std::string kinit_cmd = "echo '"  + password +  "' | kinit -V " + username + "@" +

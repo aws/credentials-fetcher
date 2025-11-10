@@ -56,15 +56,36 @@ int krb_ticket_renew_handler( Daemon cf_daemon )
                     std::pair<int, std::string> gmsa_ticket_result;
                     std::string krb_cc_name = krb_ticket->krb_file_path;
                     std::string domainless_user = krb_ticket->domainless_user;
+                    
+                    // DEBUG: Log renewal attempt details
+                    std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: RENEWAL checking ticket for service_account=" 
+                              << krb_ticket->service_account_name << " krb_cc_name=" << krb_cc_name 
+                              << " domainless_user=" << domainless_user << std::endl;
+                    
                     // check if the ticket is ready for renewal and not created in domainless mode
                     if ( ( domainless_user.empty() ||
                            domainless_user.find( "awsdomainlessusersecret" ) !=
                                std::string::npos ) &&
                          is_ticket_ready_for_renewal( krb_ticket, cf_daemon.cf_logger ) )
                     {
+                        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: RENEWAL ticket ready for renewal, proceeding" << std::endl;
+                        
+                        // DEBUG: Check current environment and tickets before renewal
+                        std::string current_krb5ccname = getenv("KRB5CCNAME") ? getenv("KRB5CCNAME") : "NOT_SET";
+                        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: RENEWAL current KRB5CCNAME=" 
+                                  << current_krb5ccname << std::endl;
+                        
+                        // Check what tickets exist before renewal
+                        std::pair<int, std::string> pre_renewal_klist = Util::exec_shell_cmd("klist -A 2>&1");
+                        std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: RENEWAL pre-renewal klist -A: " 
+                                  << pre_renewal_klist.second << std::endl;
+                        
                         int num_retries = 1;
                         for ( int i = 0; i <= num_retries; i++ )
                         {
+                            std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: RENEWAL attempt " << (i+1) 
+                                      << " for " << krb_ticket->service_account_name << std::endl;
+                            
                             gmsa_ticket_result = fetch_gmsa_password_and_create_krb_ticket(
                                 krb_ticket->domain_name, krb_ticket, krb_cc_name, cf_logger );
                             if ( gmsa_ticket_result.first != 0 )
@@ -78,11 +99,15 @@ int krb_ticket_renew_handler( Daemon cf_daemon )
                                 {
                                     int pos = domainless_user.find( ":" );
                                     std::string domainlessUser = domainless_user.substr( pos + 1 );
+                                    std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: RENEWAL generating domainless user ticket for: " 
+                                              << domainlessUser << std::endl;
                                     status = Util::generate_krb_ticket_using_secret_vault(
                                         krb_ticket->domain_name, domainlessUser, cf_logger );
                                 }
                                 else
                                 {
+                                    std::cerr << Util::getCurrentTime() << '\t' << "DEBUG: RENEWAL generating machine keytab ticket for domain: " 
+                                              << krb_ticket->domain_name << std::endl;
                                     status = generate_krb_ticket_from_machine_keytab(
                                         krb_ticket->domain_name, cf_logger );
                                 }
