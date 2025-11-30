@@ -945,6 +945,7 @@ class CredentialsFetcherImpl final
                     std::cerr << Util::getCurrentTime() << '\t' << err_msg << std::endl;
                 }
 
+                std::cout << Util::getCurrentTime() << '\t' << "INFO: CallDataRenewKerberosArnLease renewal started for " << username  << std::endl;
                 secureClearString( username );
                 secureClearString( password );
                 secureClearString( accessId );
@@ -1768,6 +1769,7 @@ class CredentialsFetcherImpl final
                     std::cerr << Util::getCurrentTime() << '\t' << err_msg << std::endl;
                 }
 
+                std::cout << Util::getCurrentTime() << '\t' << "INFO: CallDataRenewNonDomainJoinedKerberosLease renewal started for " << username  << std::endl;
                 secureClearString( username );
                 secureClearString( password );
 

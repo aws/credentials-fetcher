@@ -22,7 +22,6 @@ int krb_ticket_renew_handler( Daemon cf_daemon )
         {
             auto x = std::chrono::steady_clock::now() + std::chrono::minutes( interval );
             std::this_thread::sleep_until( x );
-            std::cout << Util::getCurrentTime() << '\t' << "INFO: renewal started" << std::endl;
 
             // identify the metadata files in the krb directory
             std::vector<std::string> metadatafiles;
@@ -62,6 +61,7 @@ int krb_ticket_renew_handler( Daemon cf_daemon )
                                std::string::npos ) &&
                          is_ticket_ready_for_renewal( krb_ticket, cf_daemon.cf_logger ) )
                     {
+                        std::cout << Util::getCurrentTime() << '\t' << "INFO: renewal started for " << domainless_user << std::endl;
                         int num_retries = 1;
                         for ( int i = 0; i <= num_retries; i++ )
                         {
