@@ -1,0 +1,6 @@
+# Compiled test program
+test_renewal_program
+
+# Test artifacts
+*.txt
+krb5cc_*

@@ -14,6 +14,7 @@ package.CredentialsFetcherV2 = {
             GoLang = 1.x;
             Go3p-Github-Securego-Gosec-V2 = 2.x;
             Go3p-Github-Golangci-GolangciLint-V2 = 2.x;
+            Kerberos = 1.x;
         };
     };
 
@@ -21,6 +22,8 @@ package.CredentialsFetcherV2 = {
         1.0 = {
             # Needed for emitting EMF metrics.
             GoAmzn-Metrics = 1.0;
+            # Needed for CGO Kerberos integration (provides krb5.h and libkrb5)
+            Kerberos = 1.x;
         };
     };
 };

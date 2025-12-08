@@ -16,6 +16,33 @@ import (
 
 var log = logger.GetInstance()
 
+// FileSystem interface abstracts filesystem operations for testing
+type FileSystem interface {
+	Remove(name string) error
+	RemoveAll(path string) error
+	Stat(name string) (os.FileInfo, error)
+	ReadDir(name string) ([]os.DirEntry, error)
+}
+
+// OsFS is the production implementation using real OS calls
+type OsFS struct{}
+
+func (o OsFS) Remove(name string) error {
+	return os.Remove(name)
+}
+
+func (o OsFS) RemoveAll(path string) error {
+	return os.RemoveAll(path)
+}
+
+func (o OsFS) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(name)
+}
+
+func (o OsFS) ReadDir(name string) ([]os.DirEntry, error) {
+	return os.ReadDir(name)
+}
+
 // ProcessCredentialSpecs processes credential specs and returns ticket info list
 // If username is empty, it assumes domain-joined mode
 func ProcessCredentialSpecs(credspecContents []string, username, leaseID string, krbFilesDir string) ([]*types.TicketInfo, error) {
@@ -57,12 +84,13 @@ func ProcessCredentialSpecs(credspecContents []string, username, leaseID string,
 	return ticketInfoList, nil
 }
 
-// CleanupKerberosFiles removes the Kerberos files and the lease ID directory if service account directory is empty
-func CleanupKerberosFiles(krbFilePath string) error {
+// CleanupKerberosFilesWithFS removes the Kerberos files and the lease ID directory if service account directory is empty
+// Uses the provided FileSystem interface for testability
+func CleanupKerberosFilesWithFS(fs FileSystem, krbFilePath string) error {
 	log.Info("Cleaning up Kerberos files", "path", krbFilePath)
 
 	// First remove the krb5cc file
-	if err := os.Remove(krbFilePath); err != nil && !os.IsNotExist(err) {
+	if err := fs.Remove(krbFilePath); err != nil && !os.IsNotExist(err) {
 		log.Error("Failed to remove Kerberos file", "path", krbFilePath, "error", err)
 		return fmt.Errorf("failed to remove Kerberos file: %v", err)
 	}
@@ -71,13 +99,13 @@ func CleanupKerberosFiles(krbFilePath string) error {
 	serviceAccountDir := filepath.Dir(krbFilePath)
 
 	// Check if service account directory exists and is empty
-	if _, err := os.Stat(serviceAccountDir); err == nil {
-		entries, err := os.ReadDir(serviceAccountDir)
+	if _, err := fs.Stat(serviceAccountDir); err == nil {
+		entries, err := fs.ReadDir(serviceAccountDir)
 		if err != nil {
 			log.Warn("Failed to read service account directory", "path", serviceAccountDir, "error", err)
 		} else if len(entries) == 0 {
 			// Service account directory exists and is empty, remove it
-			if err := os.Remove(serviceAccountDir); err != nil {
+			if err := fs.Remove(serviceAccountDir); err != nil {
 				log.Warn("Failed to remove empty service account directory", "path", serviceAccountDir, "error", err)
 			} else {
 				log.Info("Removed empty service account directory", "path", serviceAccountDir)
@@ -86,7 +114,7 @@ func CleanupKerberosFiles(krbFilePath string) error {
 				leaseDir := filepath.Dir(serviceAccountDir)
 
 				// Remove the lease ID directory and all its contents
-				if err := os.RemoveAll(leaseDir); err != nil {
+				if err := fs.RemoveAll(leaseDir); err != nil {
 					log.Warn("Failed to remove lease directory", "path", leaseDir, "error", err)
 				} else {
 					log.Info("Removed lease directory", "path", leaseDir)
@@ -102,6 +130,12 @@ func CleanupKerberosFiles(krbFilePath string) error {
 	}
 
 	return nil
+}
+
+// CleanupKerberosFiles removes the Kerberos files and the lease ID directory if service account directory is empty
+// Uses the default OS filesystem implementation
+func CleanupKerberosFiles(krbFilePath string) error {
+	return CleanupKerberosFilesWithFS(OsFS{}, krbFilePath)
 }
 
 // ParseKlistOutput parses the output of klist command to populate both Ticket and TicketInfo structs
@@ -298,25 +332,9 @@ func ParseDateFromFields(fields []string, logPrefix string) (time.Time, error) {
 	}
 
 	// Fallback: try brute force approach
+	// Note: This fallback typically fails because valid dates would have matched IsDateFormat above
 	if len(fields) >= 2 {
 		dateStr := fields[0] + " " + fields[1]
-
-		// Try MM/DD/YY format first
-		parsedTime, err := time.Parse(constants.KlistDateTimeFormat, dateStr)
-		if err == nil {
-			log.Info(fmt.Sprintf("Successfully parsed %s time using MM/DD/YY format (fallback)", logPrefix),
-				"value", dateStr)
-			return parsedTime, nil
-		}
-
-		// If that fails, try MM/DD/YYYY format
-		parsedTime, err = time.Parse(constants.KlistDateTimeFormatLong, dateStr)
-		if err == nil {
-			log.Info(fmt.Sprintf("Successfully parsed %s time using MM/DD/YYYY format (fallback)", logPrefix),
-				"value", dateStr)
-			return parsedTime, nil
-		}
-
 		log.Warn(fmt.Sprintf("Failed to parse %s time with fallback - tried both MM/DD/YY and MM/DD/YYYY formats", logPrefix),
 			"value", dateStr)
 	}
