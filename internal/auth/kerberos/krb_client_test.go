@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/krb_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
@@ -75,6 +77,21 @@ func (m *MockExecutor) BuildCommand(command string, args ...string) string {
 	}
 	ret := m.Called(callArgs...)
 	return ret.String(0)
+}
+
+// MockKrb5Client mocks the krb_utils.Krb5Client interface for testing
+type MockKrb5Client struct {
+	mock.Mock
+}
+
+func (m *MockKrb5Client) GenerateTicket(config *krb_utils.KinitConfig) error {
+	ret := m.Called(config)
+	return ret.Error(0)
+}
+
+func (m *MockKrb5Client) VerifyTicket(ccachePath string) error {
+	ret := m.Called(ccachePath)
+	return ret.Error(0)
 }
 
 // Mock LDAP client for testing
@@ -176,7 +193,6 @@ func TestCreateTicketUsingUsernamePassword(t *testing.T) {
 		domain        string
 		username      string
 		password      string
-		mockOutput    []byte
 		mockErr       error
 		expectedError bool
 	}{
@@ -185,38 +201,34 @@ func TestCreateTicketUsingUsernamePassword(t *testing.T) {
 			domain:        "example.com",
 			username:      "testuser",
 			password:      "password123",
-			mockOutput:    []byte("Ticket successfully created"),
 			mockErr:       nil,
 			expectedError: false,
 		},
 		{
-			name:          "Kinit command failure",
+			name:          "Krb5Client failure",
 			domain:        "example.com",
 			username:      "testuser",
 			password:      "password123",
-			mockOutput:    []byte("Kinit failed: invalid credentials"),
-			mockErr:       errors.New("kinit command failed"),
+			mockErr:       errors.New("authentication failed"),
 			expectedError: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a mock shell executor
-			mockExecutor := new(MockExecutor)
+			// Create a mock Krb5Client
+			mockKrb5Client := new(MockKrb5Client)
 
 			// Set up expectations
 			expectedPrincipal := tc.username + "@" + "EXAMPLE.COM"
-			mockExecutor.On("ExecuteWithStdin",
-				mock.Anything,            // context
-				"kinit",                  // command
-				[]byte(tc.password+"\n"), // stdin
-				expectedPrincipal,        // args
-			).Return(tc.mockOutput, tc.mockErr)
+			mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
+				return config.Principal == expectedPrincipal && config.Password == tc.password
+			})).Return(tc.mockErr)
 
-			// Create a client with the mock executor
+			// Create a client with the mock Krb5Client
 			client := &Client{
-				shellExecutor: mockExecutor,
+				shellExecutor: new(MockExecutor),
+				krb5Client:    mockKrb5Client,
 			}
 
 			// Call CreateTicketUsingUsernamePassword
@@ -230,7 +242,7 @@ func TestCreateTicketUsingUsernamePassword(t *testing.T) {
 			}
 
 			// Verify that the mock was called as expected
-			mockExecutor.AssertExpectations(t)
+			mockKrb5Client.AssertExpectations(t)
 		})
 	}
 }
@@ -270,21 +282,25 @@ func TestCreateTicketForServiceAccount(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a mock shell executor
-			mockExecutor := new(MockExecutor)
+			// Create a mock Krb5Client
+			mockKrb5Client := new(MockKrb5Client)
 
 			// Set up expectations
 			expectedPrincipal := tc.username + "@" + "EXAMPLE.COM"
-			mockExecutor.On("ExecuteWithStdin",
-				mock.Anything,            // context
-				"kinit",                  // command
-				[]byte(tc.password+"\n"), // stdin
-				expectedPrincipal,        // args
-			).Return(tc.mockOutput, tc.mockErr)
+			if tc.expectedError {
+				mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
+					return config.Principal == expectedPrincipal && config.Password == tc.password
+				})).Return(tc.mockErr)
+			} else {
+				mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
+					return config.Principal == expectedPrincipal && config.Password == tc.password
+				})).Return(nil)
+			}
 
-			// Create a client with the mock executor
+			// Create a client with the mock Krb5Client
 			client := &Client{
-				shellExecutor: mockExecutor,
+				shellExecutor: new(MockExecutor),
+				krb5Client:    mockKrb5Client,
 			}
 
 			// Call CreateTicketUsingUsernamePassword
@@ -298,7 +314,7 @@ func TestCreateTicketForServiceAccount(t *testing.T) {
 			}
 
 			// Verify that the mock was called as expected
-			mockExecutor.AssertExpectations(t)
+			mockKrb5Client.AssertExpectations(t)
 		})
 	}
 }
@@ -554,7 +570,6 @@ func TestCreateKerberosTicket(t *testing.T) {
 		name          string
 		ticketInfo    *types.TicketInfo
 		password      []byte
-		mockOutput    []byte
 		mockErr       error
 		expectedError bool
 	}{
@@ -566,7 +581,6 @@ func TestCreateKerberosTicket(t *testing.T) {
 				KrbFilePath:        "/path/to/krb5cc_gmsa",
 			},
 			password:      []byte("password123"),
-			mockOutput:    []byte("Ticket successfully created"),
 			mockErr:       nil,
 			expectedError: false,
 		},
@@ -578,7 +592,6 @@ func TestCreateKerberosTicket(t *testing.T) {
 				KrbFilePath:        "/path/to/krb5cc_gmsa",
 			},
 			password:      []byte("password123"),
-			mockOutput:    []byte("Kinit failed: invalid credentials"),
 			mockErr:       errors.New("kinit command failed"),
 			expectedError: true,
 		},
@@ -586,21 +599,23 @@ func TestCreateKerberosTicket(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a mock shell executor
-			mockExecutor := new(MockExecutor)
+			// Create a mock Krb5Client
+			mockKrb5Client := new(MockKrb5Client)
 
-			// Set up expectations
-			expectedPrincipal := "" + tc.ticketInfo.ServiceAccountName + "$@" + "EXAMPLE.COM"
-			mockExecutor.On("ExecuteWithStdin",
-				mock.Anything,                                            // context
-				"kinit",                                                  // command
-				tc.password,                                              // stdin
-				"-c", tc.ticketInfo.KrbFilePath, "-V", expectedPrincipal, // args as variadic
-			).Return(tc.mockOutput, tc.mockErr)
+			// Set up expectations for the Krb5Client
+			expectedPrincipal := tc.ticketInfo.ServiceAccountName + "$@" + strings.ToUpper(tc.ticketInfo.DomainName)
+			mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
+				return config.Principal == expectedPrincipal &&
+					config.Password == string(tc.password) &&
+					config.CCachePath == tc.ticketInfo.KrbFilePath &&
+					config.Forwardable == true &&
+					config.Verify == true
+			})).Return(tc.mockErr)
 
-			// Create a client with the mock executor
+			// Create a client with the mock Krb5Client
 			client := &Client{
-				shellExecutor: mockExecutor,
+				shellExecutor: new(MockExecutor),
+				krb5Client:    mockKrb5Client,
 			}
 
 			// Call createKerberosTicket
@@ -613,7 +628,7 @@ func TestCreateKerberosTicket(t *testing.T) {
 			}
 
 			// Verify that the mock was called as expected
-			mockExecutor.AssertExpectations(t)
+			mockKrb5Client.AssertExpectations(t)
 		})
 	}
 }
@@ -899,21 +914,18 @@ func TestRenewKerberosTicket(t *testing.T) {
 	testCases := []struct {
 		name          string
 		krbFilePath   string
-		mockOutput    []byte
 		mockErr       error
 		expectedError bool
 	}{
 		{
 			name:          "Successfully renew ticket",
 			krbFilePath:   "/path/to/krb5cc_test",
-			mockOutput:    []byte("Ticket successfully renewed"),
 			mockErr:       nil,
 			expectedError: false,
 		},
 		{
 			name:          "Failed to renew ticket",
 			krbFilePath:   "/path/to/krb5cc_test",
-			mockOutput:    []byte("Kinit renewal failed"),
 			mockErr:       errors.New("kinit renewal command failed"),
 			expectedError: true,
 		},
@@ -921,20 +933,20 @@ func TestRenewKerberosTicket(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a mock shell executor
-			mockExecutor := new(MockExecutor)
+			// Create a mock Krb5Client
+			mockKrb5Client := new(MockKrb5Client)
 
-			// Set up expectations
-			mockExecutor.On("Execute",
-				mock.Anything,        // context
-				"kinit",              // command
-				"-R",                 // args
-				"-c", tc.krbFilePath, // args
-			).Return(tc.mockOutput, tc.mockErr)
+			// Set up expectations for the Krb5Client
+			mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
+				return config.CCachePath == tc.krbFilePath &&
+					config.RenewTicket == true &&
+					config.Verify == true
+			})).Return(tc.mockErr)
 
-			// Create a client with the mock executor
+			// Create a client with the mock Krb5Client
 			client := &Client{
-				shellExecutor: mockExecutor,
+				shellExecutor: new(MockExecutor),
+				krb5Client:    mockKrb5Client,
 			}
 
 			// Call RenewKerberosTicket
@@ -947,7 +959,7 @@ func TestRenewKerberosTicket(t *testing.T) {
 			}
 
 			// Verify that the mock was called as expected
-			mockExecutor.AssertExpectations(t)
+			mockKrb5Client.AssertExpectations(t)
 		})
 	}
 }

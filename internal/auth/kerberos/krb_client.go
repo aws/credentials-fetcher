@@ -40,14 +40,41 @@ var (
 	newLdapClientFunc        = ldap.NewClient
 )
 
+// Client provides Kerberos authentication operations using CGO-based krb_utils package
+// for ticket creation and renewal, while maintaining shell-based operations for
+// ticket deletion to preserve existing functionality.
 type Client struct {
+	// shellExecutor is retained only for DeleteKerberosLease functionality
+	// All other Kerberos operations use the CGO-based krb_utils package
 	shellExecutor cmdexec.Executor
+	// krb5Client allows dependency injection for testing
+	krb5Client krb_utils.Krb5Client
 }
 
+// NewClient creates a new Kerberos client that uses CGO-based krb_utils package
 func NewClient() *Client {
 	return &Client{
 		shellExecutor: cmdexec.NewExecutor(),
+		krb5Client:    krb_utils.DefaultKrb5Client,
 	}
+}
+
+// NewClientWithKrb5Client creates a new client with a custom Krb5Client for testing
+func NewClientWithKrb5Client(krb5Client krb_utils.Krb5Client) *Client {
+	return &Client{
+		shellExecutor: cmdexec.NewExecutor(),
+		krb5Client:    krb5Client,
+	}
+}
+
+// translateKrbUtilsError wraps krb_utils package errors with additional context
+func (c *Client) translateKrbUtilsError(err error, operation string) error {
+	if err == nil {
+		return nil
+	}
+
+	// Wrap krb_utils errors with context
+	return fmt.Errorf("failed to %s: %w", operation, err)
 }
 
 // GetTicket retrieves comprehensive information about a Kerberos ticket from a file
@@ -151,36 +178,41 @@ func (c *Client) GetAllTicketsFromDirectory(directory string) ([]*types.Ticket, 
 }
 
 // CreateTicketUsingUsernamePassword creates a Kerberos ticket for user principal
+// using the CGO-based krb_utils package instead of shell commands.
 func (c *Client) CreateTicketUsingUsernamePassword(domain, username, password string) error {
-	log.Info("Creating Kerberos ticket", "user principal", username, "domain", domain)
+	log.Info("Creating Kerberos ticket using CGO", "user principal", username, "domain", domain)
 
-	// Build and execute the kinit command to create a Kerberos ticket
-	ctx := context.Background()
-
-	// Example command: kinit standarduser01@EXAMPLE.COM
+	// Create principal in the same format as before
 	principal := fmt.Sprintf("%s@%s", username, strings.ToUpper(domain))
 
-	// Use ExecuteWithStdin to pipe the password to kinit without setting environment variables
-	// Execute: kinit username@domain
-	// and pipe in the password
-	output, err := c.shellExecutor.ExecuteWithStdin(
-		ctx,
-		"kinit",
-		[]byte(password+"\n"), // Add newline to simulate pressing Enter
-		principal,
-	)
+	// Create KinitConfig for krb_utils.GenerateKerberosTicket()
+	config := krb_utils.NewKinitConfig(principal, password)
+	config.Verify = true
 
-	if err != nil {
-		log.Error("Kinit command failed",
-			"error", err,
-			"output", string(output),
-			"principal", principal)
-		return fmt.Errorf("failed to execute kinit command: %v: %s", err, string(output))
+	// Set a default cache path if none is provided
+	// Follow standard Kerberos behavior: check KRB5CCNAME env var first
+	if config.CCachePath == "" {
+		if ccname := os.Getenv("KRB5CCNAME"); ccname != "" {
+			config.CCachePath = ccname
+		} else {
+			// Fall back to a reasonable default
+			config.CCachePath = fmt.Sprintf("/tmp/krb5cc_%s", username)
+		}
 	}
 
+	// Use CGO-based krb_utils instead of shell execution
+	err := c.krb5Client.GenerateTicket(config)
+	if err != nil {
+		log.Error("Kerberos ticket generation failed",
+			"error", err,
+			"principal", principal)
+		return c.translateKrbUtilsError(err, "create Kerberos ticket for user")
+	}
+
+	// Securely clear the password
 	grpc_utils.SecureClearString(&password)
 
-	log.Info("Successfully created Kerberos ticket", "principal", principal)
+	log.Info("Successfully created Kerberos ticket using CGO", "principal", principal)
 	return nil
 }
 
@@ -317,58 +349,63 @@ func (c *Client) findGMSAPassword(ctx context.Context, ticketInfo *types.TicketI
 	return nil, fmt.Errorf("failed to find gMSA password for service account %s", ticketInfo.ServiceAccountName)
 }
 
-// createKerberosTicket creates a Kerberos ticket using kinit
+// createKerberosTicket creates a Kerberos ticket using CGO-based krb_utils
 func (c *Client) createKerberosTicket(ctx context.Context, ticketInfo *types.TicketInfo, password []byte) error {
 	principal := fmt.Sprintf("%s$@%s", ticketInfo.ServiceAccountName, strings.ToUpper(ticketInfo.DomainName))
 
-	log.Info("Creating Kerberos ticket for gMSA account",
+	log.Info("Creating Kerberos ticket for gMSA account using CGO",
 		"principal", principal,
 		"krb_file_path", ticketInfo.KrbFilePath)
 
-	args := []string{"-c", ticketInfo.KrbFilePath, "-V", principal}
-	output, err := c.shellExecutor.ExecuteWithStdin(
-		ctx,
-		"kinit",
-		password,
-		args...,
-	)
-
-	if err != nil {
-		log.Error("Kinit command failed for gMSA account",
-			"error", err,
-			"output", string(output),
-			"principal", principal)
-		return fmt.Errorf("failed to execute kinit command: %v: %s", err, string(output))
+	// Create KinitConfig for GMSA authentication
+	config := &krb_utils.KinitConfig{
+		Principal:   principal,
+		Password:    string(password), // Convert []byte to string
+		CCachePath:  ticketInfo.KrbFilePath,
+		Forwardable: true,
+		Verify:      true,
+		Verbose:     false,
 	}
 
-	log.Info("Successfully created Kerberos ticket for gMSA account",
+	// Use CGO-based krb_utils instead of shell execution
+	err := c.krb5Client.GenerateTicket(config)
+	if err != nil {
+		log.Error("Kerberos ticket generation failed for gMSA account",
+			"error", err,
+			"principal", principal,
+			"krb_file_path", ticketInfo.KrbFilePath)
+		return c.translateKrbUtilsError(err, "create Kerberos ticket for gMSA")
+	}
+
+	log.Info("Successfully created Kerberos ticket for gMSA account using CGO",
 		"principal", principal,
 		"krb_file_path", ticketInfo.KrbFilePath)
 
 	return nil
 }
 
-// RenewKerberosTicket renews a Kerberos ticket using kinit -R
+// RenewKerberosTicket renews a Kerberos ticket using CGO-based krb_utils
 func (c *Client) RenewKerberosTicket(ctx context.Context, krbFilePath string) error {
-	log.Info("Renewing Kerberos ticket", "krb_file_path", krbFilePath)
+	log.Info("Renewing Kerberos ticket using CGO", "krb_file_path", krbFilePath)
 
-	// Execute kinit -R to renew the ticket
-	output, err := c.shellExecutor.Execute(
-		ctx,
-		"kinit",
-		"-R",
-		"-c", krbFilePath,
-	)
-
-	if err != nil {
-		log.Error("Kinit renewal command failed",
-			"error", err,
-			"output", string(output),
-			"krb_file_path", krbFilePath)
-		return fmt.Errorf("failed to execute kinit renewal command: %v: %s", err, string(output))
+	// Create KinitConfig for ticket renewal
+	config := &krb_utils.KinitConfig{
+		CCachePath:  krbFilePath,
+		RenewTicket: true, // Enable renewal mode
+		Verify:      true,
+		Verbose:     false,
 	}
 
-	log.Info("Successfully renewed Kerberos ticket", "krb_file_path", krbFilePath)
+	// Use CGO-based krb_utils for renewal instead of shell execution
+	err := c.krb5Client.GenerateTicket(config)
+	if err != nil {
+		log.Error("Kerberos ticket renewal failed",
+			"error", err,
+			"krb_file_path", krbFilePath)
+		return c.translateKrbUtilsError(err, "renew Kerberos ticket")
+	}
+
+	log.Info("Successfully renewed Kerberos ticket using CGO", "krb_file_path", krbFilePath)
 	return nil
 }
 
@@ -504,10 +541,16 @@ func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.Tick
 			"principal", ticket.Principal,
 			"expiry", ticket.ExpirationTime.Format(time.RFC3339))
 
-		// Number of retries for creating the ticket
-		const numRetries = 1
+		// Try renewal first using CGO-based implementation
+		if err := c.RenewKerberosTicket(ctx, ticketInfo.KrbFilePath); err == nil {
+			log.Info("Direct renewal of the ticket successful using CGO")
+			return nil
+		} else {
+			log.Warn("Direct renewal failed, attempting ticket recreation", "error", err)
+		}
 
-		// Try to recreate the ticket with retries
+		// If renewal fails, fall back to recreation with retries
+		const numRetries = 1
 		if err := c.recreateTicketWithRetries(ctx, ticketInfo, numRetries, isDomainlessUserStandalone); err != nil {
 			return fmt.Errorf("failed to recreate ticket after %d retries: %w", numRetries+1, err)
 		}

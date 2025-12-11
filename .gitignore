@@ -7,3 +7,5 @@ go.work.sum
 /coverage
 /vendor
 /bin
+.kiro/
+credentials-fetcher
