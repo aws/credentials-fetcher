@@ -28,6 +28,9 @@ const (
 
 	// DefaultKrbFilesDir is the directory where Kerberos files are stored
 	DefaultKrbFilesDir = "/var/credentials-fetcher/krbdir"
+
+	// DefaultUserCacheDir is the directory where user Kerberos tickets are stored
+	DefaultUserCacheDir = "/var/credentials-fetcher/user-ccache"
 )
 
 // Application configuration constants

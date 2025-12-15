@@ -77,6 +77,59 @@ func (c *Client) translateKrbUtilsError(err error, operation string) error {
 	return fmt.Errorf("failed to %s: %w", operation, err)
 }
 
+// ensureUserCacheDirectory creates the user cache directory if it doesn't exist
+// and sets appropriate permissions for security
+func (c *Client) ensureUserCacheDirectory(cacheDir string) error {
+	// Check if directory exists
+	if _, err := os.Stat(cacheDir); os.IsNotExist(err) {
+		// Create directory with restrictive permissions (only owner can access)
+		if err := os.MkdirAll(cacheDir, 0700); err != nil {
+			log.Error("Failed to create user cache directory",
+				"directory", cacheDir,
+				"error", err)
+			return fmt.Errorf("failed to create user cache directory %s: %w", cacheDir, err)
+		}
+		log.Info("Created user cache directory", "directory", cacheDir)
+	} else if err != nil {
+		log.Error("Failed to check user cache directory",
+			"directory", cacheDir,
+			"error", err)
+		return fmt.Errorf("failed to check user cache directory %s: %w", cacheDir, err)
+	}
+
+	// Ensure directory has correct permissions (owner read/write/execute only)
+	// #nosec G302 - 0700 is appropriate for directories (owner read/write/execute only)
+	if err := os.Chmod(cacheDir, 0700); err != nil {
+		log.Warn("Failed to set permissions on user cache directory",
+			"directory", cacheDir,
+			"error", err)
+		// Don't fail here, just warn - the directory might still be usable
+	}
+
+	return nil
+}
+
+// setKrb5CCNameForUserCache sets the KRB5CCNAME environment variable to point to the user cache
+// Returns the original value so it can be restored later
+func (c *Client) setKrb5CCNameForUserCache(cachePath string) string {
+	originalValue := os.Getenv("KRB5CCNAME")
+	newValue := "FILE:" + cachePath
+
+	if err := os.Setenv("KRB5CCNAME", newValue); err != nil {
+		log.Warn("Failed to set KRB5CCNAME environment variable",
+			"error", err,
+			"cache_path", cachePath)
+		return originalValue
+	}
+
+	log.Info("Set KRB5CCNAME environment variable for LDAP operations",
+		"cache_path", cachePath,
+		"original_value", originalValue,
+		"new_value", newValue)
+
+	return originalValue
+}
+
 // GetTicket retrieves comprehensive information about a Kerberos ticket from a file
 func (c *Client) GetTicket(path string) (*types.Ticket, *types.TicketInfo, error) {
 	log.Debug("Reading ticket info using klist", "path", path)
@@ -180,6 +233,12 @@ func (c *Client) GetAllTicketsFromDirectory(directory string) ([]*types.Ticket, 
 // CreateTicketUsingUsernamePassword creates a Kerberos ticket for user principal
 // using the CGO-based krb_utils package instead of shell commands.
 func (c *Client) CreateTicketUsingUsernamePassword(domain, username, password string) error {
+	return c.CreateTicketUsingUsernamePasswordWithCacheDir(domain, username, password, constants.DefaultUserCacheDir)
+}
+
+// CreateTicketUsingUsernamePasswordWithCacheDir creates a Kerberos ticket for user principal
+// with a configurable cache directory (useful for testing)
+func (c *Client) CreateTicketUsingUsernamePasswordWithCacheDir(domain, username, password, userCacheDir string) error {
 	log.Info("Creating Kerberos ticket using CGO", "user principal", username, "domain", domain)
 
 	// Create principal in the same format as before
@@ -189,15 +248,17 @@ func (c *Client) CreateTicketUsingUsernamePassword(domain, username, password st
 	config := krb_utils.NewKinitConfig(principal, password)
 	config.Verify = true
 
-	// Set a default cache path if none is provided
-	// Follow standard Kerberos behavior: check KRB5CCNAME env var first
-	if config.CCachePath == "" {
-		if ccname := os.Getenv("KRB5CCNAME"); ccname != "" {
-			config.CCachePath = ccname
-		} else {
-			// Fall back to a reasonable default
-			config.CCachePath = fmt.Sprintf("/tmp/krb5cc_%s", username)
-		}
+	// Set cache path to the dedicated user-ccache directory
+	// This ensures consistent location and avoids conflicts with environment variables
+	config.CCachePath = filepath.Join(userCacheDir, fmt.Sprintf("krb5cc_%s", username))
+
+	log.Info("Using dedicated user cache directory",
+		"cache_path", config.CCachePath,
+		"cache_dir", userCacheDir)
+
+	// Ensure the user cache directory exists with proper permissions
+	if err := c.ensureUserCacheDirectory(userCacheDir); err != nil {
+		return c.translateKrbUtilsError(err, "prepare user cache directory")
 	}
 
 	// Use CGO-based krb_utils instead of shell execution
@@ -208,6 +269,17 @@ func (c *Client) CreateTicketUsingUsernamePassword(domain, username, password st
 			"principal", principal)
 		return c.translateKrbUtilsError(err, "create Kerberos ticket for user")
 	}
+
+	// Set KRB5CCNAME environment variable to point to our custom cache location
+	// This ensures that subsequent LDAP operations using GSSAPI can find the ticket
+	originalKrb5CCName := c.setKrb5CCNameForUserCache(config.CCachePath)
+
+	// Log the current environment variable value for debugging
+	currentKrb5CCName := os.Getenv("KRB5CCNAME")
+	log.Info("KRB5CCNAME environment variable status",
+		"original_value", originalKrb5CCName,
+		"current_value", currentKrb5CCName,
+		"cache_path", config.CCachePath)
 
 	// Securely clear the password
 	grpc_utils.SecureClearString(&password)
@@ -741,6 +813,7 @@ func (c *Client) GenerateKrbTicketUsingSecretVault(ctx context.Context, domain, 
 	}()
 
 	// Create the Kerberos ticket using the retrieved credentials
+	// This will use the same dedicated user cache directory as CreateTicketUsingUsernamePassword
 	err = c.CreateTicketUsingUsernamePassword(domain, username, password)
 	if err != nil {
 		log.Error("Failed to create Kerberos ticket using credentials from Secret Vault",

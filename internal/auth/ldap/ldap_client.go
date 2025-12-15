@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"os"
 	"strings"
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
@@ -100,6 +101,12 @@ func (e *DefaultLdapsearchExecutor) ExecuteLdapsearchWithFilter(ctx context.Cont
 
 	cmdString := e.shellExecutor.BuildCommand(command, args...)
 	log.Debug("Executing custom ldapsearch command", "command", cmdString)
+
+	// Log the current KRB5CCNAME for debugging GSSAPI authentication issues
+	currentKrb5CCName := os.Getenv("KRB5CCNAME")
+	log.Debug("LDAP GSSAPI authentication environment",
+		"KRB5CCNAME", currentKrb5CCName,
+		"command", cmdString)
 
 	// Execute the command with separate command and arguments to prevent command injection
 	output, err := e.shellExecutor.Execute(ctx, command, args...)

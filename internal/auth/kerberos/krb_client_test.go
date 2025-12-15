@@ -3,9 +3,11 @@ package kerberos
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -13,22 +15,23 @@ import (
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
-// Test data - simplified to only what's needed
-var validKlistOutput = `Ticket cache: FILE:/path/to/ticket
+// generateKlistOutput creates klist output with dynamic dates relative to current time
+func generateKlistOutput(hoursUntilExpiry int) string {
+	now := time.Now()
+	startTime := now.Add(-1 * time.Hour) // Started 1 hour ago
+	expiryTime := now.Add(time.Duration(hoursUntilExpiry) * time.Hour)
+	renewTime := now.Add(7 * 24 * time.Hour) // Renewable for 7 days
+	return fmt.Sprintf(`Ticket cache: FILE:/path/to/ticket
 Default principal: user123@EXAMPLE.COM
 
 Valid starting     Expires            Service principal
-12/11/25 09:00:00  12/12/25 10:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
-	renew until 12/18/25 09:00:00
-`
-
-var validKlistOutputNearExpiry = `Ticket cache: FILE:/path/to/ticket
-Default principal: user123@EXAMPLE.COM
-
-Valid starting     Expires            Service principal
-12/11/25 09:00:00  12/11/25 23:00:00  krbtgt/EXAMPLE.COM@EXAMPLE.COM
-	renew until 12/18/25 09:00:00
-`
+%s  %s  krbtgt/EXAMPLE.COM@EXAMPLE.COM
+	renew until %s
+`,
+		startTime.Format("01/02/06 15:04:05"),
+		expiryTime.Format("01/02/06 15:04:05"),
+		renewTime.Format("01/02/06 15:04:05"))
+}
 
 var missingPrincipalOutput = `Ticket cache: FILE:/path/to/ticket
 
@@ -137,7 +140,7 @@ func TestGetTicket(t *testing.T) {
 		{
 			name:          "Successful ticket retrieval",
 			path:          "/path/to/ticket",
-			mockOutput:    []byte(validKlistOutput),
+			mockOutput:    []byte(generateKlistOutput(24)), // Expires in 24 hours (no renewal needed)
 			mockErr:       nil,
 			expectedError: false,
 		},
@@ -224,6 +227,19 @@ func TestCreateTicketUsingUsernamePassword(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Save original KRB5CCNAME and restore after test
+			originalKrb5CCName := os.Getenv("KRB5CCNAME")
+			defer func() {
+				if originalKrb5CCName == "" {
+					_ = os.Unsetenv("KRB5CCNAME")
+				} else {
+					_ = os.Setenv("KRB5CCNAME", originalKrb5CCName)
+				}
+			}()
+
+			// Create a temporary directory for testing
+			tempDir := t.TempDir()
+
 			// Create a mock Krb5Client
 			mockKrb5Client := new(MockKrb5Client)
 
@@ -239,14 +255,19 @@ func TestCreateTicketUsingUsernamePassword(t *testing.T) {
 				krb5Client:    mockKrb5Client,
 			}
 
-			// Call CreateTicketUsingUsernamePassword
-			err := client.CreateTicketUsingUsernamePassword(tc.domain, tc.username, tc.password)
+			// Call CreateTicketUsingUsernamePasswordWithCacheDir with temp directory
+			err := client.CreateTicketUsingUsernamePasswordWithCacheDir(tc.domain, tc.username, tc.password, tempDir)
 
 			// Check results
 			if tc.expectedError {
 				assert.Error(t, err, "Expected an error but got none")
 			} else {
 				assert.NoError(t, err, "Did not expect an error")
+
+				// Verify that KRB5CCNAME was set correctly for successful ticket creation
+				currentKrb5CCName := os.Getenv("KRB5CCNAME")
+				expectedCachePath := fmt.Sprintf("FILE:%s/krb5cc_%s", tempDir, tc.username)
+				assert.Equal(t, expectedCachePath, currentKrb5CCName, "KRB5CCNAME should be set to the custom cache path")
 			}
 
 			// Verify that the mock was called as expected
@@ -290,6 +311,9 @@ func TestCreateTicketForServiceAccount(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Create a temporary directory for testing
+			tempDir := t.TempDir()
+
 			// Create a mock Krb5Client
 			mockKrb5Client := new(MockKrb5Client)
 
@@ -311,8 +335,8 @@ func TestCreateTicketForServiceAccount(t *testing.T) {
 				krb5Client:    mockKrb5Client,
 			}
 
-			// Call CreateTicketUsingUsernamePassword
-			err := client.CreateTicketUsingUsernamePassword(tc.domain, tc.username, tc.password)
+			// Call CreateTicketUsingUsernamePasswordWithCacheDir with temp directory
+			err := client.CreateTicketUsingUsernamePasswordWithCacheDir(tc.domain, tc.username, tc.password, tempDir)
 
 			// Check results
 			if tc.expectedError {
@@ -713,7 +737,7 @@ func TestGetTicketsFromMetadata(t *testing.T) {
 						mock.Anything,                // context
 						"klist",                      // command
 						"-c", ticketInfo.KrbFilePath, // args
-					).Return([]byte(validKlistOutput), tc.mockGetTicketErr)
+					).Return([]byte(generateKlistOutput(24)), tc.mockGetTicketErr) // Expires in 24 hours (no renewal needed)
 				}
 			}
 
@@ -892,7 +916,7 @@ func TestGetAllTicketsFromDirectory(t *testing.T) {
 						mock.Anything,                // context
 						"klist",                      // command
 						"-c", ticketInfo.KrbFilePath, // args
-					).Return([]byte(validKlistOutput), tc.mockGetTicketErr)
+					).Return([]byte(generateKlistOutput(24)), tc.mockGetTicketErr) // Expires in 24 hours (no renewal needed)
 				}
 			}
 
@@ -992,11 +1016,11 @@ func TestCheckAndRenewTicket(t *testing.T) {
 				KrbFilePath:        "/path/to/krb5cc_test",
 				DomainlessUser:     "", // Regular user (not domainless)
 			},
-			mockKlistOutput:             []byte(validKlistOutput),
+			mockKlistOutput:             []byte(generateKlistOutput(24)), // Expires in 24 hours (no renewal needed)
 			mockKlistErr:                nil,
-			mockIsTicketReadyForRenewal: false,
+			mockIsTicketReadyForRenewal: false, // The ticket expires tomorrow, so no renewal needed
 			mockRenewErr:                nil,
-			expectedRenewCalls:          0,
+			expectedRenewCalls:          0, // No renewal expected
 			expectedError:               false,
 		},
 		{
@@ -1007,7 +1031,7 @@ func TestCheckAndRenewTicket(t *testing.T) {
 				KrbFilePath:        "/path/to/krb5cc_test",
 				DomainlessUser:     "", // Regular user
 			},
-			mockKlistOutput:             []byte(validKlistOutputNearExpiry),
+			mockKlistOutput:             []byte(generateKlistOutput(0)), // Expires in 30 minutes (needs renewal)
 			mockKlistErr:                nil,
 			mockIsTicketReadyForRenewal: true,
 			mockRenewErr:                nil,
@@ -1022,7 +1046,7 @@ func TestCheckAndRenewTicket(t *testing.T) {
 				KrbFilePath:        "/path/to/krb5cc_test",
 				DomainlessUser:     "domainlessuser",
 			},
-			mockKlistOutput:             []byte(validKlistOutputNearExpiry),
+			mockKlistOutput:             []byte(generateKlistOutput(0)), // Expires in 30 minutes (needs renewal)
 			mockKlistErr:                nil,
 			mockIsTicketReadyForRenewal: true,
 			mockRenewErr:                nil,
@@ -1123,7 +1147,7 @@ func TestCheckAndRenewTicketDomainlessUser(t *testing.T) {
 				mock.Anything,                   // context
 				"klist",                         // command
 				"-c", tc.ticketInfo.KrbFilePath, // args
-			).Return([]byte(validKlistOutputNearExpiry), nil)
+			).Return([]byte(generateKlistOutput(0)), nil) // Expires in 30 minutes (needs renewal)
 
 			// Set up expectations for successful renewal
 			mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
@@ -1179,7 +1203,7 @@ func TestCheckAndRenewTicketRenewalFailureFallback(t *testing.T) {
 			mock.Anything,                // context
 			"klist",                      // command
 			"-c", ticketInfo.KrbFilePath, // args
-		).Return([]byte(validKlistOutputNearExpiry), nil)
+		).Return([]byte(generateKlistOutput(0)), nil) // Expires in 30 minutes (needs renewal)
 
 		// Set up expectations for renewal failure (lines 545-550)
 		// This tests the "if err := c.RenewKerberosTicket(ctx, ticketInfo.KrbFilePath); err == nil" path
