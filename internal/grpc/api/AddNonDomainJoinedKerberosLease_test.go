@@ -205,3 +205,86 @@ func TestCleanupKerberosFiles(t *testing.T) {
 	err = handler.CleanupKerberosFiles(filepath.Join(tempDir, "non-existent-file"))
 	assert.NoError(t, err) // Should not return an error for non-existent files
 }
+
+func TestProcessCredentialSpecs_DomainJoinedDetection(t *testing.T) {
+	handler := NewNonDomainJoinedKerberosHandler("/tmp/krb", "test-secret", nil, nil, cmdexec.NewExecutor())
+
+	tests := []struct {
+		name          string
+		credspecs     []string
+		username      string
+		leaseID       string
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "Valid non-domain-joined credspec",
+			credspecs: []string{`{
+				"DomainJoinConfig": {
+					"Sid": "S-1-5-21-123456789-123456789-123456789",
+					"MachineAccountName": "WebApp01",
+					"Guid": "12345678-1234-1234-1234-123456789012",
+					"DnsName": "example.com",
+					"NetBiosName": "EXAMPLE"
+				},
+				"ActiveDirectoryConfig": {
+					"GroupManagedServiceAccounts": [
+						{
+							"Name": "WebApp01",
+							"Scope": "example.com"
+						}
+					],
+					"HostAccountConfig": {
+						"PluginGUID": "12345678-1234-1234-1234-123456789012",
+						"PluginInput": {
+							"CredentialArn": "arn:aws:secretsmanager:us-west-2:123456789012:secret:example-secret"
+						},
+						"PortableCcgVersion": "1"
+					}
+				}
+			}`},
+			username:    "testuser",
+			leaseID:     "test-lease",
+			expectError: false,
+		},
+		{
+			name: "Domain-joined credspec (empty CredentialArn)",
+			credspecs: []string{`{
+				"DomainJoinConfig": {
+					"Sid": "S-1-5-21-123456789-123456789-123456789",
+					"MachineAccountName": "WebApp01",
+					"Guid": "12345678-1234-1234-1234-123456789012",
+					"DnsName": "example.com",
+					"NetBiosName": "EXAMPLE"
+				},
+				"ActiveDirectoryConfig": {
+					"GroupManagedServiceAccounts": [
+						{
+							"Name": "WebApp01",
+							"Scope": "example.com"
+						}
+					]
+				}
+			}`},
+			username:      "testuser",
+			leaseID:       "test-lease",
+			expectError:   true,
+			errorContains: "domain-joined credential spec or environment detected but non-domain-joined API was invoked",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ticketInfoList, err := handler.ProcessCredentialSpecs(tt.credspecs, tt.username, tt.leaseID)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorContains)
+				assert.Nil(t, ticketInfoList)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, ticketInfoList)
+			}
+		})
+	}
+}

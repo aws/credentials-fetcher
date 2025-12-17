@@ -159,7 +159,22 @@ func (h *NonDomainJoinedKerberosHandler) ValidateCredentials(username, password,
 
 // ProcessCredentialSpecs processes the credential specs and returns a list of ticket info objects
 func (h *NonDomainJoinedKerberosHandler) ProcessCredentialSpecs(credspecContents []string, username, leaseID string) ([]*types.TicketInfo, error) {
-	return krb_utils.ProcessCredentialSpecs(credspecContents, username, leaseID, h.krbFilesDir)
+	ticketInfoList, err := krb_utils.ProcessCredentialSpecs(credspecContents, username, leaseID, h.krbFilesDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if any ticket info has an empty CredentialArn, which indicates domain-joined environment
+	// but non-domain-joined API was invoked
+	for _, ticketInfo := range ticketInfoList {
+		if ticketInfo.CredentialArn == "" {
+			log.Error("Domain-joined credential spec or environment detected but non-domain-joined API was invoked",
+				"service_account", ticketInfo.ServiceAccountName)
+			return nil, fmt.Errorf("domain-joined credential spec or environment detected but non-domain-joined API was invoked for service account %s. Please use the domain-joined API instead", ticketInfo.ServiceAccountName)
+		}
+	}
+
+	return ticketInfoList, nil
 }
 
 // CreateKerberosTickets creates Kerberos tickets for each ticket info
