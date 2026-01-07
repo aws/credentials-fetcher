@@ -1,6 +1,6 @@
 package constants
 
-// Version information - can be overridden at build time
+// Version information
 var (
 	// Version is the current version of the Credentials Fetcher daemon
 	// This can be set at build time using: go build -ldflags "-X constants.Version=x.y.z"

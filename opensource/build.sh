@@ -116,7 +116,7 @@ lint_check() {
     log "Running golangci-lint"
     
     if ! command -v golangci-lint >/dev/null 2>&1; then
-        error "golangci-lint not found. Install with: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b \$(go env GOPATH)/bin"
+        error "golangci-lint not found. Install with: go install https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh"
     fi
     
     cd "${PROJECT_ROOT}"
