@@ -1,7 +1,7 @@
 # Makefile for credentials-fetcher Go daemon
 
 # Version
-VERSION := 1.3.8
+VERSION := 2.0.0
 
 # Run the strict release to allow vetting and race detection.
 BGO_RELEASE_TARGET=release-strict

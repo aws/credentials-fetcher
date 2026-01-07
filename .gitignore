@@ -9,3 +9,5 @@ go.work.sum
 /bin
 .kiro/
 credentials-fetcher
+/opensource/bin
+/opensource/build

@@ -1,9 +1,10 @@
 package constants
 
-// Version information
-const (
+// Version information - can be overridden at build time
+var (
 	// Version is the current version of the Credentials Fetcher daemon
-	Version = "2.0.0"
+	// This can be set at build time using: go build -ldflags "-X constants.Version=x.y.z"
+	Version = "2.0.0-dev"
 )
 
 // LDAP-related constants
