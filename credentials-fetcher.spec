@@ -7,7 +7,7 @@
 
 Name:           credentials-fetcher
 Version:        %{major_version}.%{minor_version}.%{patch_version}
-Release:        1
+Release:        1%{?dist}
 License:        Apache 2.0
 Summary:        Credentials Fetcher Service is used to connect to Active Directory from Linux Instances
 URL:            https://github.com/aws/credentials-fetcher
