@@ -20,6 +20,7 @@ Requires:       sssd
 
 # Build requirements for Go compilation
 BuildRequires:  make
+BuildRequires:  krb5-devel
 
 # Conditional dependencies based on OS version
 %if 0%{?is_al2023}
@@ -47,7 +48,7 @@ This is the Golang refactor of the original credentials-fetcher.
 
 %prep
 # This extracts the source during RPM generation
-%setup -q -n %{name}-%{version}
+%setup -q -n %{name}-%{version}-src
 
 %build
 # Build using the opensource Makefile
@@ -90,5 +91,5 @@ chmod 644 %{_unitdir}/%{SERVICE_NAME}
 /usr/bin/systemctl daemon-reload
 
 %changelog
-* Thu Jan 09 2026 Muskan Lalit <muskanl@amazon.com> - 2.0.0
+* Fri Jan 09 2026 Muskan Lalit <muskanl@amazon.com> - 2.0.0
 - Initial RPM release for CredentialsFetcherV2 
