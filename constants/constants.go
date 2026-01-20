@@ -32,6 +32,15 @@ const (
 
 	// DefaultUserCacheDir is the directory where user Kerberos tickets are stored
 	DefaultUserCacheDir = "/var/credentials-fetcher/user-ccache"
+
+	// LogDirectory is the directory where log files are stored
+	LogDirectory = "/var/credentials-fetcher/logging"
+
+	// LogFileName is the name of the log file
+	LogFileName = "credentials-fetcher.log"
+
+	// LogFilePath is the full path to the log file
+	LogFilePath = LogDirectory + "/" + LogFileName
 )
 
 // Application configuration constants

@@ -3,8 +3,10 @@ package logger
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -211,4 +213,128 @@ func TestLogLevelFromEnvironment(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestDualOutputProperty tests that log messages appear in both stdout and file
+func TestDualOutputProperty(t *testing.T) {
+	tempDir := t.TempDir()
+	testLogFile := filepath.Join(tempDir, "test.log")
+
+	logFile, err := os.OpenFile(testLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	require.NoError(t, err)
+	defer func() { _ = logFile.Close() }()
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	stdoutReader, stdoutWriter, _ := os.Pipe()
+	os.Stdout = stdoutWriter
+
+	// Create MultiWriter
+	multiWriter := io.MultiWriter(stdoutWriter, logFile)
+	handler := slog.NewTextHandler(multiWriter, &slog.HandlerOptions{Level: slog.LevelInfo})
+	testLogger := &logger{Logger: slog.New(handler), logFile: logFile}
+
+	testLogger.Info("test message", "key", "value")
+
+	_ = stdoutWriter.Close()
+	os.Stdout = oldStdout
+
+	// Read stdout output
+	var stdoutBuf bytes.Buffer
+	_, err = stdoutBuf.ReadFrom(stdoutReader)
+	require.NoError(t, err)
+	stdoutOutput := stdoutBuf.String()
+
+	// Read file output
+	fileContent, err := os.ReadFile(testLogFile)
+	require.NoError(t, err)
+	fileOutput := string(fileContent)
+
+	// Verify message appears in both outputs
+	assert.Contains(t, stdoutOutput, "test message")
+	assert.Contains(t, fileOutput, "test message")
+}
+
+// TestFilePermissions tests directory and file are created with correct permissions
+func TestFilePermissions(t *testing.T) {
+	tempDir := t.TempDir()
+	testLogDir := filepath.Join(tempDir, "logging")
+	testLogFile := filepath.Join(testLogDir, "test.log")
+
+	// Create directory and file
+	err := os.MkdirAll(testLogDir, 0755)
+	require.NoError(t, err)
+
+	logFile, err := os.OpenFile(testLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	require.NoError(t, err)
+	defer func() { _ = logFile.Close() }()
+
+	// Verify directory permissions (0755)
+	dirInfo, err := os.Stat(testLogDir)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0755), dirInfo.Mode().Perm())
+
+	// Verify file permissions (0644)
+	fileInfo, err := os.Stat(testLogFile)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0644), fileInfo.Mode().Perm())
+}
+
+// TestLoggerClose tests that the Close method properly closes the file handle
+func TestLoggerClose(t *testing.T) {
+	t.Run("Close with open file", func(t *testing.T) {
+		tempDir := t.TempDir()
+		testLogFile := filepath.Join(tempDir, "test.log")
+
+		logFile, err := os.OpenFile(testLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		require.NoError(t, err)
+
+		testLogger := &logger{
+			Logger:  slog.New(slog.NewTextHandler(logFile, nil)),
+			logFile: logFile,
+		}
+
+		err = testLogger.Close()
+		assert.NoError(t, err)
+
+		// Verify file is closed
+		_, err = logFile.Write([]byte("test"))
+		assert.Error(t, err)
+	})
+
+	t.Run("Close with nil file", func(t *testing.T) {
+		testLogger := &logger{
+			Logger:  slog.New(slog.NewTextHandler(os.Stdout, nil)),
+			logFile: nil,
+		}
+
+		err := testLogger.Close()
+		assert.NoError(t, err)
+	})
+}
+
+// TestFileLoggingAppendMode tests that logs are appended to existing file
+func TestFileLoggingAppendMode(t *testing.T) {
+	tempDir := t.TempDir()
+	testLogFile := filepath.Join(tempDir, "test.log")
+
+	// Write initial content
+	err := os.WriteFile(testLogFile, []byte("initial log\n"), 0644)
+	require.NoError(t, err)
+
+	// Open in append mode and write new content
+	logFile, err := os.OpenFile(testLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	require.NoError(t, err)
+
+	handler := slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: slog.LevelInfo})
+	testLogger := &logger{Logger: slog.New(handler), logFile: logFile}
+
+	testLogger.Info("appended log")
+	_ = logFile.Close()
+
+	// Verify both entries exist
+	content, err := os.ReadFile(testLogFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "initial log")
+	assert.Contains(t, string(content), "appended log")
 }
