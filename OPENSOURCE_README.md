@@ -314,8 +314,8 @@ sudo journalctl -u credentials-fetcher -f
 
 ### Log Locations
 - Service logs: `journalctl -u credentials-fetcher`
-- Application logs: `/var/log/credentials-fetcher/` (if configured)
-- Kerberos cache: `/var/credentials-fetcher/krbdir/`
+- Application logs: `/var/credentials-fetcher/logging`
+- Kerberos cache: `/var/credentials-fetcher/krbdir`
 
 
 
