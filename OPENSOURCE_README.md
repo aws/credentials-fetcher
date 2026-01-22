@@ -6,13 +6,13 @@ This daemon works in a similar way as ccg.exe and the gMSA plugin in Windows as 
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
+- [Building from Source](#building-from-source)
 - [Installation](#installation)
+- [Configuration](#configuration)
 - [Setting up Testing Environment](#setting-up-testing-environment)
 - [Testing](#testing)
 - [Service Management](#service-management)
 - [Troubleshooting](#troubleshooting)
-
-*Note: Build instructions and detailed configuration documentation are pending. Also, we need to close out on supported platforms *
 
 ## Prerequisites
 
@@ -33,6 +33,65 @@ dnf install realmd oddjob oddjob-mkhomedir adcli
 pip install grpcio grpcio-tools
 ```
 
+**Build Dependencies (AL2023):**
+```bash
+# Install Go
+sudo dnf install -y golang
+
+# Install golangci-lint
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+
+# Install gosec
+go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+# Add to PATH
+export PATH=$PATH:$(go env GOPATH)/bin
+```
+
+## Building from Source
+
+### Quick Build
+```bash
+make build
+```
+
+The binary will be created at `bin/credentials-fetcherd`.
+
+### Build Options
+
+| Command | Description |
+|---------|-------------|
+| `make build` | Build the binary |
+| `make lint-check` | Run golangci-lint |
+| `make security-check` | Run gosec security scanner |
+| `make release-strict` | Full build with security checks, linting, and race detection |
+| `make cf-install` | Build and install to system (requires sudo) |
+| `make cf-create-service` | Generate systemd service file |
+
+### Build Flags
+
+Enable debugging symbols:
+```bash
+ENABLE_DEBUGGING=1 make build
+```
+
+Enable code coverage:
+```bash
+CODE_COVERAGE=1 make build
+```
+
+### Manual Installation
+
+After building:
+```bash
+sudo make cf-install
+```
+
+This installs:
+- Binary to `/usr/sbin/credentials-fetcherd`
+- Service file to `/usr/lib/systemd/system/credentials-fetcher.service`
+- Config to `/etc/credentials-fetcher.conf`
+
 ## Installation
 
 ### Installing the latest version of credentials-fetcher
@@ -45,6 +104,49 @@ dnf install credentials-fetcher
 ```bash
 systemctl status credentials-fetcher
 credentials-fetcher --version
+```
+
+## Configuration
+
+The daemon is configured via `/etc/credentials-fetcher.conf`.
+
+**For ECS/Fargate (managed modes):** No configuration needed. Default settings work out of the box.
+
+**For standalone mode:** All options remain optional for basic lease operations. Configuration is only needed if you require automatic credential renewal in non-domain joined standalone deployments.
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `RunRenewalNonDomainJoined` | bool | false | Enable automatic credential renewal for non-domain joined standalone mode |
+| `CFGmsaSecretName` | string | "" | AWS Secrets Manager secret name containing AD credentials |
+| `LDAPSearchTimeout` | int | 5 | LDAP search timeout in seconds |
+
+### Default Configuration (ECS/Fargate/Standalone)
+
+Works for all deployment modes without modification:
+
+```ini
+# /etc/credentials-fetcher.conf
+RunRenewalNonDomainJoined =
+CFGmsaSecretName = ""
+LDAPSearchTimeout = 5
+```
+
+### Standalone Non-Domain-Joined with Auto-Renewal
+
+Only needed for standalone deployments requiring automatic credential renewal:
+
+```ini
+# /etc/credentials-fetcher.conf
+RunRenewalNonDomainJoined = true
+CFGmsaSecretName = "prod/ad-credentials"
+LDAPSearchTimeout = 10
+```
+
+AWS Secrets Manager secret format:
+```json
+{"username": "StandardUser01", "password": "p@ssw0rd", "domainName": "contoso.com"}
 ```
 
 ## Setting up testing environment
