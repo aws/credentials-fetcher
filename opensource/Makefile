@@ -33,7 +33,7 @@ ifeq ($(CODE_COVERAGE),1)
 endif
 
 # Project paths
-PROJECT_ROOT = ..
+PROJECT_ROOT = .
 BINARY_NAME = credentials-fetcherd
 MAIN_PATH = ./cmd/credentials-fetcher/main.go
 
@@ -87,6 +87,15 @@ check_help:
 .PHONY: build-only
 build-only: build
 
+# Install binary and config files to system (requires sudo)
+.PHONY: cf-install
+cf-install: build
+	@echo "Installing credentials-fetcher to system..."
+	install -m 755 $(BIN_DIR)/$(BINARY_NAME) /usr/sbin/credentials-fetcher
+	install -m 644 ../configuration/bin/credentials-fetcher.service /usr/lib/systemd/system/
+	install -m 644 ../configuration/conf/credentials-fetcher.conf /etc/
+	@echo "Installation complete. Run 'systemctl daemon-reload' to reload systemd."
+
 # Show help
 .PHONY: help
 help:
@@ -96,6 +105,7 @@ help:
 	@echo "  build        Build binary only (default)"
 	@echo "  test         Run tests"
 	@echo "  all          Run complete pipeline: test and build"
+	@echo "  cf-install   Build and install to system (requires sudo)"
 	@echo "  build-clean  Clean build artifacts"
 	@echo "  clean        Clean all artifacts"
 	@echo "  check_help   Show binary help"

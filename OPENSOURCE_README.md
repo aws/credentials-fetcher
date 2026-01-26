@@ -28,20 +28,15 @@ dnf install openldap-clients krb5-workstation sssd
 dnf install realmd oddjob oddjob-mkhomedir adcli
 ```
 
-**For Testing:**
-```bash
-pip install grpcio grpcio-tools
-```
-
 **Build Dependencies (AL2023):**
 ```bash
 # Install Go
-sudo dnf install -y golang
+sudo dnf install -y golang make krb5-devel
 
-# Install golangci-lint
+# Install golangci-lint (Optional)
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
-# Install gosec
+# Install gosec (Optional)
 go install github.com/securego/gosec/v2/cmd/gosec@latest
 
 # Add to PATH
@@ -180,13 +175,17 @@ Once gMSA accounts are created, use the test scripts in `tests/test_scripts/` to
 
 1. **Install Python dependencies:**
    ```bash
+   dnf install -y pip
+   cd /path/to/repo
+   python3 -m venv .venv
+   source .venv/bin/activate   
    pip install grpcio grpcio-tools
    ```
 
 2. **Generate gRPC Python files:**
    ```bash
    cd tests/test_scripts
-   python -m grpc_tools.protoc --proto_path=../../internal/grpc --python_out=. --grpc_python_out=. credentialsfetcher.proto
+   python -m grpc_tools.protoc --proto_path=../../internal/grpc/proto --python_out=. --grpc_python_out=. credentialsfetcher.proto
    ```
 
 3. **Start credentials-fetcher daemon:**
