@@ -60,7 +60,7 @@ func ProcessCredentialSpecs(credspecContents []string, username, leaseID string,
 		// Create the Kerberos file path
 		krbFilePath := filepath.Join(krbFilesDir, leaseID, credSpec.ServiceAccountName)
 
-		log.Info("Created Kerberos file path for lease ID ", leaseID, " Service account ", credSpec.ServiceAccountName)
+		log.Info("Created Kerberos file path", "leaseID", leaseID, "serviceAccount", credSpec.ServiceAccountName)
 
 		// Create ticket info object and populate it with information from the credential spec
 		ticketInfo := &types.TicketInfo{

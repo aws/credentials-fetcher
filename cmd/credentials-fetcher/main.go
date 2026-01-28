@@ -20,6 +20,14 @@ var log = logger.GetInstance()
 func main() {
 	log.Info("Starting Credentials Fetcher Daemon", "version", constants.Version)
 
+	// Ensure logger is closed on exit
+	defer func() {
+		if err := log.Close(); err != nil {
+			// Can't use log here since we're closing it, so just print to stderr
+			_, _ = os.Stderr.WriteString("Failed to close logger: " + err.Error() + "\n") // #nosec G104
+		}
+	}()
+
 	// Create a context that will be canceled on termination signals
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

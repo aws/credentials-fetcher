@@ -1,9 +1,12 @@
 package logger
 
 import (
+	"io"
 	"log/slog"
 	"os"
 	"sync"
+
+	"golang.a2z.com/CredentialsFetcherV2/constants"
 )
 
 // Logger is a simple interface for logging operations
@@ -12,11 +15,13 @@ type Logger interface {
 	Info(msg string, args ...any)
 	Warn(msg string, args ...any)
 	Error(msg string, args ...any)
+	Close() error
 }
 
 // logger implements the Logger interface
 type logger struct {
 	*slog.Logger
+	logFile *os.File
 }
 
 var (
@@ -51,12 +56,43 @@ func newLogger() Logger {
 		}
 	}
 
-	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	// Setup log file
+	logFile, err := setupLogFile()
+	var writer io.Writer = os.Stdout
+
+	if err != nil {
+		// Log error to stdout and continue with stdout-only logging
+		slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})).
+			Error("Failed to setup log file, continuing with stdout-only logging", "error", err)
+	} else if logFile != nil {
+		// Create MultiWriter for dual output
+		writer = io.MultiWriter(os.Stdout, logFile)
+	}
+
+	handler := slog.NewTextHandler(writer, &slog.HandlerOptions{
 		Level: logLevel,
 	})
 	return &logger{
-		Logger: slog.New(handler),
+		Logger:  slog.New(handler),
+		logFile: logFile,
 	}
+}
+
+// setupLogFile creates the log directory and opens the log file
+func setupLogFile() (*os.File, error) {
+	// Create log directory with 0755 permissions
+	// #nosec G301 - 0755 permissions required per spec for log directory accessibility
+	if err := os.MkdirAll(constants.LogDirectory, 0755); err != nil {
+		return nil, err
+	}
+
+	// Open/create log file with append mode and 0644 permissions
+	logFile, err := os.OpenFile(constants.LogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) // #nosec G302
+	if err != nil {
+		return nil, err
+	}
+
+	return logFile, nil
 }
 
 func (l *logger) Debug(msg string, args ...any) {
@@ -73,4 +109,12 @@ func (l *logger) Warn(msg string, args ...any) {
 
 func (l *logger) Error(msg string, args ...any) {
 	l.Logger.Error(msg, args...)
+}
+
+// Close closes the log file if it's open
+func (l *logger) Close() error {
+	if l.logFile != nil {
+		return l.logFile.Close()
+	}
+	return nil
 }
