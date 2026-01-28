@@ -2,6 +2,7 @@ package krb_utils
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -856,30 +857,25 @@ func TestCleanupKerberosFiles(t *testing.T) {
 	})
 
 	t.Run("error reading service account directory", func(t *testing.T) {
-		// This covers the ReadDir error path at line 76-77
-		// We'd need to create a directory without read permissions
-		leaseDir := filepath.Join(tmpDir, "lease_no_read")
-		serviceAccountDir := filepath.Join(leaseDir, "serviceaccount")
-		krbFile := filepath.Join(serviceAccountDir, "krb5cc_file")
-
-		if err := os.MkdirAll(serviceAccountDir, 0755); err != nil {
-			t.Fatalf("Failed to create test directories: %v", err)
+		// Use mock filesystem to reliably test ReadDir error path
+		// This avoids platform-dependent permission issues that can cause segfaults
+		mockFS := MockFS{
+			RemoveFunc: func(name string) error { return nil },
+			StatFunc: func(name string) (os.FileInfo, error) {
+				// Return a mock file info to simulate directory exists
+				return &mockFileInfo{name: "serviceaccount", isDir: true}, nil
+			},
+			ReadDirFunc: func(name string) ([]os.DirEntry, error) {
+				// Simulate ReadDir error (permission denied)
+				return nil, fmt.Errorf("permission denied")
+			},
 		}
-		if err := os.WriteFile(krbFile, []byte("test"), 0644); err != nil {
-			t.Fatalf("Failed to create test file: %v", err)
-		}
 
-		// Make directory unreadable (this may not work on all platforms)
-		_ = os.Chmod(serviceAccountDir, 0000)
-		defer func() { _ = os.Chmod(serviceAccountDir, 0755) }() // Restore permissions
+		// Execute cleanup with mock filesystem
+		err := CleanupKerberosFilesWithFS(mockFS, "/test/lease/serviceaccount/krb5cc")
 
-		// Execute cleanup
-		err := CleanupKerberosFiles(krbFile)
-
-		// Should return error because file cannot be removed from unreadable directory
-		// This test covers the error path at line 65-67
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to remove Kerberos file")
+		// Should succeed because ReadDir error is handled gracefully (just logged as warning)
+		assert.NoError(t, err, "Should not return error, just log warning")
 	})
 
 	t.Run("error removing service account directory", func(t *testing.T) {
