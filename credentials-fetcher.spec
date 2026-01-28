@@ -92,4 +92,4 @@ chmod 644 %{_unitdir}/%{SERVICE_NAME}
 
 %changelog
 * Fri Jan 09 2026 Muskan Lalit <muskanl@amazon.com> - 2.0.0
-- Initial RPM release for CredentialsFetcherV2 
+- CredentialsFetcherV2 RPM Release 
