@@ -92,4 +92,4 @@ chmod 644 %{_unitdir}/%{SERVICE_NAME}
 
 %changelog
 * Wed Jan 28 2026 Muskan Lalit <muskanl@amazon.com> - 2.0.0
-- CredentialsFetcherV2 RPM Release 
+- credentials-fetcher Golang Release 
