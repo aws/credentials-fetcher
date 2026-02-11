@@ -5,33 +5,33 @@
 %global minor_version 0
 %global patch_version 0
 
-Name:           credentials-fetcher
-Version:        %{major_version}.%{minor_version}.%{patch_version}
-Release:        1%{?dist}
-License:        Apache 2.0
-Summary:        Credentials Fetcher Service is used to connect to Active Directory from Linux Instances
-URL:            https://github.com/aws/credentials-fetcher
-Source:         %{name}-%{version}-src.tar.gz
+Name: credentials-fetcher
+Version: %{major_version}.%{minor_version}.%{patch_version}
+Release: 1%{?dist}
+License: Apache 2.0
+Summary: Credentials Fetcher Service is used to connect to Active Directory from Linux Instances
+URL: https://github.com/aws/credentials-fetcher
+Source: %{name}-%{version}-src.tar.gz
 
 # Runtime requirements
-Requires:       openldap-clients
-Requires:       krb5-workstation
-Requires:       sssd
+Requires: openldap-clients
+Requires: krb5-workstation
+Requires: sssd
 
 # Build requirements for Go compilation
-BuildRequires:  make
-BuildRequires:  krb5-devel
+BuildRequires: make
+BuildRequires: krb5-devel
 
 # Conditional dependencies based on OS version
 %if 0%{?is_al2023}
-BuildRequires:  glibc-devel
+BuildRequires: glibc-devel
 %else
-BuildRequires:  glibc-static
+BuildRequires: glibc-static
 %endif
 
 # Required for systemd macros
 %if 0%{?fedora} || 0%{?rhel} >= 8 || 0%{?is_al2023}
-BuildRequires:  systemd-rpm-macros
+BuildRequires: systemd-rpm-macros
 %endif
 
 # Define _unitdir if not already defined
@@ -59,13 +59,14 @@ rm -rf ${RPM_BUILD_ROOT}
 
 # Create directory structure in buildroot
 mkdir -p %{buildroot}/usr/sbin
-mkdir -p %{buildroot}%{_unitdir}
+mkdir -p %{buildroot}%{_unitdir}/ecs.service.d
 mkdir -p %{buildroot}/var/credentials-fetcher/{krbdir,socket,logging}
 mkdir -p %{buildroot}/etc/
 
 # Copy binary and service file to buildroot
 cp ./opensource/bin/credentials-fetcherd %{buildroot}/usr/sbin/credentials-fetcher
 cp ./configuration/bin/credentials-fetcher.service %{buildroot}%{_unitdir}/
+cp ./configuration/bin/ecs-require-credentials-fetcher.conf %{buildroot}%{_unitdir}/ecs.service.d/
 
 # Copy config file to buildroot
 cp ./configuration/conf/credentials-fetcher.conf %{buildroot}/etc/
@@ -77,6 +78,7 @@ rm -rf ${RPM_BUILD_ROOT}
 /usr/sbin/credentials-fetcher
 /etc/credentials-fetcher.conf
 %{_unitdir}/credentials-fetcher.service
+%{_unitdir}/ecs.service.d/ecs-require-credentials-fetcher.conf
 %dir /var/credentials-fetcher
 %dir /var/credentials-fetcher/krbdir
 %dir /var/credentials-fetcher/socket
@@ -85,10 +87,17 @@ rm -rf ${RPM_BUILD_ROOT}
 %post
 chmod 644 %{_unitdir}/%{SERVICE_NAME}
 /usr/bin/systemctl daemon-reload
+# Since `ecs.service` gets a new dependency on `credentials-fetcher.service`, it stops on the initial reload. Start it back up if enabled
+/usr/bin/systemctl is-enabled --quiet ecs.service 2>/dev/null && /usr/bin/systemctl restart ecs.service || :
 
 %postun
 /usr/bin/systemctl daemon-reload
+# Service continues running after a full removal, so stop it, and ensure ecs is still up if enabled
+if [ $1 -eq 0 ]; then
+    /usr/bin/systemctl stop credentials-fetcher.service
+    /usr/bin/systemctl is-enabled --quiet ecs.service 2>/dev/null && /usr/bin/systemctl restart ecs.service || :
+fi
 
 %changelog
-* Wed Jan 28 2026 Muskan Lalit <muskanl@amazon.com> - 2.0.0
-- credentials-fetcher Golang Release 
+* Wed Jan 28 2026 Muskan Lalit 2.0.0 <muskanl@amazon.com >-
+- credentials-fetcher Golang Release
