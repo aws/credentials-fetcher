@@ -7,7 +7,7 @@
 
 Name: credentials-fetcher
 Version: %{major_version}.%{minor_version}.%{patch_version}
-Release: 1%{?dist}
+Release: 2%{?dist}
 License: Apache 2.0
 Summary: Credentials Fetcher Service is used to connect to Active Directory from Linux Instances
 URL: https://github.com/aws/credentials-fetcher
@@ -117,3 +117,8 @@ fi
 %changelog
 * Wed Jan 28 2026 Muskan Lalit 2.0.0 <muskanl@amazon.com >-
 - credentials-fetcher Golang Release
+
+* Fri Feb 13 2026 Wayne Galen 2.0.0-2 <lewayne@amazon.com >-
+- Add startup ordering fixup script, to be called from userdata
+- New `/docs` directory, to be populated further later
+- Fix minor issue where service stays running after an uninstall
