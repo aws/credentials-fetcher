@@ -37,6 +37,9 @@ BuildRequires: systemd-rpm-macros
 # Define _unitdir if not already defined
 %{!?_unitdir: %global _unitdir /usr/lib/systemd/system}
 
+# Define _libexec if not already defined
+${!?_libexec: %global _libexec /usr/libexec}
+
 # Following are needed to prevent RPM build errors
 %define _missing_build_ids_terminate_build 0
 %define debug_package %{nil}
@@ -62,11 +65,15 @@ mkdir -p %{buildroot}/usr/sbin
 mkdir -p %{buildroot}%{_unitdir}/ecs.service.d
 mkdir -p %{buildroot}/var/credentials-fetcher/{krbdir,socket,logging}
 mkdir -p %{buildroot}/etc/
+mkdir -p %{buildroot}%{_libexec}
 
 # Copy binary and service file to buildroot
 cp ./opensource/bin/credentials-fetcherd %{buildroot}/usr/sbin/credentials-fetcher
 cp ./configuration/bin/credentials-fetcher.service %{buildroot}%{_unitdir}/
 cp ./configuration/bin/ecs-require-credentials-fetcher.conf %{buildroot}%{_unitdir}/ecs.service.d/
+
+# Copy startup-order userdata script into libexec
+cp ./scripts/credentials-fetcher-startup-order.sh %{buildroot}%{_libexec}/
 
 # Copy config file to buildroot
 cp ./configuration/conf/credentials-fetcher.conf %{buildroot}/etc/
@@ -83,6 +90,7 @@ rm -rf ${RPM_BUILD_ROOT}
 %dir /var/credentials-fetcher/krbdir
 %dir /var/credentials-fetcher/socket
 %dir /var/credentials-fetcher/logging
+%{_libexec}/credentials-fetcher-startup-order.sh
 
 %post
 chmod 644 %{_unitdir}/%{SERVICE_NAME}
@@ -91,11 +99,18 @@ chmod 644 %{_unitdir}/%{SERVICE_NAME}
 /usr/bin/systemctl is-enabled --quiet ecs.service 2>/dev/null && /usr/bin/systemctl restart ecs.service || :
 
 %postun
+# If the user ran our systemd dependency script, there will be an out-of-package systemd drop-in for ECS agent.
+# Remove this, and also clean up the drop-in directory, but only if it is empty after removing ours.
+if [ -d "/usr/lib/systemd/system/ecs.service.d" ]; then
+    rm /usr/lib/systemd/system/ecs.service.d/require-credentials-fetcher.conf
+    if [ -z "$( ls -A '/usr/lib/systemd/system/ecs.service.d' )" ]; then
+        rm -rf /usr/lib/systemd/system/ecs.service.d
+    fi
+fi
 /usr/bin/systemctl daemon-reload
-# Service continues running after a full removal, so stop it, and ensure ecs is still up if enabled
+# Service continues running after a full removal, so stop it
 if [ $1 -eq 0 ]; then
     /usr/bin/systemctl stop credentials-fetcher.service
-    /usr/bin/systemctl is-enabled --quiet ecs.service 2>/dev/null && /usr/bin/systemctl restart ecs.service || :
 fi
 
 %changelog
