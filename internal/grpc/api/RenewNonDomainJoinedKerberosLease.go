@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/aws_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
-
-	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
+
+	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 )
 
 // RenewNonDomainJoinedKerberosLeaseInterface extends KerberosTicketOperations with Renew-specific operations
@@ -61,8 +62,31 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 		// Filter ticket infos that match the provided username
 		var matchingTicketInfos []*types.TicketInfo
 		for _, ticketInfo := range ticketInfoList {
+			// First, try direct match with DomainlessUser
 			if ticketInfo.DomainlessUser == req.Username {
 				matchingTicketInfos = append(matchingTicketInfos, ticketInfo)
+				continue
+			}
+
+			// If no direct match and CredentialArn is available, extract username from the secret
+			if ticketInfo.CredentialArn != "" {
+				secretMap, err := aws_utils.GetSecretFromSecretsManagerWithContext(ctx, ticketInfo.CredentialArn)
+				if err != nil {
+					log.Warn("Failed to retrieve secret from CredentialArn", "arn", ticketInfo.CredentialArn, "error", err)
+					continue
+				}
+
+				username, _, _, _, err := aws_utils.ExtractCredentialsFromSecret(secretMap)
+				if err != nil {
+					log.Warn("Failed to extract username from secret", "arn", ticketInfo.CredentialArn, "error", err)
+					continue
+				}
+
+				// Check if the extracted username matches the request username
+				if username == req.Username {
+					matchingTicketInfos = append(matchingTicketInfos, ticketInfo)
+					log.Info("Matched ticket via CredentialArn username", "username", username, "arn", ticketInfo.CredentialArn)
+				}
 			}
 		}
 
