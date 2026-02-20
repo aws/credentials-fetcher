@@ -68,15 +68,17 @@ mkdir -p %{buildroot}/etc/
 cp ./opensource/bin/credentials-fetcherd %{buildroot}/usr/sbin/credentials-fetcher
 cp ./configuration/bin/credentials-fetcher.service %{buildroot}%{_unitdir}/
 
-# Copy config file to buildroot
+# Copy config files to buildroot
 cp ./configuration/conf/credentials-fetcher.conf %{buildroot}/etc/
+cp ./configuration/conf/krb5.conf %{buildroot}/etc/
 
 %clean
 rm -rf ${RPM_BUILD_ROOT}
 
 %files
 /usr/sbin/credentials-fetcher
-/etc/credentials-fetcher.conf
+%config(noreplace) /etc/credentials-fetcher.conf
+%config(noreplace) /etc/krb5.conf
 %{_unitdir}/credentials-fetcher.service
 %dir /var/credentials-fetcher
 %dir /var/credentials-fetcher/krbdir
