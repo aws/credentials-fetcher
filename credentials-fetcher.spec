@@ -78,15 +78,16 @@ cp ./scripts/credentials-fetcher-startup-order.sh %{buildroot}%{_libexec}/
 
 # Copy config files to buildroot
 cp ./configuration/conf/credentials-fetcher.conf %{buildroot}/etc/
-cp ./configuration/conf/krb5.conf %{buildroot}/etc/
+# Place krb5.conf in /usr/sbin to avoid conflict with system krb5-libs package
+cp ./configuration/conf/krb5.conf %{buildroot}/usr/sbin/krb5.conf
 
 %clean
 rm -rf ${RPM_BUILD_ROOT}
 
 %files
 /usr/sbin/credentials-fetcher
+/usr/sbin/krb5.conf
 %config(noreplace) /etc/credentials-fetcher.conf
-%config(noreplace) /etc/krb5.conf
 %{_unitdir}/credentials-fetcher.service
 %{_unitdir}/ecs.service.d/ecs-require-credentials-fetcher.conf
 %dir /var/credentials-fetcher
