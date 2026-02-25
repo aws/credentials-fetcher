@@ -300,6 +300,7 @@ sudo journalctl -u credentials-fetcher -f
 - Verify AD connectivity: `ldapsearch -H ldap://your-dc.contoso.com`
 - Check DNS resolution: `nslookup your-dc.contoso.com`
 - Validate credentials in AWS Secrets Manager
+- Review logs: `journalctl -u credentials-fetcher | grep -i ldap` (automatic retry with debug on failure)
 
 **Kerberos ticket issues:**
 - Check ticket cache: `klist -c /var/credentials-fetcher/krbdir/*/krb5cc_*`

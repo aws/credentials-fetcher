@@ -118,18 +118,34 @@ func TestBuildLdapsearchCommandWithFilter(t *testing.T) {
 		fqdn         string
 		searchFilter string
 		attributes   []string
+		enableDebug  bool
 		expectedCmd  string
 		expectedArgs []string
 	}{
 		{
-			name:         "Basic search",
+			name:         "Basic search without debug",
 			baseDN:       "DC=contoso,DC=com",
 			fqdn:         "contoso.com",
 			searchFilter: "(objectClass=msDS-GroupManagedServiceAccount)",
 			attributes:   []string{"msDS-ManagedPassword"},
+			enableDebug:  false,
 			expectedCmd:  "ldapsearch",
 			expectedArgs: []string{
-				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "5", "-H", "ldap://contoso.com",
+				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "5", "-v", "-H", "ldap://contoso.com",
+				"-b", "DC=contoso,DC=com", "-s", "sub", "(objectClass=msDS-GroupManagedServiceAccount)",
+				"msDS-ManagedPassword",
+			},
+		},
+		{
+			name:         "Basic search with debug",
+			baseDN:       "DC=contoso,DC=com",
+			fqdn:         "contoso.com",
+			searchFilter: "(objectClass=msDS-GroupManagedServiceAccount)",
+			attributes:   []string{"msDS-ManagedPassword"},
+			enableDebug:  true,
+			expectedCmd:  "ldapsearch",
+			expectedArgs: []string{
+				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "5", "-v", "-d", "1", "-H", "ldap://contoso.com",
 				"-b", "DC=contoso,DC=com", "-s", "sub", "(objectClass=msDS-GroupManagedServiceAccount)",
 				"msDS-ManagedPassword",
 			},
@@ -140,9 +156,10 @@ func TestBuildLdapsearchCommandWithFilter(t *testing.T) {
 			fqdn:         "contoso.com",
 			searchFilter: "(sAMAccountName=WebApp01$)",
 			attributes:   []string{"distinguishedName", "objectClass"},
+			enableDebug:  false,
 			expectedCmd:  "ldapsearch",
 			expectedArgs: []string{
-				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "5", "-H", "ldap://contoso.com",
+				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "5", "-v", "-H", "ldap://contoso.com",
 				"-b", "DC=contoso,DC=com", "-s", "sub", "(sAMAccountName=WebApp01$)",
 				"distinguishedName", "objectClass",
 			},
@@ -153,9 +170,10 @@ func TestBuildLdapsearchCommandWithFilter(t *testing.T) {
 			fqdn:         "contoso.com",
 			searchFilter: "(objectClass=*)",
 			attributes:   []string{},
+			enableDebug:  false,
 			expectedCmd:  "ldapsearch",
 			expectedArgs: []string{
-				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "5", "-H", "ldap://contoso.com",
+				"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "5", "-v", "-H", "ldap://contoso.com",
 				"-b", "DC=contoso,DC=com", "-s", "sub", "(objectClass=*)",
 			},
 		},
@@ -169,7 +187,7 @@ func TestBuildLdapsearchCommandWithFilter(t *testing.T) {
 			getLdapTimeoutFromConf = func() (string, error) { return "5", nil }
 
 			executor := NewDefaultLdapsearchExecutor()
-			cmd, args, _ := executor.BuildLdapsearchCommandWithFilter(tt.baseDN, tt.fqdn, tt.searchFilter, tt.attributes)
+			cmd, args, _ := executor.BuildLdapsearchCommandWithFilter(tt.baseDN, tt.fqdn, tt.searchFilter, tt.attributes, tt.enableDebug)
 
 			assert.Equal(t, tt.expectedCmd, cmd)
 			assert.Equal(t, tt.expectedArgs, args)
@@ -305,10 +323,10 @@ func TestLdapSearchBaseArgs_ContainsTimeout(t *testing.T) {
 	defer func() { getLdapTimeoutFromConf = originalGetLdapTimeoutFunc }()
 	getLdapTimeoutFromConf = func() (string, error) { return "5", nil }
 
-	// Verify that the base args contain the timeout parameter
-	expectedArgs := []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "5", "-H"}
+	// Verify that the base args contain the timeout parameter and -v flag
+	expectedArgs := []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", "5", "-v", "-H"}
 	args, _ := getLdapSearchBaseArgs()
-	assert.Equal(t, expectedArgs, args, "ldapSearchBaseArgs should contain timeout parameter -l 5")
+	assert.Equal(t, expectedArgs, args, "ldapSearchBaseArgs should contain timeout parameter -l 5 and -v flag")
 }
 
 func TestExecuteLdapsearchWithBaseArgsError_(t *testing.T) {
@@ -362,6 +380,7 @@ func TestLdapSearchBaseArgs_ContainsConfigTimeout(t *testing.T) {
 		"contoso.com",
 		"(objectClass=*)",
 		[]string{"cn"},
+		false,
 	)
 
 	// Check that the args contain the expected timeout
@@ -389,6 +408,7 @@ func TestBuildLdapsearchCommandWithFilter_IncludesTimeout(t *testing.T) {
 		"contoso.com",
 		"(objectClass=*)",
 		[]string{"cn"},
+		false,
 	)
 
 	assert.Equal(t, "ldapsearch", cmd)
@@ -396,8 +416,9 @@ func TestBuildLdapsearchCommandWithFilter_IncludesTimeout(t *testing.T) {
 	// Verify timeout parameters are present
 	assert.Contains(t, args, "-l", "Command should contain timeout flag -l")
 	assert.Contains(t, args, "5", "Command should contain timeout value 5")
+	assert.Contains(t, args, "-v", "Command should contain verbose flag -v")
 
-	// Verify the timeout parameters are in the correct position (after GSSAPI, before -H)
+	// Verify the timeout parameters are in the correct position (after GSSAPI, before -v)
 	lIndex := -1
 	timeoutIndex := -1
 	for i, arg := range args {
@@ -410,5 +431,5 @@ func TestBuildLdapsearchCommandWithFilter_IncludesTimeout(t *testing.T) {
 	}
 
 	assert.NotEqual(t, -1, lIndex, "Should find -l flag")
-	assert.NotEqual(t, -1, timeoutIndex, "Should find timeout value 2 immediately after -l flag")
+	assert.NotEqual(t, -1, timeoutIndex, "Should find timeout value immediately after -l flag")
 }
