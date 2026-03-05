@@ -3,11 +3,11 @@
 
 %global major_version 2
 %global minor_version 0
-%global patch_version 0
+%global patch_version 1
 
 Name: credentials-fetcher
 Version: %{major_version}.%{minor_version}.%{patch_version}
-Release: 2%{?dist}
+Release: 1%{?dist}
 License: Apache 2.0
 Summary: Credentials Fetcher Service is used to connect to Active Directory from Linux Instances
 URL: https://github.com/aws/credentials-fetcher
@@ -119,8 +119,8 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
-* Mon Feb 23 2026 Samiullah Mohammed <samiull@amazon.com> - 2.0.0-2
-- Fix syntax errors in this spec file
+* Mon Feb 23 2026 Samiullah Mohammed <samiull@amazon.com> - 2.0.1
+- Update ticket renewal logic to fetch username from secret
 
 * Fri Feb 13 2026 Wayne Galen <lewayne@amazon.com> - 2.0.0-1
 - Add startup ordering fixup script, to be called from userdata
