@@ -264,7 +264,9 @@ python renew_non_domain_joined_kerberos_lease.py
         "HostAccountConfig": {
             "PortableCcgVersion": "1",
             "PluginGUID": "{859E1386-BDB4-49E8-85C7-3070B13920E1}",
-            "PluginInput": "prod/ad-credentials"  // AWS Secrets Manager secret name
+            "PluginInput": {
+                "CredentialArn": "$gmsaSecretArn$" // AWS secret manager arn
+            }
         }
     }
 }
