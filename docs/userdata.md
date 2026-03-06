@@ -11,7 +11,7 @@ You can call this from your userdata as follows:
 /usr/libexec/credentials-fetcher-startup-order.sh
 ```
 
-After running this script, any time ~ecs.service~ is started in the future, ~credentials-fetcher.service~ is guaranteed to start first.
+After running this script, any time ecs.service is started in the future, credentials-fetcher.service is guaranteed to start first.
 
 # Removing the dependency
 
