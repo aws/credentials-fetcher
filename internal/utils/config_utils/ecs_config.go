@@ -163,6 +163,13 @@ func GetSecretNameFromConf() string {
 // GetLdapTimeoutFromConf retrieves the LDAP Search Timeout Interval value from from the credentials-fetcher.conf file
 func GetLdapTimeoutFromConf() (string, error) {
 	intervalStr := GetValueFromCredentialsFetcherConf("LDAPSearchTimeout")
+
+	// If not set in config, use default value of 5 seconds
+	if intervalStr == "" {
+		log.Debug("LDAPSearchTimeout not set in config, using default value", "default", "5")
+		intervalStr = "5"
+	}
+
 	interval, err := strconv.Atoi(intervalStr)
 	if err != nil {
 		log.Error("non-integer LDAPSearchTimeout value",

@@ -28,6 +28,7 @@ var getLdapTimeoutFromConf = config_utils.GetLdapTimeoutFromConf
 // -LLL: Enables LDIF output format with minimal additional information (no comments, no version)
 // -Y GSSAPI: Specifies SASL mechanism for authentication using Kerberos/GSSAPI
 // -l interval: Sets the time limit for the search operation to value in config file, or 5 seconds as a fallback
+// -v: Enables verbose mode for additional diagnostic information
 // -H: Indicates that the next argument will be the LDAP server URI (ldap://hostname)
 func getLdapSearchBaseArgs() ([]string, error) {
 	timeout, err := getLdapTimeoutFromConf()
@@ -35,7 +36,7 @@ func getLdapSearchBaseArgs() ([]string, error) {
 		log.Error("Failed to get LDAP timeout from config", "error", err)
 		return nil, err
 	}
-	return []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", timeout, "-H"}, nil
+	return []string{"-o", "ldif_wrap=no", "-LLL", "-Y", "GSSAPI", "-l", timeout, "-v", "-H"}, nil
 }
 
 type Client struct{}
@@ -60,7 +61,7 @@ func NewDefaultLdapsearchExecutor() *DefaultLdapsearchExecutor {
 }
 
 // BuildLdapsearchCommandWithFilter creates a custom ldapsearch command with the specified filter and attributes
-func (e *DefaultLdapsearchExecutor) BuildLdapsearchCommandWithFilter(baseDN, fqdn, searchFilter string, attributes []string) (string, []string, error) {
+func (e *DefaultLdapsearchExecutor) BuildLdapsearchCommandWithFilter(baseDN, fqdn, searchFilter string, attributes []string, enableDebug bool) (string, []string, error) {
 	log.Debug("LDAP search with custom filter", "filter", searchFilter, "base_dn", baseDN)
 
 	command := constants.LDAPSearchCommand
@@ -73,6 +74,12 @@ func (e *DefaultLdapsearchExecutor) BuildLdapsearchCommandWithFilter(baseDN, fqd
 	// Start with base arguments
 	args := make([]string, len(ldapSearchBaseArgs))
 	copy(args, ldapSearchBaseArgs)
+
+	// Add debug flag if this is a retry attempt
+	if enableDebug {
+		// Insert -d 1 before -H flag (which is the last element)
+		args = append(args[:len(args)-1], "-d", "1", args[len(args)-1])
+	}
 
 	// Add LDAP server URL
 	args = append(args, "ldap://"+fqdn)
@@ -91,8 +98,38 @@ func (e *DefaultLdapsearchExecutor) BuildLdapsearchCommandWithFilter(baseDN, fqd
 }
 
 // ExecuteLdapsearchWithFilter executes an ldapsearch with a custom filter and attributes
+// On failure, it automatically retries once with debug output enabled
 func (e *DefaultLdapsearchExecutor) ExecuteLdapsearchWithFilter(ctx context.Context, baseDN, fqdn, searchFilter string, attributes []string) ([]byte, error) {
-	command, args, err := e.BuildLdapsearchCommandWithFilter(baseDN, fqdn, searchFilter, attributes)
+	// First attempt without forced debug
+	output, err := e.executeLdapsearchAttempt(ctx, baseDN, fqdn, searchFilter, attributes, false)
+	if err == nil {
+		return output, nil
+	}
+
+	// Log that we're retrying with debug
+	log.Warn("LDAP search failed, retrying with debug output enabled",
+		"base_dn", baseDN,
+		"fqdn", fqdn,
+		"filter", searchFilter,
+		"error", err)
+
+	// Retry with debug enabled
+	output, retryErr := e.executeLdapsearchAttempt(ctx, baseDN, fqdn, searchFilter, attributes, true)
+	if retryErr != nil {
+		// Return the retry error (which will have debug output)
+		return nil, fmt.Errorf("ldapsearch failed after retry: %w", retryErr)
+	}
+
+	log.Info("LDAP search succeeded on retry",
+		"base_dn", baseDN,
+		"fqdn", fqdn)
+
+	return output, nil
+}
+
+// executeLdapsearchAttempt performs a single ldapsearch attempt
+func (e *DefaultLdapsearchExecutor) executeLdapsearchAttempt(ctx context.Context, baseDN, fqdn, searchFilter string, attributes []string, enableDebug bool) ([]byte, error) {
+	command, args, err := e.BuildLdapsearchCommandWithFilter(baseDN, fqdn, searchFilter, attributes, enableDebug)
 	if err != nil {
 		log.Error("Failed to build ldapsearch command", "error", err)
 		return nil, err
@@ -100,7 +137,11 @@ func (e *DefaultLdapsearchExecutor) ExecuteLdapsearchWithFilter(ctx context.Cont
 	timeout, _ := getLdapTimeoutFromConf()
 
 	cmdString := e.shellExecutor.BuildCommand(command, args...)
-	log.Debug("Executing custom ldapsearch command", "command", cmdString)
+	if enableDebug {
+		log.Info("Executing ldapsearch with debug output (-d 1)", "command", cmdString)
+	} else {
+		log.Debug("Executing custom ldapsearch command", "command", cmdString)
+	}
 
 	// Log the current KRB5CCNAME for debugging GSSAPI authentication issues
 	currentKrb5CCName := os.Getenv("KRB5CCNAME")
@@ -118,22 +159,31 @@ func (e *DefaultLdapsearchExecutor) ExecuteLdapsearchWithFilter(ctx context.Cont
 			strings.Contains(outputStr, "time limit exceeded") ||
 			strings.Contains(errorStr, "timeout") ||
 			strings.Contains(outputStr, "timeout") {
-			log.Warn("LDAP search timed out after "+timeout+"seconds",
+			log.Warn("LDAP search timed out after "+timeout+" seconds",
 				"base_dn", baseDN,
 				"fqdn", fqdn,
 				"filter", searchFilter,
-				"error", err)
+				"timeout", timeout,
+				"error", err,
+				"output", string(output))
 		} else {
-			log.Error("Custom ldapsearch failed",
+			logLevel := "Error"
+			if enableDebug {
+				logLevel = "Error (with debug)"
+			}
+			log.Error("Custom ldapsearch failed - "+logLevel,
 				"error", err,
 				"output", string(output),
 				"base_dn", baseDN,
 				"fqdn", fqdn,
-				"filter", searchFilter)
+				"filter", searchFilter,
+				"command", cmdString,
+				"KRB5CCNAME", currentKrb5CCName,
+				"debug_enabled", enableDebug)
 		}
 		return nil, fmt.Errorf("custom ldapsearch failed: %w: %s", err, string(output))
 	}
-	log.Debug("Custom ldapsearch completed successfully", "output_size", len(output))
+	log.Debug("Custom ldapsearch completed successfully", "output_size", len(output), "command", cmdString)
 
 	return output, nil
 }

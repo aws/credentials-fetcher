@@ -482,10 +482,10 @@ SomeOtherKey = "some value"
 		// Set the path to our test file
 		credentialsFetcherConfPath = configPath
 
-		// Test retrieving non-existent timeout value
+		// Test retrieving non-existent timeout value - should return default of "5"
 		timeout, err := GetLdapTimeoutFromConf()
-		assert.Error(t, err)
-		assert.Empty(t, timeout)
+		assert.NoError(t, err)
+		assert.Equal(t, "5", timeout)
 	})
 
 	t.Run("Timeout variable exists and is malformed", func(t *testing.T) {

@@ -98,30 +98,23 @@ func CleanupKerberosFilesWithFS(fs FileSystem, krbFilePath string) error {
 	// Get the service account directory (parent of krb5cc file)
 	serviceAccountDir := filepath.Dir(krbFilePath)
 
-	// Check if service account directory exists and is empty
+	// Check if service account directory exists
 	if _, err := fs.Stat(serviceAccountDir); err == nil {
-		entries, err := fs.ReadDir(serviceAccountDir)
-		if err != nil {
-			log.Warn("Failed to read service account directory", "path", serviceAccountDir, "error", err)
-		} else if len(entries) == 0 {
-			// Service account directory exists and is empty, remove it
-			if err := fs.Remove(serviceAccountDir); err != nil {
-				log.Warn("Failed to remove empty service account directory", "path", serviceAccountDir, "error", err)
-			} else {
-				log.Info("Removed empty service account directory", "path", serviceAccountDir)
-
-				// Get the lease ID directory (parent of service account directory)
-				leaseDir := filepath.Dir(serviceAccountDir)
-
-				// Remove the lease ID directory and all its contents
-				if err := fs.RemoveAll(leaseDir); err != nil {
-					log.Warn("Failed to remove lease directory", "path", leaseDir, "error", err)
-				} else {
-					log.Info("Removed lease directory", "path", leaseDir)
-				}
-			}
+		// Service account directory exists, remove it and all contents
+		if err := fs.RemoveAll(serviceAccountDir); err != nil {
+			log.Warn("Failed to remove service account directory", "path", serviceAccountDir, "error", err)
 		} else {
-			log.Info("Service account directory is not empty, skipping removal", "path", serviceAccountDir)
+			log.Info("Removed service account directory", "path", serviceAccountDir)
+
+			// Get the lease ID directory (parent of service account directory)
+			leaseDir := filepath.Dir(serviceAccountDir)
+
+			// Remove the lease ID directory and all its contents
+			if err := fs.RemoveAll(leaseDir); err != nil {
+				log.Warn("Failed to remove lease directory", "path", leaseDir, "error", err)
+			} else {
+				log.Info("Removed lease directory", "path", leaseDir)
+			}
 		}
 	} else if os.IsNotExist(err) {
 		log.Info("Service account directory does not exist", "path", serviceAccountDir)
