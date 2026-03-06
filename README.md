@@ -83,9 +83,11 @@ sudo make cf-install
 ```
 
 This installs:
-- Binary to `/usr/sbin/credentials-fetcherd`
+- Binary to `/usr/sbin/credentials-fetcher`
 - Service file to `/usr/lib/systemd/system/credentials-fetcher.service`
 - Config to `/etc/credentials-fetcher.conf`
+
+Please note the name of the binary is updated to `credentials-fetcher`
 
 ## Installation
 
