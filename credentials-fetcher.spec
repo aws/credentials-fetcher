@@ -68,7 +68,7 @@ mkdir -p %{buildroot}/etc/
 mkdir -p %{buildroot}%{_libexec}
 
 # Copy binary and service file to buildroot
-cp ./opensource/bin/credentials-fetcherd %{buildroot}/usr/sbin/credentials-fetcher
+cp ./bin/credentials-fetcherd %{buildroot}/usr/sbin/credentials-fetcher
 cp ./configuration/bin/credentials-fetcher.service %{buildroot}%{_unitdir}/
 cp ./configuration/bin/ecs-require-credentials-fetcher.conf %{buildroot}%{_unitdir}/ecs.service.d/
 
