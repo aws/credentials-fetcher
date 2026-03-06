@@ -1,7 +1,0 @@
-{
-  "alias": "golang.a2z.com/CredentialsFetcherV2",
-  "modules_enabled": true,
-  "environment": {
-    "BGO_COVER_FILTER_REPORT": "1"
-  }
-}
