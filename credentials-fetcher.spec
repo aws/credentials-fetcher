@@ -55,7 +55,6 @@ This is the Golang refactor of the original credentials-fetcher.
 
 %build
 # Build using the opensource Makefile
-cd opensource
 make build VERSION=%{version}
 
 %install
