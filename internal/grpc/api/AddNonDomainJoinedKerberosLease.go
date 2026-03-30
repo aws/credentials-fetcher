@@ -190,12 +190,14 @@ func (h *NonDomainJoinedKerberosHandler) CreateKerberosTickets(ctx context.Conte
 
 	for _, ticketInfo := range ticketInfoList {
 		krbFilePath, err := h.SetupKerberosFileForTicket(ticketInfo)
+		if err == nil {
+			err = simulateDebugError(SimulateSetupKerberosFile)
+		}
 		if err != nil {
-			// Clean up any created files on error
 			for _, path := range createdKrbFilePaths {
-				err := h.CleanupKerberosFiles(path)
-				if err != nil {
-					return nil, err
+				if cleanupErr := h.CleanupKerberosFiles(path); cleanupErr != nil {
+					log.Error("Failed to clean up Kerberos files during error handling",
+						"path", path, "error", cleanupErr)
 				}
 			}
 			return nil, err
@@ -203,19 +205,22 @@ func (h *NonDomainJoinedKerberosHandler) CreateKerberosTickets(ctx context.Conte
 
 		// Get distinguished name
 		distinguishedName, err := h.GetDistinguishedName(ticketInfo)
+		if err == nil {
+			err = simulateDebugError(SimulateGetDistinguishedName)
+		}
 		if err != nil {
-			// Clean up any created files on error
-			err := h.CleanupKerberosFiles(krbFilePath)
-			if err != nil {
-				return nil, err
+			if cleanupErr := h.CleanupKerberosFiles(krbFilePath); cleanupErr != nil {
+				log.Error("Failed to clean up Kerberos files during error handling",
+					"path", krbFilePath, "error", cleanupErr)
 			}
 			for _, path := range createdKrbFilePaths {
-				err := h.CleanupKerberosFiles(path)
-				if err != nil {
-					return nil, err
+				if cleanupErr := h.CleanupKerberosFiles(path); cleanupErr != nil {
+					log.Error("Failed to clean up Kerberos files during error handling",
+						"path", path, "error", cleanupErr)
 				}
 			}
-			return nil, err
+			return nil, fmt.Errorf("failed to get distinguished name for service account %s: %v",
+				ticketInfo.ServiceAccountName, err)
 		}
 
 		// Update ticketInfo with the distinguished name
@@ -224,17 +229,19 @@ func (h *NonDomainJoinedKerberosHandler) CreateKerberosTickets(ctx context.Conte
 
 		// Create krb ticket for this gmsa account using the ticketInfo
 		err = h.krbClient.CreateTicketForGMSA(ticketInfo)
+		if err == nil {
+			err = simulateDebugError(SimulateCreateTicketGMSA)
+		}
 		if err != nil {
 			log.Error("Failed to create Kerberos ticket for gMSA account", "error", err)
-			// Clean up Kerberos files if there's an error
-			err := h.CleanupKerberosFiles(krbFilePath)
-			if err != nil {
-				return nil, err
+			if cleanupErr := h.CleanupKerberosFiles(krbFilePath); cleanupErr != nil {
+				log.Error("Failed to clean up Kerberos files during error handling",
+					"path", krbFilePath, "error", cleanupErr)
 			}
 			for _, path := range createdKrbFilePaths {
-				err := h.CleanupKerberosFiles(path)
-				if err != nil {
-					return nil, err
+				if cleanupErr := h.CleanupKerberosFiles(path); cleanupErr != nil {
+					log.Error("Failed to clean up Kerberos files during error handling",
+						"path", path, "error", cleanupErr)
 				}
 			}
 			return nil, fmt.Errorf("failed to create Kerberos ticket for gMSA account: %v", err)

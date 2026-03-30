@@ -156,12 +156,14 @@ func (h *DomainJoinedKerberosLeaseHandler) CreateKerberosTickets(ctx context.Con
 
 		// Now proceed with creating tickets for each gMSA account
 		krbFilePath, err := h.SetupKerberosFileForTicket(ticketInfo)
+		if err == nil {
+			err = simulateDebugError(SimulateSetupKerberosFile)
+		}
 		if err != nil {
-			// Clean up any created files on error
 			for _, path := range createdKrbFilePaths {
-				err := h.CleanupKerberosFiles(path) // #nosec G104
-				if err != nil {
-					return nil, err
+				if cleanupErr := h.CleanupKerberosFiles(path); cleanupErr != nil {
+					log.Error("Failed to clean up Kerberos files during error handling",
+						"path", path, "error", cleanupErr)
 				}
 			}
 			return nil, err
@@ -169,17 +171,20 @@ func (h *DomainJoinedKerberosLeaseHandler) CreateKerberosTickets(ctx context.Con
 
 		// Create krb ticket for this gmsa account using the ticketInfo
 		err = h.CreateTicketForGMSA(ctx, ticketInfo)
+		if err == nil {
+			err = simulateDebugError(SimulateCreateTicketGMSA)
+		}
 		if err != nil {
-			log.Error("Failed to create Kerberos ticket for gMSA account", "error", err)
-			// Clean up Kerberos files if there's an error
-			err := h.CleanupKerberosFiles(krbFilePath) // #nosec G104
-			if err != nil {
-				return nil, err
+			log.Error("Failed to create Kerberos ticket for gMSA account",
+				"service_account", ticketInfo.ServiceAccountName, "error", err)
+			if cleanupErr := h.CleanupKerberosFiles(krbFilePath); cleanupErr != nil {
+				log.Error("Failed to clean up Kerberos files during error handling",
+					"path", krbFilePath, "error", cleanupErr)
 			}
 			for _, path := range createdKrbFilePaths {
-				err := h.CleanupKerberosFiles(path) // #nosec G104
-				if err != nil {
-					return nil, err
+				if cleanupErr := h.CleanupKerberosFiles(path); cleanupErr != nil {
+					log.Error("Failed to clean up Kerberos files during error handling",
+						"path", path, "error", cleanupErr)
 				}
 			}
 			return nil, fmt.Errorf("failed to create Kerberos ticket for gMSA account: %v", err)

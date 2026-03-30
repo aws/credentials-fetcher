@@ -89,10 +89,10 @@ func ProcessCredentialSpecs(credspecContents []string, username, leaseID string,
 func CleanupKerberosFilesWithFS(fs FileSystem, krbFilePath string) error {
 	log.Info("Cleaning up Kerberos files", "path", krbFilePath)
 
-	// First remove the krb5cc file
-	if err := fs.Remove(krbFilePath); err != nil && !os.IsNotExist(err) {
-		log.Error("Failed to remove Kerberos file", "path", krbFilePath, "error", err)
-		return fmt.Errorf("failed to remove Kerberos file: %v", err)
+	// Remove the file or directory (use RemoveAll to handle non-empty directories)
+	if err := fs.RemoveAll(krbFilePath); err != nil && !os.IsNotExist(err) {
+		log.Error("Failed to remove Kerberos path", "path", krbFilePath, "error", err)
+		return fmt.Errorf("failed to remove Kerberos path: %v", err)
 	}
 
 	// Get the service account directory (parent of krb5cc file)
