@@ -1,10 +1,12 @@
-package api
+package debug_utils
 
 import (
 	"fmt"
 	"os"
 	"strings"
 	"sync/atomic"
+
+	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 )
 
 // Debug error injection simulation targets.
@@ -18,14 +20,14 @@ const (
 	maxDebugErrorSimulations = 3
 )
 
-// debugErrorCount tracks how many times simulateDebugError has been invoked.
+// debugErrorCount tracks how many times SimulateDebugError has been invoked.
 var debugErrorCount atomic.Int32
 
-// simulateDebugError returns a simulated error when debug error injection is
+// SimulateDebugError returns a simulated error when debug error injection is
 // enabled for the given operation. It requires both LOG_LEVEL=debug and
 // CF_DEBUG_SIMULATE_ERROR=<operation> to be set. Returns nil after being
 // invoked more than 3 times to prevent infinite error loops.
-func simulateDebugError(operation string) error {
+func SimulateDebugError(operation string) error {
 	if os.Getenv("LOG_LEVEL") != "debug" {
 		return nil
 	}
@@ -34,6 +36,8 @@ func simulateDebugError(operation string) error {
 	if target == "" || target != operation {
 		return nil
 	}
+
+	log := logger.GetInstance()
 
 	if debugErrorCount.Add(1) > maxDebugErrorSimulations {
 		log.Warn("DEBUG ERROR INJECTION: invocation limit reached, skipping",
@@ -46,7 +50,7 @@ func simulateDebugError(operation string) error {
 	return fmt.Errorf("simulated debug error in %s", operation)
 }
 
-// resetDebugErrorCount resets the invocation counter (for testing).
-func resetDebugErrorCount() {
+// ResetDebugErrorCount resets the invocation counter (for testing).
+func ResetDebugErrorCount() {
 	debugErrorCount.Store(0)
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/config_utils"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/debug_utils"
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
@@ -33,7 +34,7 @@ type KerberosTicketOperations interface {
 	SetupKerberosFileForTicket(ticketInfo *types.TicketInfo) (string, error)
 
 	// GetDistinguishedName gets the distinguished name from ECS config or secrets manager
-	GetDistinguishedName(ticketInfo *types.TicketInfo) (string, error)
+	GetDistinguishedName(ticketInfo *types.TicketInfo) string
 
 	// CreateKerberosTickets creates Kerberos tickets for each ticket info
 	CreateKerberosTickets(ctx context.Context, domain, username, password string, ticketInfoList []*types.TicketInfo) ([]string, error)
@@ -191,7 +192,7 @@ func (h *NonDomainJoinedKerberosHandler) CreateKerberosTickets(ctx context.Conte
 	for _, ticketInfo := range ticketInfoList {
 		krbFilePath, err := h.SetupKerberosFileForTicket(ticketInfo)
 		if err == nil {
-			err = simulateDebugError(SimulateSetupKerberosFile)
+			err = debug_utils.SimulateDebugError(debug_utils.SimulateSetupKerberosFile)
 		}
 		if err != nil {
 			for _, path := range createdKrbFilePaths {
@@ -203,24 +204,12 @@ func (h *NonDomainJoinedKerberosHandler) CreateKerberosTickets(ctx context.Conte
 			return nil, err
 		}
 
-		// Get distinguished name
-		distinguishedName, err := h.GetDistinguishedName(ticketInfo)
-		if err == nil {
-			err = simulateDebugError(SimulateGetDistinguishedName)
-		}
-		if err != nil {
-			if cleanupErr := h.CleanupKerberosFiles(krbFilePath); cleanupErr != nil {
-				log.Error("Failed to clean up Kerberos files during error handling",
-					"path", krbFilePath, "error", cleanupErr)
-			}
-			for _, path := range createdKrbFilePaths {
-				if cleanupErr := h.CleanupKerberosFiles(path); cleanupErr != nil {
-					log.Error("Failed to clean up Kerberos files during error handling",
-						"path", path, "error", cleanupErr)
-				}
-			}
-			return nil, fmt.Errorf("failed to get distinguished name for service account %s: %v",
-				ticketInfo.ServiceAccountName, err)
+		// Get distinguished name (non-fatal: empty string is acceptable,
+		// downstream LDAP lookup in CreateTicketForGMSA will resolve it)
+		distinguishedName := h.GetDistinguishedName(ticketInfo)
+		if distinguishedName == "" {
+			log.Warn("Distinguished name lookup returned empty, will rely on downstream LDAP resolution",
+				"service_account", ticketInfo.ServiceAccountName)
 		}
 
 		// Update ticketInfo with the distinguished name
@@ -230,7 +219,7 @@ func (h *NonDomainJoinedKerberosHandler) CreateKerberosTickets(ctx context.Conte
 		// Create krb ticket for this gmsa account using the ticketInfo
 		err = h.krbClient.CreateTicketForGMSA(ticketInfo)
 		if err == nil {
-			err = simulateDebugError(SimulateCreateTicketGMSA)
+			err = debug_utils.SimulateDebugError(debug_utils.SimulateCreateTicketGMSA)
 		}
 		if err != nil {
 			log.Error("Failed to create Kerberos ticket for gMSA account", "error", err)
@@ -293,32 +282,34 @@ func (h *NonDomainJoinedKerberosHandler) SetupKerberosFileForTicket(ticketInfo *
 	return krbDirectoryPath, nil
 }
 
-// GetDistinguishedName gets the distinguished name from ECS config or secrets manager
-func (h *NonDomainJoinedKerberosHandler) GetDistinguishedName(ticketInfo *types.TicketInfo) (string, error) {
+// GetDistinguishedName attempts to retrieve the distinguished name from ECS config
+// or secrets manager. It never returns an error — when both sources fail it returns
+// an empty string, allowing downstream code (ensureDistinguishedName in krb_client)
+// to resolve it via LDAP.
+func (h *NonDomainJoinedKerberosHandler) GetDistinguishedName(ticketInfo *types.TicketInfo) string {
 	// Get distinguished name from ECS config
-	distinguishedName, err := config_utils.RetrieveVariableFromECSConfig(constants.EnvCFDistinguishedName)
-	if err != nil {
-		log.Error("Failed to retrieve distinguished name from ECS config", "error", err)
-		return "", fmt.Errorf("failed to retrieve distinguished name from ECS config: %v", err)
+	distinguishedName, ecsErr := config_utils.RetrieveVariableFromECSConfig(constants.EnvCFDistinguishedName)
+	if ecsErr != nil {
+		log.Warn("Could not retrieve distinguished name from ECS config, will try other sources", "error", ecsErr)
+		distinguishedName = ""
 	}
 
 	if distinguishedName == "" {
 		// Get distinguished name from secrets manager if not found in ECS config
-		secretDn, err := grpc_utils.GetBaseDnFromSecret(ticketInfo.CredentialArn)
-		if err != nil {
-			log.Error("Failed to get distinguished name from secret", "error", err)
-			return "", fmt.Errorf("failed to get distinguished name from secret: %v", err)
-		}
-
-		if secretDn != "" {
+		secretDn, secretErr := grpc_utils.GetBaseDnFromSecret(ticketInfo.CredentialArn)
+		if secretErr != nil {
+			log.Warn("Could not get distinguished name from secret", "error", secretErr)
+		} else if secretDn != "" {
 			distinguishedName = secretDn
 			log.Info("Retrieved distinguished name from secrets manager", "distinguished_name", distinguishedName)
-		} else {
-			log.Warn("Distinguished name not found in ECS config or secrets manager")
 		}
 	}
 
-	return distinguishedName, nil
+	if distinguishedName == "" {
+		log.Warn("Distinguished name not found in ECS config or secrets manager, downstream LDAP lookup will be attempted")
+	}
+
+	return distinguishedName
 }
 
 // CleanupKerberosFiles removes the Kerberos files if there's an error

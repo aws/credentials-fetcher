@@ -85,6 +85,7 @@ cp ./configuration/conf/krb5.conf %{buildroot}/usr/sbin/krb5.conf
 rm -rf ${RPM_BUILD_ROOT}
 
 %files
+%license LICENSE.txt
 /usr/sbin/credentials-fetcher
 /usr/sbin/krb5.conf
 %config(noreplace) /etc/credentials-fetcher.conf

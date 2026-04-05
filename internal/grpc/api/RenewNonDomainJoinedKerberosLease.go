@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/aws_utils"
+
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
@@ -30,9 +32,33 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 		grpc_utils.SecureClearString(&req.Password)
 	}()
 
-	// Validate request
-	if err := h.ValidateCredentials(req.Username, req.Password, req.Domain); err != nil {
+	// Parse blue/green username rotation format ("oldUser:newUser").
+	// When usernames are rotated in AWS Secrets Manager, the caller supplies
+	// the old and new usernames separated by ':' so we can match existing
+	// tickets (by the old name) and recreate them with the new credentials.
+	matchUsername, activeUsername, isRotation := grpc_utils.ParseBlueGreenUsername(req.Username)
+	if isRotation {
+		if matchUsername == "" || activeUsername == "" {
+			return nil, fmt.Errorf("blue/green rotation format requires both old and new usernames (\"oldUser:newUser\")")
+		}
+		if matchUsername == activeUsername {
+			// Same username on both sides — treat as a normal renewal.
+			isRotation = false
+		} else {
+			log.Info("Blue/green username rotation detected",
+				"match_username", matchUsername, "active_username", activeUsername)
+		}
+	}
+
+	// Validate each username part individually (the raw "old:new" string
+	// would fail ValidateAccountName because ':' is invalid in AD usernames)
+	if err := h.ValidateCredentials(activeUsername, req.Password, req.Domain); err != nil {
 		return nil, err
+	}
+	if isRotation {
+		if err := grpc_utils.ValidateAccountName(matchUsername); err != nil {
+			return nil, fmt.Errorf("invalid old username: %v", err)
+		}
 	}
 
 	// Get all metadata files from the Kerberos files directory
@@ -50,6 +76,14 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 	var renewedKrbFilePaths []string
 	var ticketsToRecreate []*types.TicketInfo
 
+	// Pending metadata updates for rotation — written only after successful
+	// ticket recreation to avoid inconsistent state on failure.
+	type pendingMetadataUpdate struct {
+		path           string
+		ticketInfoList []*types.TicketInfo
+	}
+	var pendingUpdates []pendingMetadataUpdate
+
 	// Process each metadata file
 	for _, metadataPath := range metadataFiles {
 		// Read ticket info from metadata file
@@ -59,11 +93,10 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 			continue // Skip this file and try the next one
 		}
 
-		// Filter ticket infos that match the provided username
+		// Filter ticket infos that match the provided (or old/blue) username
 		var matchingTicketInfos []*types.TicketInfo
 		for _, ticketInfo := range ticketInfoList {
-			// First, try direct match with DomainlessUser
-			if ticketInfo.DomainlessUser == req.Username {
+			if ticketInfo.DomainlessUser == matchUsername {
 				matchingTicketInfos = append(matchingTicketInfos, ticketInfo)
 				continue
 			}
@@ -82,8 +115,7 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 					continue
 				}
 
-				// Check if the extracted username matches the request username
-				if username == req.Username {
+				if username == matchUsername || (isRotation && username == activeUsername) {
 					matchingTicketInfos = append(matchingTicketInfos, ticketInfo)
 					log.Info("Matched ticket via CredentialArn username", "username", username, "arn", ticketInfo.CredentialArn)
 				}
@@ -91,21 +123,38 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 		}
 
 		if len(matchingTicketInfos) == 0 {
-			log.Info("No matching tickets found for user", "username", req.Username, "metadata_path", metadataPath)
+			log.Info("No matching tickets found for user",
+				"match_username", matchUsername, "metadata_path", metadataPath)
 			continue // Skip to next metadata file
 		}
 
-		// First try to renew each matching ticket directly using krbClient.RenewKerberosTicket
-		for _, ticketInfo := range matchingTicketInfos {
-			err = h.krbClient.RenewKerberosTicket(ctx, ticketInfo.KrbFilePath)
-			if err == nil {
-				// Successfully renewed the ticket
-				renewedKrbFilePaths = append(renewedKrbFilePaths, ticketInfo.KrbFilePath)
-				log.Info("Successfully renewed Kerberos ticket directly", "path", ticketInfo.KrbFilePath)
-			} else {
-				log.Warn("Direct renewal failed, will recreate the ticket", "error", err, "path", ticketInfo.KrbFilePath)
-				// Add to list of tickets that need recreation
+		// When rotating usernames, all matched tickets must be recreated with
+		// the new (green) credentials — direct kinit renewal won't work because
+		// the TGT belongs to the old user principal.
+		if isRotation {
+			for _, ticketInfo := range matchingTicketInfos {
+				// Update DomainlessUser to the new (green) username so that
+				// subsequent renewals and metadata lookups use the new name.
+				ticketInfo.DomainlessUser = activeUsername
 				ticketsToRecreate = append(ticketsToRecreate, ticketInfo)
+			}
+			// Queue metadata write — deferred until after successful ticket recreation
+			// to avoid inconsistent state if CreateKerberosTickets fails.
+			pendingUpdates = append(pendingUpdates, pendingMetadataUpdate{metadataPath, ticketInfoList})
+			log.Info("Username rotation: all matching tickets queued for recreation",
+				"count", len(matchingTicketInfos))
+		} else {
+			// Normal (non-rotation) path: try direct renewal first
+			for _, ticketInfo := range matchingTicketInfos {
+				err = h.krbClient.RenewKerberosTicket(ctx, ticketInfo.KrbFilePath)
+				if err == nil {
+					renewedKrbFilePaths = append(renewedKrbFilePaths, ticketInfo.KrbFilePath)
+					log.Info("Successfully renewed Kerberos ticket directly", "path", ticketInfo.KrbFilePath)
+				} else {
+					log.Warn("Direct renewal failed, will recreate the ticket",
+						"error", err, "path", ticketInfo.KrbFilePath)
+					ticketsToRecreate = append(ticketsToRecreate, ticketInfo)
+				}
 			}
 		}
 	}
@@ -114,8 +163,8 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 	if len(ticketsToRecreate) > 0 {
 		log.Info("Attempting to recreate tickets that couldn't be renewed directly", "count", len(ticketsToRecreate))
 
-		// Use CreateKerberosTickets to recreate the tickets
-		recreatedPaths, err := h.CreateKerberosTickets(ctx, req.Domain, req.Username, req.Password, ticketsToRecreate)
+		// Use the active (green) username for ticket creation
+		recreatedPaths, err := h.CreateKerberosTickets(ctx, req.Domain, activeUsername, req.Password, ticketsToRecreate)
 		if err != nil {
 			log.Error("Failed to recreate Kerberos tickets", "error", err)
 			// If we have some successfully renewed tickets, return those
@@ -131,6 +180,26 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 		// Add recreated paths to renewed paths
 		renewedKrbFilePaths = append(renewedKrbFilePaths, recreatedPaths...)
 		log.Info("Successfully recreated Kerberos tickets", "count", len(recreatedPaths))
+
+		// Persist rotation metadata only after tickets were successfully recreated.
+		// This ensures on-disk metadata stays consistent with actual ticket state.
+		// Attempt all writes and collect errors so the caller gets an accurate
+		// picture (some metadata files may have been updated successfully).
+		var metadataErrors []string
+		for _, pu := range pendingUpdates {
+			if err := metadata_utils.UpdateMetadataJSON(pu.path, pu.ticketInfoList); err != nil {
+				metadataErrors = append(metadataErrors, fmt.Sprintf("%s: %v", pu.path, err))
+				log.Error("Failed to persist username rotation to metadata", "path", pu.path, "error", err)
+			}
+		}
+		if len(metadataErrors) > 0 {
+			// Return the successfully renewed paths alongside the error
+			// so the caller knows which tickets were actually recreated.
+			return &pb.RenewNonDomainJoinedKerberosLeaseResponse{
+					RenewedKerberosFilePaths: renewedKrbFilePaths,
+				}, fmt.Errorf("metadata persistence failed for %d file(s): %s",
+					len(metadataErrors), strings.Join(metadataErrors, "; "))
+		}
 	}
 
 	if len(renewedKrbFilePaths) == 0 {

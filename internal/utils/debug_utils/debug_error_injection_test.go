@@ -1,4 +1,4 @@
-package api
+package debug_utils
 
 import (
 	"os"
@@ -88,7 +88,7 @@ func TestSimulateDebugError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resetDebugErrorCount()
+			ResetDebugErrorCount()
 
 			origLogLevel := os.Getenv("LOG_LEVEL")
 			origSimTarget := os.Getenv(envDebugSimulateError)
@@ -108,7 +108,7 @@ func TestSimulateDebugError(t *testing.T) {
 				require.NoError(t, os.Unsetenv(envDebugSimulateError))
 			}
 
-			err := simulateDebugError(tt.operation)
+			err := SimulateDebugError(tt.operation)
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedMsg)
@@ -120,7 +120,7 @@ func TestSimulateDebugError(t *testing.T) {
 }
 
 func TestSimulateDebugError_InvocationLimit(t *testing.T) {
-	resetDebugErrorCount()
+	ResetDebugErrorCount()
 
 	origLogLevel := os.Getenv("LOG_LEVEL")
 	origSimTarget := os.Getenv(envDebugSimulateError)
@@ -133,18 +133,18 @@ func TestSimulateDebugError_InvocationLimit(t *testing.T) {
 	require.NoError(t, os.Setenv(envDebugSimulateError, SimulateCreateTicketGMSA))
 
 	for i := 1; i <= maxDebugErrorSimulations; i++ {
-		err := simulateDebugError(SimulateCreateTicketGMSA)
+		err := SimulateDebugError(SimulateCreateTicketGMSA)
 		assert.Error(t, err, "invocation %d should return error", i)
 	}
 
 	for i := 1; i <= 3; i++ {
-		err := simulateDebugError(SimulateCreateTicketGMSA)
+		err := SimulateDebugError(SimulateCreateTicketGMSA)
 		assert.NoError(t, err, "invocation %d past limit should return nil", maxDebugErrorSimulations+i)
 	}
 }
 
 func TestResetDebugErrorCount(t *testing.T) {
-	resetDebugErrorCount()
+	ResetDebugErrorCount()
 
 	origLogLevel := os.Getenv("LOG_LEVEL")
 	origSimTarget := os.Getenv(envDebugSimulateError)
@@ -157,14 +157,14 @@ func TestResetDebugErrorCount(t *testing.T) {
 	require.NoError(t, os.Setenv(envDebugSimulateError, SimulateSetupKerberosFile))
 
 	for i := 0; i < maxDebugErrorSimulations; i++ {
-		err := simulateDebugError(SimulateSetupKerberosFile)
+		err := SimulateDebugError(SimulateSetupKerberosFile)
 		assert.Error(t, err)
 	}
-	err := simulateDebugError(SimulateSetupKerberosFile)
+	err := SimulateDebugError(SimulateSetupKerberosFile)
 	assert.NoError(t, err, "should stop after limit")
 
-	resetDebugErrorCount()
+	ResetDebugErrorCount()
 
-	err = simulateDebugError(SimulateSetupKerberosFile)
+	err = SimulateDebugError(SimulateSetupKerberosFile)
 	assert.Error(t, err, "should simulate again after reset")
 }

@@ -622,6 +622,68 @@ _ldap._tcp.dc._msdcs.example.com  service = 0 100 389 dc2.example.com`,
 	}
 }
 
+func TestParseBlueGreenUsername(t *testing.T) {
+	tests := []struct {
+		name           string
+		raw            string
+		wantMatch      string
+		wantActive     string
+		wantIsRotation bool
+	}{
+		{
+			name:           "Normal username (no rotation)",
+			raw:            "standarduser",
+			wantMatch:      "standarduser",
+			wantActive:     "standarduser",
+			wantIsRotation: false,
+		},
+		{
+			name:           "Blue/green rotation",
+			raw:            "olduser:newuser",
+			wantMatch:      "olduser",
+			wantActive:     "newuser",
+			wantIsRotation: true,
+		},
+		{
+			name:           "Empty old username",
+			raw:            ":newuser",
+			wantMatch:      "",
+			wantActive:     "newuser",
+			wantIsRotation: true,
+		},
+		{
+			name:           "Empty new username",
+			raw:            "olduser:",
+			wantMatch:      "olduser",
+			wantActive:     "",
+			wantIsRotation: true,
+		},
+		{
+			name:           "Multiple colons (only first split)",
+			raw:            "old:new:extra",
+			wantMatch:      "old",
+			wantActive:     "new:extra",
+			wantIsRotation: true,
+		},
+		{
+			name:           "Empty string",
+			raw:            "",
+			wantMatch:      "",
+			wantActive:     "",
+			wantIsRotation: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matchUser, activeUser, isRotation := ParseBlueGreenUsername(tt.raw)
+			assert.Equal(t, tt.wantMatch, matchUser, "matchUsername mismatch")
+			assert.Equal(t, tt.wantActive, activeUser, "activeUsername mismatch")
+			assert.Equal(t, tt.wantIsRotation, isRotation, "isRotation mismatch")
+		})
+	}
+}
+
 func TestSecureClearString(t *testing.T) {
 	// Test with a non-empty string
 	sensitiveData := "sensitive-password"

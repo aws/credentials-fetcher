@@ -491,6 +491,30 @@ func ParseCredSpecDomainless(credspecData string, krbTicketInfo *types.TicketInf
 	return nil
 }
 
+// ParseBlueGreenUsername parses a username that may contain a blue/green rotation
+// separator (':').  Active Directory forbids ':' in usernames, so the format
+// "oldUser:newUser" is unambiguous.
+//
+// This is used during credential rotation when usernames are changed in
+// AWS Secrets Manager. The caller supplies "oldUser:newUser" so that the
+// service can match existing tickets by the old (blue) username and then
+// recreate them with the new (green) username and password.
+//
+// Returns:
+//   - matchUsername: the username to match existing tickets against (old / "blue")
+//   - activeUsername: the username to use for ticket creation (new / "green")
+//   - isRotation: true when a ':' separator was found
+//
+// When no ':' is present the same value is returned for both fields and
+// isRotation is false (normal, non-rotation renewal).
+func ParseBlueGreenUsername(raw string) (matchUsername, activeUsername string, isRotation bool) {
+	idx := strings.Index(raw, ":")
+	if idx < 0 {
+		return raw, raw, false
+	}
+	return raw[:idx], raw[idx+1:], true
+}
+
 // SecureClearString securely clears a string by overwriting its contents before setting it to empty
 // This should be called before every RPC call ends to clear sensitive data
 func SecureClearString(s *string) {

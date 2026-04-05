@@ -121,7 +121,7 @@ func (h *KerberosArnLeaseHandler) processTicket(ctx context.Context, cfg aws.Con
 	}
 
 	// Get and validate credentials
-	username, password, domain, err := h.getAndValidateCredentials(ctx, cfg, krbTicketArn)
+	username, password, domain, distinguishedName, err := h.getAndValidateCredentials(ctx, cfg, krbTicketArn)
 	if err != nil {
 		return err
 	}
@@ -129,6 +129,7 @@ func (h *KerberosArnLeaseHandler) processTicket(ctx context.Context, cfg aws.Con
 	// Update ticket info with retrieved credentials
 	ticketInfo.DomainlessUser = username
 	ticketInfo.DomainName = domain
+	ticketInfo.DistinguishedName = distinguishedName
 
 	// Renew the Kerberos tickets
 	if err := h.renewKerberosTickets(ticketInfo, username, password, domain); err != nil {
@@ -168,42 +169,42 @@ func (h *KerberosArnLeaseHandler) getAndParseCredSpec(ctx context.Context, cfg a
 }
 
 // getAndValidateCredentials retrieves and validates credentials from Secrets Manager
-func (h *KerberosArnLeaseHandler) getAndValidateCredentials(ctx context.Context, cfg aws.Config, krbTicketArn *types.KerberosTicketArnMapping) (string, string, string, error) {
+func (h *KerberosArnLeaseHandler) getAndValidateCredentials(ctx context.Context, cfg aws.Config, krbTicketArn *types.KerberosTicketArnMapping) (string, string, string, string, error) {
 	log := logger.GetInstance()
 
 	// Get secrets ARN
 	secretsArn := krbTicketArn.CredentialDomainlessUserArn
 	if secretsArn == "" {
 		log.Error("Invalid Secrets Manager ARN")
-		return "", "", "", fmt.Errorf("invalid secrets manager ARN")
+		return "", "", "", "", fmt.Errorf("invalid secrets manager ARN")
 	}
 
 	// Retrieve credentials from Secrets Manager
 	secretMap, err := aws_utils.GetSecretFromSecretsManagerWithConfig(ctx, cfg, secretsArn)
 	if err != nil {
 		log.Error("Failed to retrieve credentials from secrets manager", "error", err)
-		return "", "", "", fmt.Errorf("failed to retrieve credentials from secrets manager: %w", err)
+		return "", "", "", "", fmt.Errorf("failed to retrieve credentials from secrets manager: %w", err)
 	}
 
 	// Extract credentials from the secret
-	username, password, domain, _, err := aws_utils.ExtractCredentialsFromSecret(secretMap)
+	username, password, domain, distinguishedName, err := aws_utils.ExtractCredentialsFromSecret(secretMap)
 	if err != nil {
 		log.Error("Failed to extract credentials from secret", "error", err)
-		return "", "", "", fmt.Errorf("failed to extract credentials from secret: %w", err)
+		return "", "", "", "", fmt.Errorf("failed to extract credentials from secret: %w", err)
 	}
 
 	// Validate domain and username
 	if !aws_utils.IsValidDomain(domain) || aws_utils.ContainsInvalidCharactersInADAccountName(username) {
 		log.Error("Invalid domainName/username")
-		return "", "", "", fmt.Errorf("invalid domainName/username")
+		return "", "", "", "", fmt.Errorf("invalid domainName/username")
 	}
 
 	// Validate credential lengths
 	if !h.validateCredentials(username, password, domain) {
-		return "", "", "", fmt.Errorf("invalid credentials")
+		return "", "", "", "", fmt.Errorf("invalid credentials")
 	}
 
-	return username, password, domain, nil
+	return username, password, domain, distinguishedName, nil
 }
 
 // renewKerberosTickets creates/renews Kerberos tickets for the user and gMSA account

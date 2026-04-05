@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/debug_utils"
 
 	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
@@ -157,7 +158,7 @@ func (h *DomainJoinedKerberosLeaseHandler) CreateKerberosTickets(ctx context.Con
 		// Now proceed with creating tickets for each gMSA account
 		krbFilePath, err := h.SetupKerberosFileForTicket(ticketInfo)
 		if err == nil {
-			err = simulateDebugError(SimulateSetupKerberosFile)
+			err = debug_utils.SimulateDebugError(debug_utils.SimulateSetupKerberosFile)
 		}
 		if err != nil {
 			for _, path := range createdKrbFilePaths {
@@ -172,7 +173,7 @@ func (h *DomainJoinedKerberosLeaseHandler) CreateKerberosTickets(ctx context.Con
 		// Create krb ticket for this gmsa account using the ticketInfo
 		err = h.CreateTicketForGMSA(ctx, ticketInfo)
 		if err == nil {
-			err = simulateDebugError(SimulateCreateTicketGMSA)
+			err = debug_utils.SimulateDebugError(debug_utils.SimulateCreateTicketGMSA)
 		}
 		if err != nil {
 			log.Error("Failed to create Kerberos ticket for gMSA account",
