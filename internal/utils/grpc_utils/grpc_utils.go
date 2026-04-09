@@ -96,6 +96,9 @@ func ParseCredSpec(credspecData string) (*types.CredentialSpec, error) {
 
 // parseJSON parses the credential spec JSON string into a map
 func parseJSON(credspecData string) (map[string]interface{}, error) {
+	// Strip UTF-8 BOM (EF BB BF) if present — Windows tools commonly emit BOM-prefixed files
+	credspecData = strings.TrimPrefix(credspecData, "\xef\xbb\xbf")
+
 	var root map[string]interface{}
 	if err := json.Unmarshal([]byte(credspecData), &root); err != nil {
 		logger.GetInstance().Error("Failed to parse credential spec JSON", "error", err)
@@ -227,7 +230,7 @@ func ValidateAccountName(username string) error {
 
 	// Check for invalid characters
 	for _, char := range username {
-		if strings.ContainsRune(constants.InvalidUsernameChars, char) || char == ' ' {
+		if strings.ContainsRune(constants.InvalidSAMAccountNameChars, char) {
 			log.Error("Username contains invalid character",
 				"username", username,
 				"invalid_char", string(char))

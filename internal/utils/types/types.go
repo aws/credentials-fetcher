@@ -2,10 +2,21 @@ package types
 
 import (
 	"time"
+
+	"golang.a2z.com/CredentialsFetcherV2/constants"
 )
 
-// InvalidCharacters defines characters not allowed in paths/names
-var InvalidCharacters = []rune{'&', '|', ';', ':', '$', '*', '?', '<', '>', '!', ' ', '\\', '.', ']', '[', '+', '\'', '`', '~', '}', '{', '"', ')', '('}
+// InvalidCredSpecPathChars defines characters not allowed in credential spec mount paths.
+// Derived from constants.InvalidSAMAccountNameChars, excluding '/' since paths contain forward slashes.
+var InvalidCredSpecPathChars []rune
+
+func init() {
+	for _, r := range constants.InvalidSAMAccountNameChars {
+		if r != '/' {
+			InvalidCredSpecPathChars = append(InvalidCredSpecPathChars, r)
+		}
+	}
+}
 
 const (
 	InstallPathForAwsCli = "/usr/bin/aws"

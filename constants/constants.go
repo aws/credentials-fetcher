@@ -77,8 +77,11 @@ const (
 	MaxPasswordLength = 104
 	MaxDomainLength   = 253
 
-	// InvalidUsernameChars contains characters not allowed in username
-	InvalidUsernameChars = "&:][+|;$*?<>!/\\\\'`~"
+	// InvalidSAMAccountNameChars contains characters not allowed in AD sAMAccountName logon names.
+	// References:
+	//   - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/bb726984(v=technet.10)
+	//   - https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/naming-conventions-for-computer-domain-site-ou
+	InvalidSAMAccountNameChars = "\"/:;|=,+*?<>\\][&$!'`~(){} "
 
 	// DomainRegexPattern is the regex pattern for validating domain names
 	DomainRegexPattern = `^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$`

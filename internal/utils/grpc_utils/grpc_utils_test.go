@@ -59,6 +59,14 @@ func TestParseCredSpec(t *testing.T) {
 		assert.Equal(t, "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret", credSpec.CredentialArn)
 	})
 
+	t.Run("Valid CredSpec with UTF-8 BOM", func(t *testing.T) {
+		bomCredSpec := "\xef\xbb\xbf" + validCredSpec
+		credSpec, err := ParseCredSpec(bomCredSpec)
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", credSpec.DomainName)
+		assert.Equal(t, "WebApp01", credSpec.ServiceAccountName)
+	})
+
 	t.Run("Empty CredSpec", func(t *testing.T) {
 		_, err := ParseCredSpec("")
 		assert.Error(t, err)
@@ -381,6 +389,56 @@ func TestValidateAccountName(t *testing.T) {
 		{
 			name:     "Username with invalid character ~",
 			username: "invalid~user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character double quote",
+			username: "invalid\"user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character =",
+			username: "invalid=user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character ,",
+			username: "invalid,user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with period is valid",
+			username: "svc.myapp",
+			wantErr:  false,
+		},
+		{
+			name:     "Username with multiple periods is valid",
+			username: "corp.svc.account",
+			wantErr:  false,
+		},
+		{
+			name:     "Username with hyphen and period is valid",
+			username: "svc.my-app",
+			wantErr:  false,
+		},
+		{
+			name:     "Username with invalid character (",
+			username: "invalid(user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character )",
+			username: "invalid)user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character {",
+			username: "invalid{user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character }",
+			username: "invalid}user",
 			wantErr:  true,
 		},
 	}
