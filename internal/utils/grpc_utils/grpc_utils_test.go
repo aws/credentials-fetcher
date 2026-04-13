@@ -278,6 +278,57 @@ func TestParseCredSpec(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "missing or invalid CredentialArn")
 	})
+
+	// Real-world credspec with periods in gMSA name and non-domain-joined HostAccountConfig
+	periodGmsaCredSpec := `{
+    "CmsPlugins": [
+        "ActiveDirectory"
+    ],
+    "DomainJoinConfig": {
+        "Sid": "S-1-5-21-861567501-616249376-725345543",
+        "MachineAccountName": "AWS.msa.kiosk",
+        "Guid": "c08770b1-09d5-4b64-a409-dc8193361342",
+        "DnsTreeName": "ad.contoso.com",
+        "DnsName": "ad.contoso.com",
+        "NetBiosName": "CONTOSO"
+    },
+    "ActiveDirectoryConfig": {
+        "GroupManagedServiceAccounts": [
+            {
+                "Name": "AWS.msa.kiosk",
+                "Scope": "ad.contoso.com"
+            },
+            {
+                "Name": "AWS.msa.kiosk",
+                "Scope": "CONTOSO"
+            }
+        ],
+        "HostAccountConfig": {
+            "PortableCcgVersion": "1",
+            "PluginGUID": "{859E1386-BDB4-49E8-85C7-3070B13920E1}",
+            "PluginInput": {
+                "CredentialArn": "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws/kiosk/ecs/msa_kiosk"
+            }
+        }
+    }
+}`
+
+	t.Run("Real-world credspec with periods in gMSA name", func(t *testing.T) {
+		credSpec, err := ParseCredSpec(periodGmsaCredSpec)
+		require.NoError(t, err)
+		assert.Equal(t, "ad.contoso.com", credSpec.DomainName)
+		assert.Equal(t, "AWS.msa.kiosk", credSpec.ServiceAccountName)
+		assert.Equal(t, "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws/kiosk/ecs/msa_kiosk", credSpec.CredentialArn)
+	})
+
+	t.Run("Real-world credspec with UTF-8 BOM", func(t *testing.T) {
+		bomCredSpec := "\xef\xbb\xbf" + periodGmsaCredSpec
+		credSpec, err := ParseCredSpec(bomCredSpec)
+		require.NoError(t, err)
+		assert.Equal(t, "ad.contoso.com", credSpec.DomainName)
+		assert.Equal(t, "AWS.msa.kiosk", credSpec.ServiceAccountName)
+		assert.Equal(t, "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws/kiosk/ecs/msa_kiosk", credSpec.CredentialArn)
+	})
 }
 
 func TestValidateAccountName(t *testing.T) {
