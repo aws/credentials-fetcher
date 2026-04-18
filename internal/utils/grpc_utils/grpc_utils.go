@@ -3,6 +3,7 @@ package grpc_utils
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -98,10 +99,17 @@ func ParseCredSpec(credspecData string) (*types.CredentialSpec, error) {
 func parseJSON(credspecData string) (map[string]interface{}, error) {
 	// Strip UTF-8 BOM (EF BB BF) if present — Windows tools commonly emit BOM-prefixed files
 	credspecData = strings.TrimPrefix(credspecData, "\xef\xbb\xbf")
+	// Strip lone 0xEF byte from partial/corrupt BOM sequences
+	credspecData = strings.TrimPrefix(credspecData, "\xef")
 
 	var root map[string]interface{}
 	if err := json.Unmarshal([]byte(credspecData), &root); err != nil {
 		logger.GetInstance().Error("Failed to parse credential spec JSON", "error", err)
+		n := len(credspecData)
+		if n > 32 {
+			n = 32
+		}
+		logger.GetInstance().Error("Credential spec hex prefix", "hex", hex.EncodeToString([]byte(credspecData[:n])))
 		return nil, fmt.Errorf("failed to parse credential spec JSON: %v", err)
 	}
 	return root, nil

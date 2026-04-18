@@ -1,6 +1,8 @@
 package grpc_utils
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -328,6 +330,49 @@ func TestParseCredSpec(t *testing.T) {
 		assert.Equal(t, "ad.contoso.com", credSpec.DomainName)
 		assert.Equal(t, "AWS.msa.kiosk", credSpec.ServiceAccountName)
 		assert.Equal(t, "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws/kiosk/ecs/msa_kiosk", credSpec.CredentialArn)
+	})
+
+	t.Run("contoso_WebApp01_ndj.json with UTF-8 BOM", func(t *testing.T) {
+		// Find repo root by walking up from the test file's package directory
+		repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(filepath.Join(repoRoot, "tests", "assets", "contoso_WebApp01_ndj.json"))
+		require.NoError(t, err)
+
+		bomCredSpec := "\xef\xbb\xbf" + string(data)
+		credSpec, err := ParseCredSpec(bomCredSpec)
+		require.NoError(t, err)
+		assert.Equal(t, "contoso.com", credSpec.DomainName)
+		assert.Equal(t, "svc_test.app", credSpec.ServiceAccountName)
+		assert.Equal(t, "arn:aws:secretsmanager:us-west-2:123456789012:secret:aws/directoryservice/contoso/standarduser-AbCdEf", credSpec.CredentialArn)
+	})
+
+	t.Run("CredSpec with lone 0xEF byte prefix", func(t *testing.T) {
+		loneEF := "\xef" + validCredSpec
+		credSpec, err := ParseCredSpec(loneEF)
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", credSpec.DomainName)
+		assert.Equal(t, "WebApp01", credSpec.ServiceAccountName)
+	})
+
+	t.Run("CredSpec with partial BOM 0xEF 0xBB prefix", func(t *testing.T) {
+		partialBOM := "\xef\xbb" + validCredSpec
+		_, err := ParseCredSpec(partialBOM)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse credential spec JSON")
+	})
+
+	t.Run("CredSpec without any BOM prefix parses normally", func(t *testing.T) {
+		credSpec, err := ParseCredSpec(validCredSpec)
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", credSpec.DomainName)
+	})
+
+	t.Run("Invalid JSON includes hex prefix in error", func(t *testing.T) {
+		_, err := ParseCredSpec("\xef\xbb\xbf{bad json}")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse credential spec JSON")
 	})
 }
 
