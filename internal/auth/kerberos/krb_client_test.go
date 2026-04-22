@@ -1081,7 +1081,7 @@ func TestCheckAndRenewTicket(t *testing.T) {
 				mock.Anything,                   // context
 				"klist",                         // command
 				"-c", tc.ticketInfo.KrbFilePath, // args
-			).Return(tc.mockKlistOutput, tc.mockKlistErr)
+			).Return(tc.mockKlistOutput, tc.mockKlistErr).Once()
 
 			// Set up expectations for renewal if needed
 			if tc.expectedRenewCalls > 0 {
@@ -1090,6 +1090,17 @@ func TestCheckAndRenewTicket(t *testing.T) {
 						config.RenewTicket == true &&
 						config.Verify == true
 				})).Return(tc.mockRenewErr)
+
+				// After successful renewal, CheckAndRenewTicket re-reads the ticket
+				// to verify the expiry was actually extended
+				if tc.mockRenewErr == nil {
+					renewedOutput := []byte(generateKlistOutput(10)) // Extended expiry
+					mockExecutor.On("Execute",
+						mock.Anything,
+						"klist",
+						"-c", tc.ticketInfo.KrbFilePath,
+					).Return(renewedOutput, nil).Once()
+				}
 			}
 
 			// Create a client with mocks
@@ -1147,7 +1158,7 @@ func TestCheckAndRenewTicketDomainlessUser(t *testing.T) {
 				mock.Anything,                   // context
 				"klist",                         // command
 				"-c", tc.ticketInfo.KrbFilePath, // args
-			).Return([]byte(generateKlistOutput(0)), nil) // Expires in 30 minutes (needs renewal)
+			).Return([]byte(generateKlistOutput(0)), nil).Once() // Expires in 30 minutes (needs renewal)
 
 			// Set up expectations for successful renewal
 			mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
@@ -1155,6 +1166,17 @@ func TestCheckAndRenewTicketDomainlessUser(t *testing.T) {
 					config.RenewTicket == true &&
 					config.Verify == true
 			})).Return(nil)
+
+			// After successful renewal, CheckAndRenewTicket re-reads the ticket
+			// to verify the expiry was actually extended
+			if tc.expectedRenewCalls > 0 {
+				renewedOutput := []byte(generateKlistOutput(10)) // Extended expiry
+				mockExecutor.On("Execute",
+					mock.Anything,
+					"klist",
+					"-c", tc.ticketInfo.KrbFilePath,
+				).Return(renewedOutput, nil).Once()
+			}
 
 			// Create a client with mocks
 			client := &Client{

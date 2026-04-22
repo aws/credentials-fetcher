@@ -615,8 +615,19 @@ func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.Tick
 
 		// Try renewal first using CGO-based implementation
 		if err := c.RenewKerberosTicket(ctx, ticketInfo.KrbFilePath); err == nil {
-			log.Info("Direct renewal of the ticket successful using CGO")
-			return nil
+			// Verify the renewed ticket actually has an extended expiry
+			renewedTicket, _, err := c.GetTicket(ticketInfo.KrbFilePath)
+			if err != nil {
+				log.Warn("CGO renewal succeeded but failed to re-read ticket, falling back to recreation", "error", err)
+			} else if renewedTicket.ExpirationTime.After(ticket.ExpirationTime) {
+				log.Info("Direct renewal of the ticket successful using CGO",
+					"new_expiry", renewedTicket.ExpirationTime.Format(time.RFC3339))
+				return nil
+			} else {
+				log.Warn("CGO renewal reported success but ticket expiry was not extended, falling back to recreation",
+					"old_expiry", ticket.ExpirationTime.Format(time.RFC3339),
+					"current_expiry", renewedTicket.ExpirationTime.Format(time.RFC3339))
+			}
 		} else {
 			log.Warn("Direct renewal failed, attempting ticket recreation", "error", err)
 		}
@@ -634,6 +645,7 @@ func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.Tick
 // recreateTicketWithRetries attempts to recreate a Kerberos ticket with the specified number of retries.
 func (c *Client) recreateTicketWithRetries(ctx context.Context, ticketInfo *types.TicketInfo, numRetries int, isDomainlessUserStandalone bool) error {
 	domainlessUser := ticketInfo.DomainlessUser
+	maxRetries := numRetries + 1 // allow at most one extension beyond the original retry count
 
 	for i := 0; i <= numRetries; i++ {
 		// Try to recreate the ticket using gMSA password
@@ -650,9 +662,12 @@ func (c *Client) recreateTicketWithRetries(ctx context.Context, ticketInfo *type
 
 			// Try alternative methods based on user type
 			if err := c.tryAlternativeTicketCreation(ctx, ticketInfo, domainlessUser, isDomainlessUserStandalone); err == nil {
-				// Success with alternative method
-				log.Info("Renewal successful after recreating user principal or machine principal Kerberos ticket")
-				return nil
+				// User/machine ticket recreated — ensure at least one more GMSA attempt
+				log.Info("Successfully recreated user principal or machine principal Kerberos ticket, retrying GMSA ticket creation")
+				if i == numRetries && numRetries < maxRetries {
+					numRetries++ // allow one final GMSA attempt with fresh credentials
+				}
+				continue
 			}
 		}
 	}
