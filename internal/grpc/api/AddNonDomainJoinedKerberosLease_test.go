@@ -89,6 +89,26 @@ func TestValidateCredentials(t *testing.T) {
 			},
 			expectedError: true,
 		},
+		{
+			name: "Blue/green username rejected by ValidateCredentials (raw colon)",
+			request: &pb.CreateNonDomainJoinedKerberosLeaseRequest{
+				Username:         "olduser:newuser",
+				Password:         "testpassword",
+				Domain:           "example.com",
+				CredspecContents: []string{"credspec1"},
+			},
+			expectedError: true, // ValidateCredentials rejects ':' — caller must use ParseBlueGreenUsername first
+		},
+		{
+			name: "Customer rotation username SvcAccountGR:SvcAccountBL rejected by ValidateCredentials",
+			request: &pb.CreateNonDomainJoinedKerberosLeaseRequest{
+				Username:         "SvcAccountGR:SvcAccountBL",
+				Password:         "testpassword",
+				Domain:           "contoso.com",
+				CredspecContents: []string{"credspec1"},
+			},
+			expectedError: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -119,6 +139,130 @@ func TestValidateCredentials(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAddNonDomainJoinedKerberosLease_BlueGreenUsername(t *testing.T) {
+	t.Run("Blue/green username - active username stored in metadata", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		handler := NewNonDomainJoinedKerberosHandler(tmpDir, "test-secret", nil, nil, cmdexec.NewExecutor())
+
+		// ProcessCredentialSpecs should store the active (green) username, not "old:new"
+		credspec := `{
+			"DomainJoinConfig": {
+				"Sid": "S-1-5-21-123456789-123456789-123456789",
+				"MachineAccountName": "WebApp01",
+				"Guid": "12345678-1234-1234-1234-123456789012",
+				"DnsName": "example.com",
+				"NetBiosName": "EXAMPLE"
+			},
+			"ActiveDirectoryConfig": {
+				"GroupManagedServiceAccounts": [
+					{
+						"Name": "WebApp01",
+						"Scope": "example.com"
+					}
+				],
+				"HostAccountConfig": {
+					"PluginGUID": "12345678-1234-1234-1234-123456789012",
+					"PluginInput": {
+						"CredentialArn": "arn:aws:secretsmanager:us-west-2:123456789012:secret:example-secret"
+					},
+					"PortableCcgVersion": "1"
+				}
+			}
+		}`
+
+		// When Add is called with "olduser:newuser", only "newuser" should be passed
+		// to ProcessCredentialSpecs (i.e. stored as DomainlessUser in metadata).
+		ticketInfoList, err := handler.ProcessCredentialSpecs([]string{credspec}, "newuser", "test-lease")
+		assert.NoError(t, err)
+		assert.NotNil(t, ticketInfoList)
+		for _, ti := range ticketInfoList {
+			assert.Equal(t, "newuser", ti.DomainlessUser, "DomainlessUser should be the active (green) username only")
+			assert.NotContains(t, ti.DomainlessUser, ":", "DomainlessUser must not contain ':'")
+		}
+	})
+
+	t.Run("Customer rotation SvcAccountGR:SvcAccountBL resolves to SvcAccountBL", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		handler := NewNonDomainJoinedKerberosHandler(tmpDir, "test-secret", nil, nil, cmdexec.NewExecutor())
+
+		credspec := `{
+			"DomainJoinConfig": {
+				"Sid": "S-1-5-21-123456789-987654321-111222333",
+				"MachineAccountName": "gSvcAccount",
+				"Guid": "12345678-1234-1234-1234-123456789012",
+				"DnsName": "contoso.com",
+				"NetBiosName": "CORE"
+			},
+			"ActiveDirectoryConfig": {
+				"GroupManagedServiceAccounts": [
+					{
+						"Name": "gSvcAccount",
+						"Scope": "contoso.com"
+					}
+				],
+				"HostAccountConfig": {
+					"PluginGUID": "{859E1386-BDB4-49E8-85C7-3070B13920E1}",
+					"PluginInput": {
+						"CredentialArn": "arn:aws:secretsmanager:us-east-1:123456789012:secret:/gmsa/SvcAccount-AbCdEf"
+					},
+					"PortableCcgVersion": "1"
+				}
+			}
+		}`
+
+		// After ParseBlueGreenUsername, only "SvcAccountBL" should reach ProcessCredentialSpecs
+		ticketInfoList, err := handler.ProcessCredentialSpecs([]string{credspec}, "SvcAccountBL", "test-lease")
+		assert.NoError(t, err)
+		assert.NotNil(t, ticketInfoList)
+		assert.Len(t, ticketInfoList, 1)
+		assert.Equal(t, "SvcAccountBL", ticketInfoList[0].DomainlessUser)
+		assert.NotContains(t, ticketInfoList[0].DomainlessUser, ":")
+		assert.Equal(t, "gSvcAccount", ticketInfoList[0].ServiceAccountName)
+		assert.Equal(t, "contoso.com", ticketInfoList[0].DomainName)
+	})
+
+	t.Run("Blue/green format with empty new username returns error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		handler := NewNonDomainJoinedKerberosHandler(tmpDir, "test-secret", nil, nil, cmdexec.NewExecutor())
+
+		req := &pb.CreateNonDomainJoinedKerberosLeaseRequest{
+			Username:         "olduser:",
+			Password:         "testpassword",
+			Domain:           "example.com",
+			CredspecContents: []string{"credspec1"},
+		}
+
+		resp, err := handler.AddNonDomainJoinedKerberosLease(context.Background(), req)
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+		assert.Contains(t, err.Error(), "blue/green rotation format requires a non-empty new username")
+	})
+
+	t.Run("Plain username without colon still works", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		handler := NewNonDomainJoinedKerberosHandler(tmpDir, "test-secret", nil, nil, cmdexec.NewExecutor())
+
+		// ProcessCredentialSpecs with a plain username should just store it directly
+		credspec := `{
+			"DomainJoinConfig": {
+				"Sid": "S-1-5-21-123456789-123456789-123456789",
+				"MachineAccountName": "WebApp01",
+				"DnsName": "example.com"
+			},
+			"ActiveDirectoryConfig": {
+				"GroupManagedServiceAccounts": [{"Name": "WebApp01", "Scope": "example.com"}],
+				"HostAccountConfig": {"PluginGUID": "12345678-1234-1234-1234-123456789012", "PluginInput": {"CredentialArn": "arn:aws:secretsmanager:us-west-2:123456789012:secret:test"}, "PortableCcgVersion": "1"}
+			}
+		}`
+
+		ticketInfoList, err := handler.ProcessCredentialSpecs([]string{credspec}, "plainuser", "test-lease")
+		assert.NoError(t, err)
+		for _, ti := range ticketInfoList {
+			assert.Equal(t, "plainuser", ti.DomainlessUser)
+		}
+	})
 }
 
 // Test for NewNonDomainJoinedKerberosHandler

@@ -79,8 +79,25 @@ func (h *NonDomainJoinedKerberosHandler) AddNonDomainJoinedKerberosLease(ctx con
 		grpc_utils.SecureClearString(&req.Password)
 	}()
 
-	// Validate request
-	if err := h.ValidateCredentials(req.Username, req.Password, req.Domain); err != nil {
+	// Parse blue/green username rotation format ("oldUser:newUser").
+	// When usernames are rotated in AWS Secrets Manager, the caller may supply
+	// "oldUser:newUser" so that the service creates tickets under the new (green)
+	// username. For the Add flow only the active (green) username is used.
+	_, activeUsername, isRotation := grpc_utils.ParseBlueGreenUsername(req.Username)
+	if isRotation {
+		if activeUsername == "" {
+			return nil, fmt.Errorf("blue/green rotation format requires a non-empty new username (\"oldUser:newUser\")")
+		}
+		log.Info("Blue/green username detected in Add request, using active username",
+			"active_username", activeUsername)
+	}
+
+	// Use the active (green) username for all downstream operations — validation,
+	// credential spec processing, and ticket creation.
+	username := activeUsername
+
+	// Validate request using the resolved username
+	if err := h.ValidateCredentials(username, req.Password, req.Domain); err != nil {
 		return nil, err
 	}
 
@@ -97,13 +114,13 @@ func (h *NonDomainJoinedKerberosHandler) AddNonDomainJoinedKerberosLease(ctx con
 	}
 
 	// Process credential specs
-	ticketInfoList, err := h.ProcessCredentialSpecs(req.CredspecContents, req.Username, leaseID)
+	ticketInfoList, err := h.ProcessCredentialSpecs(req.CredspecContents, username, leaseID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create Kerberos tickets
-	createdKrbFilePaths, err := h.CreateKerberosTickets(ctx, req.Domain, req.Username, req.Password, ticketInfoList)
+	createdKrbFilePaths, err := h.CreateKerberosTickets(ctx, req.Domain, username, req.Password, ticketInfoList)
 	if err != nil {
 		return nil, err
 	}

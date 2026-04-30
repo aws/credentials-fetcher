@@ -826,6 +826,13 @@ func TestParseBlueGreenUsername(t *testing.T) {
 			wantActive:     "",
 			wantIsRotation: false,
 		},
+		{
+			name:           "Blue/green rotation with real-world naming convention",
+			raw:            "SvcAccountGR:SvcAccountBL",
+			wantMatch:      "SvcAccountGR",
+			wantActive:     "SvcAccountBL",
+			wantIsRotation: true,
+		},
 	}
 
 	for _, tt := range tests {

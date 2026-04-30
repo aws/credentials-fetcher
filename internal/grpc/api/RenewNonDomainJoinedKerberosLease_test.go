@@ -95,6 +95,23 @@ func TestBlueGreenUsernameParsingInRenewFlow(t *testing.T) {
 		assert.NoError(t, grpc_utils.ValidateAccountName(matchUser))
 	})
 
+	t.Run("Customer rotation SvcAccountGR:SvcAccountBL", func(t *testing.T) {
+		matchUser, activeUser, isRotation := grpc_utils.ParseBlueGreenUsername("SvcAccountGR:SvcAccountBL")
+		assert.True(t, isRotation)
+		assert.Equal(t, "SvcAccountGR", matchUser)
+		assert.Equal(t, "SvcAccountBL", activeUser)
+
+		// Active (new) username passes validation
+		assert.NoError(t, handler.ValidateCredentials(activeUser, "password", "contoso.com"))
+		// Old username also passes validation independently
+		assert.NoError(t, grpc_utils.ValidateAccountName(matchUser))
+
+		// Raw combined string must NOT pass ValidateAccountName (contains ':')
+		err := grpc_utils.ValidateAccountName("SvcAccountGR:SvcAccountBL")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "username contains invalid character: :")
+	})
+
 	t.Run("Blue/green format - new username invalid", func(t *testing.T) {
 		_, activeUser, isRotation := grpc_utils.ParseBlueGreenUsername("olduser:invalid user")
 		assert.True(t, isRotation)
