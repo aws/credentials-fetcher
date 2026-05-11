@@ -92,3 +92,90 @@ resolution during renewal.
 Until then, the `oldUser:newUser` convention is documented here and in the
 `ParseBlueGreenUsername` function in
 `internal/utils/grpc_utils/grpc_utils.go`.
+
+## Manual Integration Test
+
+The following test was performed against credentials-fetcher 2.0-2 on an
+AL2023 EC2 instance (non-domain-joined ECS cluster) with an AWS Managed
+Microsoft AD (`contoso.com`).
+
+### Prerequisites
+
+- gMSA account `WebApp01` created in AD with group `WebAppAccounts_OU`
+- Both `StandardUser01` and `StandardUser02` exist in AD and are members of
+  `WebAppAccounts_OU`
+- Secret `aws/directoryservice/contoso/standarduser` in Secrets Manager
+
+### Step 1: Create a lease with StandardUser01
+
+```python
+response = stub.AddNonDomainJoinedKerberosLease(
+    credentialsfetcher_pb2.CreateNonDomainJoinedKerberosLeaseRequest(
+        credspec_contents=[credspec_json],
+        username="StandardUser01",
+        password="<StandardUser01_password>",
+        domain="contoso.com"
+    )
+)
+```
+
+**Result:**
+```json
+{
+  "success": true,
+  "lease_id": "48bc39b8e422f64cde60",
+  "created_kerberos_file_paths": ["/var/credentials-fetcher/krbdir/48bc39b8e422f64cde60/WebApp01"]
+}
+```
+
+Metadata on disk shows `"domainless_user": "StandardUser01"`.
+
+### Step 2: Update Secrets Manager to blue-green format
+
+```json
+{
+  "password": "<StandardUser02_password>",
+  "domainName": "contoso.com",
+  "username": "StandardUser01:StandardUser02"
+}
+```
+
+### Step 3: Renew with blue-green username
+
+```python
+response = stub.RenewNonDomainJoinedKerberosLease(
+    credentialsfetcher_pb2.RenewNonDomainJoinedKerberosLeaseRequest(
+        username="StandardUser01:StandardUser02",
+        password="<StandardUser02_password>",
+        domain="contoso.com"
+    )
+)
+```
+
+**Result:**
+```json
+{
+  "success": true,
+  "renewed_kerberos_file_paths": ["/var/credentials-fetcher/krbdir/48bc39b8e422f64cde60/WebApp01/krb5cc"]
+}
+```
+
+### Step 4: Verify metadata rotation
+
+```json
+{
+  "krb_ticket_info": [
+    {
+      "credential_arn": "arn:aws:secretsmanager:us-west-2:XXXXXXXXXXXX:secret:aws/directoryservice/contoso/standarduser-XXXXXX",
+      "distinguished_name": "CN=WebApp01,OU=MYOU,OU=Users,OU=contoso,DC=contoso,DC=com",
+      "domain_name": "contoso.com",
+      "domainless_user": "StandardUser02",
+      "krb_file_path": "/var/credentials-fetcher/krbdir/48bc39b8e422f64cde60/WebApp01/krb5cc",
+      "service_account_name": "WebApp01"
+    }
+  ]
+}
+```
+
+`domainless_user` was rewritten from `StandardUser01` → `StandardUser02`,
+confirming the blue-green rotation worked end-to-end.

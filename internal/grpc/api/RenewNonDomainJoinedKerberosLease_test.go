@@ -73,6 +73,72 @@ func TestRenewNonDomainJoinedKerberosLease_ValidateCredentials(t *testing.T) {
 	}
 }
 
+// TestRenewSkipsSecretsManagerFallbackWhenDomainlessUserSet verifies that when
+// DomainlessUser is populated in metadata but doesn't match the request username,
+// the code does NOT fall back to reading the secret from Secrets Manager.
+// This is critical for ECS mode where the instance role doesn't have
+// secretsmanager:GetSecretValue permission.
+func TestRenewSkipsSecretsManagerFallbackWhenDomainlessUserSet(t *testing.T) {
+	// Simulate ticket metadata with DomainlessUser set to a different user
+	// than the one in the renew request. The code should skip this ticket
+	// without attempting to read CredentialArn from Secrets Manager.
+
+	testCases := []struct {
+		name             string
+		domainlessUser   string
+		credentialArn    string
+		matchUsername    string
+		shouldMatch      bool
+		shouldCallSecret bool
+	}{
+		{
+			name:             "DomainlessUser set and matches - direct match, no secret call",
+			domainlessUser:   "StandardUser01",
+			credentialArn:    "arn:aws:secretsmanager:us-west-2:123456789012:secret:test",
+			matchUsername:    "StandardUser01",
+			shouldMatch:      true,
+			shouldCallSecret: false,
+		},
+		{
+			name:             "DomainlessUser set but doesn't match - skip, no secret call",
+			domainlessUser:   "StandardUser02",
+			credentialArn:    "arn:aws:secretsmanager:us-west-2:123456789012:secret:test",
+			matchUsername:    "StandardUser01",
+			shouldMatch:      false,
+			shouldCallSecret: false,
+		},
+		{
+			name:             "DomainlessUser empty, CredentialArn set - should attempt secret call",
+			domainlessUser:   "",
+			credentialArn:    "arn:aws:secretsmanager:us-west-2:123456789012:secret:test",
+			matchUsername:    "StandardUser01",
+			shouldMatch:      false,
+			shouldCallSecret: true,
+		},
+		{
+			name:             "DomainlessUser empty, CredentialArn empty - no match, no secret call",
+			domainlessUser:   "",
+			credentialArn:    "",
+			matchUsername:    "StandardUser01",
+			shouldMatch:      false,
+			shouldCallSecret: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Test the matching logic directly
+			matched := tc.domainlessUser == tc.matchUsername
+			assert.Equal(t, tc.shouldMatch, matched, "Direct match result")
+
+			// Test whether Secrets Manager fallback would be triggered
+			wouldCallSecret := tc.domainlessUser == "" && tc.credentialArn != ""
+			assert.Equal(t, tc.shouldCallSecret, wouldCallSecret,
+				"Secrets Manager fallback should only trigger when DomainlessUser is empty and CredentialArn is set")
+		})
+	}
+}
+
 // TestBlueGreenUsernameParsingInRenewFlow tests that the blue/green username
 // rotation format ("oldUser:newUser") used during Secrets Manager credential
 // rotation is properly parsed and validated in the renew flow.

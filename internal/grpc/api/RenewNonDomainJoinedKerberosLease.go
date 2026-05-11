@@ -101,8 +101,8 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 				continue
 			}
 
-			// If no direct match and CredentialArn is available, extract username from the secret
-			if ticketInfo.CredentialArn != "" {
+			// If DomainlessUser is empty and CredentialArn is available, extract username from the secret
+			if ticketInfo.DomainlessUser == "" && ticketInfo.CredentialArn != "" {
 				secretMap, err := aws_utils.GetSecretFromSecretsManagerWithContext(ctx, ticketInfo.CredentialArn)
 				if err != nil {
 					log.Warn("Failed to retrieve secret from CredentialArn", "arn", ticketInfo.CredentialArn, "error", err)
