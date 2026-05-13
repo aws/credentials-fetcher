@@ -101,6 +101,13 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 				continue
 			}
 
+			// If rotation is active and the ticket already has the new (green) username,
+			// the rotation was already completed — treat as a normal renewal match.
+			if isRotation && ticketInfo.DomainlessUser == activeUsername {
+				matchingTicketInfos = append(matchingTicketInfos, ticketInfo)
+				continue
+			}
+
 			// If DomainlessUser is empty and CredentialArn is available, extract username from the secret
 			if ticketInfo.DomainlessUser == "" && ticketInfo.CredentialArn != "" {
 				secretMap, err := aws_utils.GetSecretFromSecretsManagerWithContext(ctx, ticketInfo.CredentialArn)
@@ -128,21 +135,47 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 			continue // Skip to next metadata file
 		}
 
-		// When rotating usernames, all matched tickets must be recreated with
-		// the new (green) credentials — direct kinit renewal won't work because
-		// the TGT belongs to the old user principal.
+		// Determine if this is an actual rotation or if rotation was already completed.
+		// If all matched tickets already have the active username, treat as normal renewal.
+		needsRotation := false
 		if isRotation {
 			for _, ticketInfo := range matchingTicketInfos {
-				// Update DomainlessUser to the new (green) username so that
-				// subsequent renewals and metadata lookups use the new name.
-				ticketInfo.DomainlessUser = activeUsername
-				ticketsToRecreate = append(ticketsToRecreate, ticketInfo)
+				if ticketInfo.DomainlessUser == matchUsername {
+					needsRotation = true
+					break
+				}
+			}
+		}
+
+		// When rotating usernames, only tickets that still have the old username
+		// need recreation. Tickets already carrying the active username are renewed
+		// normally — this handles the mixed-state case where some tickets in a
+		// metadata file were already rotated.
+		if needsRotation {
+			for _, ticketInfo := range matchingTicketInfos {
+				if ticketInfo.DomainlessUser == matchUsername {
+					// Update DomainlessUser to the new (green) username so that
+					// subsequent renewals and metadata lookups use the new name.
+					ticketInfo.DomainlessUser = activeUsername
+					ticketsToRecreate = append(ticketsToRecreate, ticketInfo)
+				} else {
+					// Already rotated — renew normally
+					err = h.krbClient.RenewKerberosTicket(ctx, ticketInfo.KrbFilePath)
+					if err == nil {
+						renewedKrbFilePaths = append(renewedKrbFilePaths, ticketInfo.KrbFilePath)
+						log.Info("Successfully renewed already-rotated ticket directly", "path", ticketInfo.KrbFilePath)
+					} else {
+						log.Warn("Direct renewal failed for already-rotated ticket, will recreate",
+							"error", err, "path", ticketInfo.KrbFilePath)
+						ticketsToRecreate = append(ticketsToRecreate, ticketInfo)
+					}
+				}
 			}
 			// Queue metadata write — deferred until after successful ticket recreation
 			// to avoid inconsistent state if CreateKerberosTickets fails.
 			pendingUpdates = append(pendingUpdates, pendingMetadataUpdate{metadataPath, ticketInfoList})
-			log.Info("Username rotation: all matching tickets queued for recreation",
-				"count", len(matchingTicketInfos))
+			log.Info("Username rotation: tickets queued for recreation",
+				"recreate_count", len(ticketsToRecreate), "already_renewed", len(renewedKrbFilePaths))
 		} else {
 			// Normal (non-rotation) path: try direct renewal first
 			for _, ticketInfo := range matchingTicketInfos {

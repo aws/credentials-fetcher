@@ -179,3 +179,121 @@ response = stub.RenewNonDomainJoinedKerberosLease(
 
 `domainless_user` was rewritten from `StandardUser01` → `StandardUser02`,
 confirming the blue-green rotation worked end-to-end.
+
+
+## ECS Renewal Flow
+
+In ECS mode, the ECS agent manages the full lifecycle of Kerberos tickets:
+
+1. **Task start:** ECS agent reads the secret from Secrets Manager and calls
+   `AddNonDomainJoinedKerberosLease` with the username and password.
+2. **Periodic renewal:** ECS agent re-reads the secret from Secrets Manager
+   on each renewal cycle (~hourly) and calls
+   `RenewNonDomainJoinedKerberosLease` with the current username and
+   password.
+3. **Task stop:** ECS agent calls `DeleteKerberosLease` to clean up.
+
+Because the ECS agent re-reads the secret on every renewal, blue-green
+rotation works without task restart:
+
+```
+Time 0:  Secret = "StandardUser01", password = pw1
+         → AddNonDomainJoinedKerberosLease(username="StandardUser01", ...)
+         → metadata: domainless_user = "StandardUser01"
+
+Time 1:  Customer rotates secret to "StandardUser01:StandardUser02", password = pw2
+         → RenewNonDomainJoinedKerberosLease(username="StandardUser01:StandardUser02", ...)
+         → Matches tickets by "StandardUser01", recreates with "StandardUser02"
+         → metadata: domainless_user = "StandardUser02"
+
+Time 2+: Secret still "StandardUser01:StandardUser02"
+         → RenewNonDomainJoinedKerberosLease(username="StandardUser01:StandardUser02", ...)
+         → Matches tickets by "StandardUser02" (active username fallback)
+         → Normal kinit renewal (no recreation needed)
+```
+
+The ECS agent source (`credentialspec_linux.go`) fetches fresh credentials
+from Secrets Manager before each renewal call via
+`asm.GetSecretFromASM(domainlessGmsaUserArn, asmClient)`.
+
+## Post-Rotation Renewal (Active Username Fallback)
+
+After a successful blue-green rotation, the secret may remain in
+`oldUser:newUser` format indefinitely (customers are not required to
+update it back to a single username). The renewal flow handles this:
+
+1. Parse `oldUser:newUser` → `matchUsername=oldUser`,
+   `activeUsername=newUser`.
+2. Scan metadata for tickets with `domainless_user == oldUser` → none
+   found (rotation already applied).
+3. **Fallback:** scan for tickets with `domainless_user == activeUsername`
+   → found.
+4. Since tickets already have the active username, no rotation is needed —
+   renew normally via direct kinit.
+
+This fallback is implemented in `RenewNonDomainJoinedKerberosLease` with
+the `needsRotation` flag:
+
+```go
+needsRotation := false
+if isRotation {
+    for _, ticketInfo := range matchingTicketInfos {
+        if ticketInfo.DomainlessUser == matchUsername {
+            needsRotation = true
+            break
+        }
+    }
+}
+```
+
+### Mixed-State Handling
+
+In rare cases (e.g., partial failure during rotation), some tickets in a
+metadata file may have the old username while others already have the new
+username. The code handles this by only recreating tickets that still need
+rotation:
+
+```go
+if needsRotation {
+    for _, ticketInfo := range matchingTicketInfos {
+        if ticketInfo.DomainlessUser == matchUsername {
+            ticketInfo.DomainlessUser = activeUsername
+            ticketsToRecreate = append(ticketsToRecreate, ticketInfo)
+        } else {
+            // Already rotated — renew normally
+            krbClient.RenewKerberosTicket(ctx, ticketInfo.KrbFilePath)
+        }
+    }
+}
+```
+
+This ensures already-valid tickets are not unnecessarily destroyed and
+recreated, and a failure to recreate one ticket does not block renewal of
+others.
+
+
+### Edge Cases
+
+| Scenario | Input | Behaviour |
+|----------|-------|-----------|
+| Normal renewal (no rotation) | `alice` | Match by `alice`, renew directly |
+| First rotation | `alice:bob` | Match by `alice`, recreate with `bob`, update metadata |
+| Post-rotation renewal | `alice:bob` (metadata has `bob`) | Match by `bob` (fallback), renew directly |
+| Reverse rotation (green→blue) | `bob:alice` (metadata has `bob`) | Match by `bob`, recreate with `alice`, update metadata |
+| Post-reverse renewal | `bob:alice` (metadata has `alice`) | Match by `alice` (fallback), renew directly |
+| Same username both sides | `alice:alice` | Treated as normal renewal (no rotation) |
+| Multiple rotations | `alice:bob` then `bob:charlie` | Each rotation matches old, recreates with new |
+| Unrelated username | `charlie:dave` (metadata has `alice`) | No match → renewal fails |
+
+**Green→Blue (reverse rotation):** The system supports rotating back to
+the original user. If the secret is changed from `alice:bob` to
+`bob:alice`, the next renewal will:
+
+1. Parse `bob:alice` → `matchUsername=bob`, `activeUsername=alice`
+2. Find tickets with `domainless_user=bob` (from the previous rotation)
+3. Recreate them with `alice` credentials
+4. Update metadata to `domainless_user=alice`
+
+Subsequent renewals with `bob:alice` will match by `alice` (active
+username fallback) and renew normally. The rotation is fully
+bidirectional.

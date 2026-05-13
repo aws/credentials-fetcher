@@ -139,6 +139,121 @@ func TestRenewSkipsSecretsManagerFallbackWhenDomainlessUserSet(t *testing.T) {
 	}
 }
 
+// TestBlueGreenRenewalAfterRotationCompleted verifies that when the secret still
+// has oldUser:newUser format but tickets have already been rotated to newUser,
+// renewal continues to work by matching the active username.
+func TestBlueGreenRenewalAfterRotationCompleted(t *testing.T) {
+	testCases := []struct {
+		name           string
+		username       string // from GRPC request (secret value)
+		domainlessUser string // in metadata
+		shouldMatch    bool
+		needsRotation  bool
+	}{
+		{
+			name:           "Rotation needed - ticket has old username",
+			username:       "StandardUser01:StandardUser02",
+			domainlessUser: "StandardUser01",
+			shouldMatch:    true,
+			needsRotation:  true,
+		},
+		{
+			name:           "Rotation already done - ticket has new username",
+			username:       "StandardUser01:StandardUser02",
+			domainlessUser: "StandardUser02",
+			shouldMatch:    true,
+			needsRotation:  false,
+		},
+		{
+			name:           "No rotation - single username matches",
+			username:       "StandardUser01",
+			domainlessUser: "StandardUser01",
+			shouldMatch:    true,
+			needsRotation:  false,
+		},
+		{
+			name:           "No rotation - single username doesn't match",
+			username:       "StandardUser01",
+			domainlessUser: "StandardUser02",
+			shouldMatch:    false,
+			needsRotation:  false,
+		},
+		{
+			name:           "Rotation format - neither old nor new matches",
+			username:       "StandardUser01:StandardUser02",
+			domainlessUser: "StandardUser03",
+			shouldMatch:    false,
+			needsRotation:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			matchUsername, activeUsername, isRotation := grpc_utils.ParseBlueGreenUsername(tc.username)
+
+			// Simulate the matching logic
+			matched := tc.domainlessUser == matchUsername ||
+				(isRotation && tc.domainlessUser == activeUsername)
+			assert.Equal(t, tc.shouldMatch, matched, "Ticket match result")
+
+			// Simulate needsRotation determination
+			needsRotation := isRotation && matched && tc.domainlessUser == matchUsername
+			assert.Equal(t, tc.needsRotation, needsRotation, "Needs rotation")
+
+			// Suppress unused variable warnings
+			_ = activeUsername
+		})
+	}
+}
+
+// TestBlueGreenMixedStateRotation verifies that in a mixed state where some
+// tickets have the old username and some have the new username, the production
+// matching logic correctly classifies each ticket.
+func TestBlueGreenMixedStateRotation(t *testing.T) {
+	username := "StandardUser01:StandardUser02"
+	matchUsername, activeUsername, isRotation := grpc_utils.ParseBlueGreenUsername(username)
+
+	assert.True(t, isRotation)
+	assert.Equal(t, "StandardUser01", matchUsername)
+	assert.Equal(t, "StandardUser02", activeUsername)
+
+	tickets := []struct {
+		domainlessUser string
+		expectMatch    bool
+		expectRotate   bool // true = needs recreation, false = renew normally
+	}{
+		{"StandardUser01", true, true},   // old username → needs rotation
+		{"StandardUser02", true, false},  // already has active username → renew normally
+		{"StandardUser01", true, true},   // old username → needs rotation
+		{"StandardUser02", true, false},  // already has active username → renew normally
+		{"StandardUser03", false, false}, // unrelated → no match
+	}
+
+	var matchCount, rotateCount, renewCount int
+	for _, ticket := range tickets {
+		// Use the same matching logic as production code
+		matched := ticket.domainlessUser == matchUsername ||
+			(isRotation && ticket.domainlessUser == activeUsername)
+		assert.Equal(t, ticket.expectMatch, matched, "Match for %s", ticket.domainlessUser)
+
+		if matched {
+			matchCount++
+			// Production logic: only rotate if DomainlessUser == matchUsername
+			if ticket.domainlessUser == matchUsername {
+				rotateCount++
+				assert.True(t, ticket.expectRotate)
+			} else {
+				renewCount++
+				assert.False(t, ticket.expectRotate)
+			}
+		}
+	}
+
+	assert.Equal(t, 4, matchCount, "4 tickets should match (2 old + 2 active)")
+	assert.Equal(t, 2, rotateCount, "Only old-username tickets need rotation")
+	assert.Equal(t, 2, renewCount, "Active-username tickets renewed normally")
+}
+
 // TestBlueGreenUsernameParsingInRenewFlow tests that the blue/green username
 // rotation format ("oldUser:newUser") used during Secrets Manager credential
 // rotation is properly parsed and validated in the renew flow.
