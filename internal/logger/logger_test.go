@@ -338,3 +338,59 @@ func TestFileLoggingAppendMode(t *testing.T) {
 	assert.Contains(t, string(content), "initial log")
 	assert.Contains(t, string(content), "appended log")
 }
+
+// TestTruncateLogFileIfNeeded tests log file truncation at max size
+func TestTruncateLogFileIfNeeded(t *testing.T) {
+	t.Run("File under max size is not truncated", func(t *testing.T) {
+		tempDir := t.TempDir()
+		testLogFile := filepath.Join(tempDir, "test.log")
+
+		// Write 1 MB of data
+		data := make([]byte, 1*1024*1024)
+		err := os.WriteFile(testLogFile, data, 0644)
+		require.NoError(t, err)
+
+		truncateLogFileIfNeeded(testLogFile)
+
+		info, err := os.Stat(testLogFile)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1*1024*1024), info.Size(), "File should not be truncated")
+	})
+
+	t.Run("File over max size is truncated", func(t *testing.T) {
+		tempDir := t.TempDir()
+		testLogFile := filepath.Join(tempDir, "test.log")
+
+		// Write 11 MB of data (over 10 MB limit)
+		data := make([]byte, 11*1024*1024)
+		err := os.WriteFile(testLogFile, data, 0644)
+		require.NoError(t, err)
+
+		truncateLogFileIfNeeded(testLogFile)
+
+		info, err := os.Stat(testLogFile)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), info.Size(), "File should be truncated to 0")
+	})
+
+	t.Run("Exactly at max size is not truncated", func(t *testing.T) {
+		tempDir := t.TempDir()
+		testLogFile := filepath.Join(tempDir, "test.log")
+
+		// Write exactly 10 MB
+		data := make([]byte, maxLogFileSize)
+		err := os.WriteFile(testLogFile, data, 0644)
+		require.NoError(t, err)
+
+		truncateLogFileIfNeeded(testLogFile)
+
+		info, err := os.Stat(testLogFile)
+		require.NoError(t, err)
+		assert.Equal(t, int64(maxLogFileSize), info.Size(), "File at exact limit should not be truncated")
+	})
+
+	t.Run("Non-existent file does not error", func(t *testing.T) {
+		// Should not panic or error
+		truncateLogFileIfNeeded("/tmp/nonexistent-log-file-xyz.log")
+	})
+}
