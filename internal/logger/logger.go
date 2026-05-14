@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -22,8 +23,9 @@ type Logger interface {
 // logger implements the Logger interface
 type logger struct {
 	*slog.Logger
-	logFile *os.File
-	done    chan struct{}
+	logFile   *os.File
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 var (
@@ -119,7 +121,10 @@ func truncateLogFileIfNeeded(path string) {
 		return // file doesn't exist yet, nothing to truncate
 	}
 	if info.Size() > maxLogFileSize {
-		_ = os.Truncate(path, 0)
+		if err := os.Truncate(path, 0); err != nil {
+			// Log to stderr since the log file itself may be the problem
+			fmt.Fprintf(os.Stderr, "credentials-fetcher: failed to truncate log file %s: %v\n", path, err)
+		}
 	}
 }
 
@@ -141,9 +146,11 @@ func (l *logger) Error(msg string, args ...any) {
 
 // Close closes the log file if it's open
 func (l *logger) Close() error {
-	if l.done != nil {
-		close(l.done)
-	}
+	l.closeOnce.Do(func() {
+		if l.done != nil {
+			close(l.done)
+		}
+	})
 	if l.logFile != nil {
 		return l.logFile.Close()
 	}

@@ -38,6 +38,8 @@ var (
 	getMetadataFilePathsFunc = metadata_utils.GetMetadataFilePaths
 	getFQDNListFunc          = grpc_utils.GetFQDNList
 	newLdapClientFunc        = ldap.NewClient
+	// getTicketsFromMetadataFunc is mockable for testing CleanupOrphanedTickets
+	getTicketsFromMetadataFunc func(c *Client, metadataPath string) ([]*types.Ticket, []*types.TicketInfo, error) = (*Client).GetTicketsFromMetadata
 )
 
 // Client provides Kerberos authentication operations using CGO-based krb_utils package
@@ -843,4 +845,65 @@ func (c *Client) GenerateKrbTicketUsingSecretVault(ctx context.Context, domain, 
 		"username", username)
 
 	return nil
+}
+
+// orphanedTicketGracePeriod is how long past the renew_until time before a ticket
+// is considered orphaned and eligible for cleanup (7 days).
+const orphanedTicketGracePeriod = 7 * 24 * time.Hour
+
+// CleanupOrphanedTickets removes lease directories containing tickets that have
+// been expired beyond the grace period. This handles tickets left behind after
+// instance reboots where the ECS agent loses track of running tasks.
+func (c *Client) CleanupOrphanedTickets(krbFilesDir string) {
+	log.Info("Running orphaned ticket cleanup", "directory", krbFilesDir)
+
+	metadataFiles, err := metadata_utils.GetMetadataFilePaths(krbFilesDir)
+	if err != nil {
+		log.Error("Failed to get metadata files for cleanup", "error", err)
+		return
+	}
+
+	if len(metadataFiles) == 0 {
+		return
+	}
+
+	now := time.Now()
+	cleaned := 0
+
+	for _, metadataPath := range metadataFiles {
+		tickets, _, err := getTicketsFromMetadataFunc(c, metadataPath)
+		if err != nil {
+			log.Warn("Failed to read tickets for cleanup check", "path", metadataPath, "error", err)
+			continue
+		}
+
+		// Check if all tickets in this lease are expired beyond grace period
+		allExpired := true
+		for _, ticket := range tickets {
+			if ticket.RenewUntil.IsZero() {
+				allExpired = false
+				break
+			}
+			if now.Before(ticket.RenewUntil.Add(orphanedTicketGracePeriod)) {
+				allExpired = false
+				break
+			}
+		}
+
+		if allExpired && len(tickets) > 0 {
+			// Extract lease directory from metadata path
+			leaseDir := filepath.Dir(metadataPath)
+			log.Info("Removing orphaned lease", "path", leaseDir,
+				"oldest_renew_until", tickets[0].RenewUntil.Format(time.RFC3339))
+			if err := os.RemoveAll(leaseDir); err != nil {
+				log.Error("Failed to remove orphaned lease directory", "path", leaseDir, "error", err)
+			} else {
+				cleaned++
+			}
+		}
+	}
+
+	if cleaned > 0 {
+		log.Info("Orphaned ticket cleanup complete", "removed", cleaned)
+	}
 }
