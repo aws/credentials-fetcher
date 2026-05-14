@@ -100,6 +100,7 @@ rm -rf ${RPM_BUILD_ROOT}
 %post
 chmod 644 %{_unitdir}/%{SERVICE_NAME}
 /usr/bin/systemctl daemon-reload
+/usr/bin/systemctl enable %{SERVICE_NAME}
 # Since `ecs.service` gets a new dependency on `credentials-fetcher.service`, it stops on the initial reload. Start it back up if enabled
 /usr/bin/systemctl is-enabled --quiet ecs.service 2>/dev/null && /usr/bin/systemctl restart ecs.service || :
 
