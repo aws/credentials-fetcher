@@ -582,27 +582,34 @@ func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.Tick
 		"path", ticketInfo.KrbFilePath,
 		"service_account", ticketInfo.ServiceAccountName)
 
+	domainlessUser := ticketInfo.DomainlessUser
+
+	// Agent-managed tickets (created via AddKerberosArnLease or AddNonDomainJoinedKerberosLease)
+	// are renewed by the agent via gRPC calls. Skip internal renewal for these.
+	if strings.Contains(domainlessUser, "awsdomainlessusersecret") {
+		log.Info("Skipping internal renewal for agent-managed ticket",
+			"path", ticketInfo.KrbFilePath,
+			"domainless_user", domainlessUser)
+		return nil
+	}
+
 	// Get the ticket information
 	ticket, _, err := c.GetTicket(ticketInfo.KrbFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to get ticket information: %w", err)
 	}
 
-	domainlessUser := ticketInfo.DomainlessUser
-
 	// Check if the ticket is ready for renewal and either:
 	// 1. Not a domainless user (empty string), OR
-	// 2. A domainless user created using the Domain Joined API
+	// 2. A standalone domainless user (config flag enabled)
 	isNotDomainlessUser := domainlessUser == ""
-	isDomainlessUserWithSecret := strings.Contains(domainlessUser, "awsdomainlessusersecret")
 	isDomainlessUserStandalone := config_utils.IsRunRenewalNonDomainJoinedEnabled()
 
-	if !isDomainlessUserStandalone && !isNotDomainlessUser && !isDomainlessUserWithSecret {
+	if !isDomainlessUserStandalone && !isNotDomainlessUser {
 		log.Info("Skipping renewal for domainless user not created using Domain Join API",
 			"path", ticketInfo.KrbFilePath,
 			"principal", ticket.Principal,
 			"domainless_user", domainlessUser,
-			"isDomainlessUserWithSecret", isDomainlessUserWithSecret,
 			"isDomainlessUserStandalone", isDomainlessUserStandalone)
 	} else if !krb_utils.IsTicketReadyForRenewal(ticket) {
 		log.Info("Ticket does not need renewal yet",

@@ -62,15 +62,18 @@ func newLogger() Logger {
 
 	// Setup log file
 	logFile, err := setupLogFile()
-	var writer io.Writer = os.Stdout
+	var writer io.Writer
 
 	if err != nil {
-		// Log error to stdout and continue with stdout-only logging
-		slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})).
-			Error("Failed to setup log file, continuing with stdout-only logging", "error", err)
+		// Log error to stderr and fall back to stderr-only logging
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})).
+			Error("Failed to setup log file, continuing with stderr-only logging", "error", err)
+		writer = os.Stderr
 	} else if logFile != nil {
-		// Create MultiWriter for dual output
-		writer = io.MultiWriter(os.Stdout, logFile)
+		// Write to log file and stderr (stderr is safe for containers; stdout causes pipe deadlock)
+		writer = io.MultiWriter(os.Stderr, logFile)
+	} else {
+		writer = os.Stderr
 	}
 
 	handler := slog.NewTextHandler(writer, &slog.HandlerOptions{

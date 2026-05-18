@@ -18,6 +18,15 @@ import (
 var log = logger.GetInstance()
 
 func main() {
+	// Health check mode — just verify the socket exists and exit
+	if len(os.Args) > 1 && os.Args[1] == "--healthcheck" {
+		socketPath := "/var/credentials-fetcher/socket/credentials_fetcher.sock"
+		if _, err := os.Stat(socketPath); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	log.Info("Starting Credentials Fetcher Daemon", "version", constants.Version)
 
 	// Ensure logger is closed on exit

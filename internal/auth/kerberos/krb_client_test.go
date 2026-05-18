@@ -1018,11 +1018,11 @@ func TestCheckAndRenewTicket(t *testing.T) {
 				KrbFilePath:        "/path/to/krb5cc_test",
 				DomainlessUser:     "", // Regular user (not domainless)
 			},
-			mockKlistOutput:             []byte(generateKlistOutput(24)), // Expires in 24 hours (no renewal needed)
+			mockKlistOutput:             []byte(generateKlistOutput(24)), // Expires in 24 hours
 			mockKlistErr:                nil,
-			mockIsTicketReadyForRenewal: false, // The ticket expires tomorrow, so no renewal needed
+			mockIsTicketReadyForRenewal: false,
 			mockRenewErr:                nil,
-			expectedRenewCalls:          0, // No renewal expected
+			expectedRenewCalls:          0, // No renewal expected (threshold not met)
 			expectedError:               false,
 		},
 		{
@@ -1137,14 +1137,14 @@ func TestCheckAndRenewTicketDomainlessUser(t *testing.T) {
 		expectedError      bool
 	}{
 		{
-			name: "Domainless user with secret - processes renewal",
+			name: "Domainless user with secret - skips internal renewal (agent-managed)",
 			ticketInfo: &types.TicketInfo{
 				ServiceAccountName: "testuser",
 				DomainName:         "example.com",
 				KrbFilePath:        "/path/to/krb5cc_test",
 				DomainlessUser:     "awsdomainlessusersecret:my-secret",
 			},
-			expectedRenewCalls: 1,
+			expectedRenewCalls: 0, // Agent-managed tickets skip internal renewal
 			expectedError:      false,
 		},
 	}
@@ -1155,19 +1155,23 @@ func TestCheckAndRenewTicketDomainlessUser(t *testing.T) {
 			mockExecutor := new(MockExecutor)
 			mockKrb5Client := new(MockKrb5Client)
 
-			// Set up expectations for GetTicket (klist command)
-			mockExecutor.On("Execute",
-				mock.Anything,                   // context
-				"klist",                         // command
-				"-c", tc.ticketInfo.KrbFilePath, // args
-			).Return([]byte(generateKlistOutput(0)), nil).Once() // Expires in 30 minutes (needs renewal)
+			// Set up expectations for GetTicket (klist command) - only called for non-agent-managed tickets
+			if tc.expectedRenewCalls > 0 {
+				mockExecutor.On("Execute",
+					mock.Anything,                   // context
+					"klist",                         // command
+					"-c", tc.ticketInfo.KrbFilePath, // args
+				).Return([]byte(generateKlistOutput(0)), nil).Once() // Expires in 30 minutes (needs renewal)
+			}
 
 			// Set up expectations for successful renewal
-			mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
-				return config.CCachePath == tc.ticketInfo.KrbFilePath &&
-					config.RenewTicket == true &&
-					config.Verify == true
-			})).Return(nil)
+			if tc.expectedRenewCalls > 0 {
+				mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
+					return config.CCachePath == tc.ticketInfo.KrbFilePath &&
+						config.RenewTicket == true &&
+						config.Verify == true
+				})).Return(nil)
+			}
 
 			// After successful renewal, CheckAndRenewTicket re-reads the ticket
 			// to verify the expiry was actually extended

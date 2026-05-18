@@ -157,9 +157,9 @@ func TestLogLevelFromEnvironment(t *testing.T) {
 			}
 
 			// Capture stdout
-			oldStdout := os.Stdout
+			oldStderr := os.Stderr
 			r, w, _ := os.Pipe()
-			os.Stdout = w
+			os.Stderr = w
 
 			// Create logger and log a message
 			log := GetInstance()
@@ -174,7 +174,7 @@ func TestLogLevelFromEnvironment(t *testing.T) {
 			if err := w.Close(); err != nil {
 				t.Fatalf("Failed to close writer: %v", err)
 			}
-			os.Stdout = oldStdout
+			os.Stderr = oldStderr
 
 			// Read captured output
 			var buf bytes.Buffer
@@ -215,7 +215,7 @@ func TestLogLevelFromEnvironment(t *testing.T) {
 	}
 }
 
-// TestDualOutputProperty tests that log messages appear in both stdout and file
+// TestDualOutputProperty tests that log messages appear in both stderr and file
 func TestDualOutputProperty(t *testing.T) {
 	tempDir := t.TempDir()
 	testLogFile := filepath.Join(tempDir, "test.log")
@@ -225,9 +225,9 @@ func TestDualOutputProperty(t *testing.T) {
 	defer func() { _ = logFile.Close() }()
 
 	// Capture stdout
-	oldStdout := os.Stdout
+	oldStderr := os.Stderr
 	stdoutReader, stdoutWriter, _ := os.Pipe()
-	os.Stdout = stdoutWriter
+	os.Stderr = stdoutWriter
 
 	// Create MultiWriter
 	multiWriter := io.MultiWriter(stdoutWriter, logFile)
@@ -237,7 +237,7 @@ func TestDualOutputProperty(t *testing.T) {
 	testLogger.Info("test message", "key", "value")
 
 	_ = stdoutWriter.Close()
-	os.Stdout = oldStdout
+	os.Stderr = oldStderr
 
 	// Read stdout output
 	var stdoutBuf bytes.Buffer
