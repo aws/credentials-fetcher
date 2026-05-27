@@ -45,7 +45,7 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 			// Same username on both sides — treat as a normal renewal.
 			isRotation = false
 		} else {
-			log.Info("Blue/green username rotation detected",
+			log.Info("Detected username with colon separator",
 				"match_username", matchUsername, "active_username", activeUsername)
 		}
 	}
@@ -152,6 +152,8 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 		// normally — this handles the mixed-state case where some tickets in a
 		// metadata file were already rotated.
 		if needsRotation {
+			log.Info("Blue/green username rotation detected",
+				"match_username", matchUsername, "active_username", activeUsername)
 			for _, ticketInfo := range matchingTicketInfos {
 				if ticketInfo.DomainlessUser == matchUsername {
 					// Update DomainlessUser to the new (green) username so that
