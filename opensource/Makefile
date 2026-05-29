@@ -45,7 +45,7 @@ MAIN_PATH = ./cmd/credentials-fetcher/main.go
 build:
 	@echo "Building $(BINARY_NAME) binary..."
 	@mkdir -p $(BIN_DIR)
-	@cd $(PROJECT_ROOT) && go build $(GO_FLAGS) -o opensource/$(BIN_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+	@cd $(PROJECT_ROOT) && go build $(GO_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_PATH)
 	@echo "Binary built successfully: $(BIN_DIR)/$(BINARY_NAME)"
 
 # Run tests

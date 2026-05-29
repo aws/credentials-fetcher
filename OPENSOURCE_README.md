@@ -83,9 +83,11 @@ sudo make cf-install
 ```
 
 This installs:
-- Binary to `/usr/sbin/credentials-fetcherd`
+- Binary to `/usr/sbin/credentials-fetcher`
 - Service file to `/usr/lib/systemd/system/credentials-fetcher.service`
 - Config to `/etc/credentials-fetcher.conf`
+
+Please note the name of the binary is updated to `credentials-fetcher`
 
 ## Installation
 
@@ -262,7 +264,9 @@ python renew_non_domain_joined_kerberos_lease.py
         "HostAccountConfig": {
             "PortableCcgVersion": "1",
             "PluginGUID": "{859E1386-BDB4-49E8-85C7-3070B13920E1}",
-            "PluginInput": "prod/ad-credentials"  // AWS Secrets Manager secret name
+            "PluginInput": {
+                "CredentialArn": "$gmsaSecretArn$"
+            }
         }
     }
 }
