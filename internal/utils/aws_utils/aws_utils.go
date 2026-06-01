@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"golang.a2z.com/CredentialsFetcherV2/constants"
 	"golang.a2z.com/CredentialsFetcherV2/internal/logger"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
@@ -173,11 +174,11 @@ func IsValidDomain(domain string) bool {
 	return len(parts) >= 2
 }
 
-// ContainsInvalidCharacters checks if a string contains invalid characters
+// ContainsInvalidCharacters checks if a string contains invalid characters for AD sAMAccountName
 func ContainsInvalidCharacters(s string, logMessage string) bool {
 	log := logger.GetInstance()
-	for _, char := range types.InvalidCharacters {
-		if strings.ContainsRune(s, char) {
+	for _, char := range s {
+		if strings.ContainsRune(constants.InvalidSAMAccountNameChars, char) {
 			log.Error("Contains invalid credentials in ", logMessage)
 			return true
 		}
@@ -190,9 +191,20 @@ func ContainsInvalidCharactersInADAccountName(username string) bool {
 	return ContainsInvalidCharacters(username, "AD account name")
 }
 
-// ContainsInvalidCharactersInCredentialSpec checks if a string contains invalid characters
+// ContainsInvalidCharactersInCredentialSpec checks if a credential spec path contains invalid characters
 func ContainsInvalidCharactersInCredentialSpec(s string) bool {
-	return ContainsInvalidCharacters(s, "credential spec path")
+	log := logger.GetInstance()
+	if strings.Contains(s, "..") {
+		log.Error("Contains path traversal sequence in ", "credential spec path")
+		return true
+	}
+	for _, char := range types.InvalidCredSpecPathChars {
+		if strings.ContainsRune(s, char) {
+			log.Error("Contains invalid credentials in ", "credential spec path")
+			return true
+		}
+	}
+	return false
 }
 
 // parseRegionFromARN extracts the region from an AWS ARN

@@ -314,3 +314,50 @@ func TestGetSecretWithClient(t *testing.T) {
 		})
 	}
 }
+
+func TestContainsInvalidCharactersInADAccountName(t *testing.T) {
+	tests := []struct {
+		name     string
+		username string
+		want     bool
+	}{
+		{"Valid simple username", "webadmin", false},
+		{"Valid username with period", "svc.myapp", false},
+		{"Valid username with hyphen", "svc-myapp", false},
+		{"Invalid with slash", "invalid/user", true},
+		{"Invalid with backslash", "invalid\\user", true},
+		{"Invalid with colon", "invalid:user", true},
+		{"Invalid with space", "invalid user", true},
+		{"Invalid with double quote", "invalid\"user", true},
+		{"Invalid with equals", "invalid=user", true},
+		{"Invalid with comma", "invalid,user", true},
+		{"Invalid with parens", "invalid(user", true},
+		{"Invalid with braces", "invalid{user", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, ContainsInvalidCharactersInADAccountName(tt.username))
+		})
+	}
+}
+
+func TestContainsInvalidCharactersInCredentialSpec(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"Valid mount path", "leaseID/credspec.json", false},
+		{"Valid path with period", "lease123/my.credspec.json", false},
+		{"Path traversal blocked", "leaseID/../etc/passwd", true},
+		{"Double dot blocked", "lease..ID/file", true},
+		{"Invalid with backslash", "leaseID\\file", true},
+		{"Invalid with colon", "leaseID:file", true},
+		{"Invalid with space", "lease ID/file", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, ContainsInvalidCharactersInCredentialSpec(tt.path))
+		})
+	}
+}

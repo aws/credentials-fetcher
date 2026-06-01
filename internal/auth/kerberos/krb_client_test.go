@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/krb_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
@@ -1016,11 +1018,11 @@ func TestCheckAndRenewTicket(t *testing.T) {
 				KrbFilePath:        "/path/to/krb5cc_test",
 				DomainlessUser:     "", // Regular user (not domainless)
 			},
-			mockKlistOutput:             []byte(generateKlistOutput(24)), // Expires in 24 hours (no renewal needed)
+			mockKlistOutput:             []byte(generateKlistOutput(24)), // Expires in 24 hours
 			mockKlistErr:                nil,
-			mockIsTicketReadyForRenewal: false, // The ticket expires tomorrow, so no renewal needed
+			mockIsTicketReadyForRenewal: false,
 			mockRenewErr:                nil,
-			expectedRenewCalls:          0, // No renewal expected
+			expectedRenewCalls:          0, // No renewal expected (threshold not met)
 			expectedError:               false,
 		},
 		{
@@ -1081,7 +1083,7 @@ func TestCheckAndRenewTicket(t *testing.T) {
 				mock.Anything,                   // context
 				"klist",                         // command
 				"-c", tc.ticketInfo.KrbFilePath, // args
-			).Return(tc.mockKlistOutput, tc.mockKlistErr)
+			).Return(tc.mockKlistOutput, tc.mockKlistErr).Once()
 
 			// Set up expectations for renewal if needed
 			if tc.expectedRenewCalls > 0 {
@@ -1090,6 +1092,17 @@ func TestCheckAndRenewTicket(t *testing.T) {
 						config.RenewTicket == true &&
 						config.Verify == true
 				})).Return(tc.mockRenewErr)
+
+				// After successful renewal, CheckAndRenewTicket re-reads the ticket
+				// to verify the expiry was actually extended
+				if tc.mockRenewErr == nil {
+					renewedOutput := []byte(generateKlistOutput(10)) // Extended expiry
+					mockExecutor.On("Execute",
+						mock.Anything,
+						"klist",
+						"-c", tc.ticketInfo.KrbFilePath,
+					).Return(renewedOutput, nil).Once()
+				}
 			}
 
 			// Create a client with mocks
@@ -1124,14 +1137,14 @@ func TestCheckAndRenewTicketDomainlessUser(t *testing.T) {
 		expectedError      bool
 	}{
 		{
-			name: "Domainless user with secret - processes renewal",
+			name: "Domainless user with secret - skips internal renewal (agent-managed)",
 			ticketInfo: &types.TicketInfo{
 				ServiceAccountName: "testuser",
 				DomainName:         "example.com",
 				KrbFilePath:        "/path/to/krb5cc_test",
 				DomainlessUser:     "awsdomainlessusersecret:my-secret",
 			},
-			expectedRenewCalls: 1,
+			expectedRenewCalls: 0, // Agent-managed tickets skip internal renewal
 			expectedError:      false,
 		},
 	}
@@ -1142,19 +1155,34 @@ func TestCheckAndRenewTicketDomainlessUser(t *testing.T) {
 			mockExecutor := new(MockExecutor)
 			mockKrb5Client := new(MockKrb5Client)
 
-			// Set up expectations for GetTicket (klist command)
-			mockExecutor.On("Execute",
-				mock.Anything,                   // context
-				"klist",                         // command
-				"-c", tc.ticketInfo.KrbFilePath, // args
-			).Return([]byte(generateKlistOutput(0)), nil) // Expires in 30 minutes (needs renewal)
+			// Set up expectations for GetTicket (klist command) - only called for non-agent-managed tickets
+			if tc.expectedRenewCalls > 0 {
+				mockExecutor.On("Execute",
+					mock.Anything,                   // context
+					"klist",                         // command
+					"-c", tc.ticketInfo.KrbFilePath, // args
+				).Return([]byte(generateKlistOutput(0)), nil).Once() // Expires in 30 minutes (needs renewal)
+			}
 
 			// Set up expectations for successful renewal
-			mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
-				return config.CCachePath == tc.ticketInfo.KrbFilePath &&
-					config.RenewTicket == true &&
-					config.Verify == true
-			})).Return(nil)
+			if tc.expectedRenewCalls > 0 {
+				mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
+					return config.CCachePath == tc.ticketInfo.KrbFilePath &&
+						config.RenewTicket == true &&
+						config.Verify == true
+				})).Return(nil)
+			}
+
+			// After successful renewal, CheckAndRenewTicket re-reads the ticket
+			// to verify the expiry was actually extended
+			if tc.expectedRenewCalls > 0 {
+				renewedOutput := []byte(generateKlistOutput(10)) // Extended expiry
+				mockExecutor.On("Execute",
+					mock.Anything,
+					"klist",
+					"-c", tc.ticketInfo.KrbFilePath,
+				).Return(renewedOutput, nil).Once()
+			}
 
 			// Create a client with mocks
 			client := &Client{
@@ -1257,5 +1285,59 @@ func TestCheckAndRenewTicketRenewalFailureFallback(t *testing.T) {
 
 		// Also verify the klist command was called
 		mockExecutor.AssertExpectations(t)
+	})
+}
+
+func TestCleanupOrphanedTickets(t *testing.T) {
+	client := NewClient()
+
+	t.Run("Removes leases expired beyond grace period", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create an orphaned lease directory with metadata
+		orphanLease := filepath.Join(tmpDir, "orphan123")
+		require.NoError(t, os.MkdirAll(filepath.Join(orphanLease, "WebApp01"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(orphanLease, "WebApp01", "krb5cc"), []byte("fake"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(orphanLease, "orphan123_metadata.json"), []byte(`{"krb_ticket_info":[]}`), 0644))
+
+		// Create an active lease directory with metadata
+		activeLease := filepath.Join(tmpDir, "active456")
+		require.NoError(t, os.MkdirAll(filepath.Join(activeLease, "WebApp01"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(activeLease, "WebApp01", "krb5cc"), []byte("fake"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(activeLease, "active456_metadata.json"), []byte(`{"krb_ticket_info":[]}`), 0644))
+
+		// Mock GetTicketsFromMetadata to return controllable RenewUntil values
+		originalFunc := getTicketsFromMetadataFunc
+		defer func() { getTicketsFromMetadataFunc = originalFunc }()
+
+		getTicketsFromMetadataFunc = func(_ *Client, metadataPath string) ([]*types.Ticket, []*types.TicketInfo, error) {
+			if strings.Contains(metadataPath, "orphan123") {
+				return []*types.Ticket{{
+					RenewUntil: time.Now().Add(-8 * 24 * time.Hour),
+				}}, nil, nil
+			}
+			return []*types.Ticket{{
+				RenewUntil: time.Now().Add(10 * time.Hour),
+			}}, nil, nil
+		}
+
+		client.CleanupOrphanedTickets(tmpDir)
+
+		// Orphaned lease should be removed
+		_, err := os.Stat(orphanLease)
+		assert.True(t, os.IsNotExist(err), "Orphaned lease should be removed")
+
+		// Active lease should still exist
+		_, err = os.Stat(activeLease)
+		assert.NoError(t, err, "Active lease should not be removed")
+	})
+
+	t.Run("Does nothing with empty directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		client.CleanupOrphanedTickets(tmpDir)
+	})
+
+	t.Run("Does nothing with non-existent directory", func(t *testing.T) {
+		client.CleanupOrphanedTickets("/tmp/nonexistent-krbdir-xyz")
 	})
 }

@@ -38,6 +38,8 @@ var (
 	getMetadataFilePathsFunc = metadata_utils.GetMetadataFilePaths
 	getFQDNListFunc          = grpc_utils.GetFQDNList
 	newLdapClientFunc        = ldap.NewClient
+	// getTicketsFromMetadataFunc is mockable for testing CleanupOrphanedTickets
+	getTicketsFromMetadataFunc func(c *Client, metadataPath string) ([]*types.Ticket, []*types.TicketInfo, error) = (*Client).GetTicketsFromMetadata
 )
 
 // Client provides Kerberos authentication operations using CGO-based krb_utils package
@@ -580,27 +582,34 @@ func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.Tick
 		"path", ticketInfo.KrbFilePath,
 		"service_account", ticketInfo.ServiceAccountName)
 
+	domainlessUser := ticketInfo.DomainlessUser
+
+	// Agent-managed tickets (created via AddKerberosArnLease or AddNonDomainJoinedKerberosLease)
+	// are renewed by the agent via gRPC calls. Skip internal renewal for these.
+	if strings.Contains(domainlessUser, "awsdomainlessusersecret") {
+		log.Info("Skipping internal renewal for agent-managed ticket",
+			"path", ticketInfo.KrbFilePath,
+			"domainless_user", domainlessUser)
+		return nil
+	}
+
 	// Get the ticket information
 	ticket, _, err := c.GetTicket(ticketInfo.KrbFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to get ticket information: %w", err)
 	}
 
-	domainlessUser := ticketInfo.DomainlessUser
-
 	// Check if the ticket is ready for renewal and either:
 	// 1. Not a domainless user (empty string), OR
-	// 2. A domainless user created using the Domain Joined API
+	// 2. A standalone domainless user (config flag enabled)
 	isNotDomainlessUser := domainlessUser == ""
-	isDomainlessUserWithSecret := strings.Contains(domainlessUser, "awsdomainlessusersecret")
 	isDomainlessUserStandalone := config_utils.IsRunRenewalNonDomainJoinedEnabled()
 
-	if !isDomainlessUserStandalone && !isNotDomainlessUser && !isDomainlessUserWithSecret {
+	if !isDomainlessUserStandalone && !isNotDomainlessUser {
 		log.Info("Skipping renewal for domainless user not created using Domain Join API",
 			"path", ticketInfo.KrbFilePath,
 			"principal", ticket.Principal,
 			"domainless_user", domainlessUser,
-			"isDomainlessUserWithSecret", isDomainlessUserWithSecret,
 			"isDomainlessUserStandalone", isDomainlessUserStandalone)
 	} else if !krb_utils.IsTicketReadyForRenewal(ticket) {
 		log.Info("Ticket does not need renewal yet",
@@ -615,8 +624,19 @@ func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.Tick
 
 		// Try renewal first using CGO-based implementation
 		if err := c.RenewKerberosTicket(ctx, ticketInfo.KrbFilePath); err == nil {
-			log.Info("Direct renewal of the ticket successful using CGO")
-			return nil
+			// Verify the renewed ticket actually has an extended expiry
+			renewedTicket, _, err := c.GetTicket(ticketInfo.KrbFilePath)
+			if err != nil {
+				log.Warn("CGO renewal succeeded but failed to re-read ticket, falling back to recreation", "error", err)
+			} else if renewedTicket.ExpirationTime.After(ticket.ExpirationTime) {
+				log.Info("Direct renewal of the ticket successful using CGO",
+					"new_expiry", renewedTicket.ExpirationTime.Format(time.RFC3339))
+				return nil
+			} else {
+				log.Warn("CGO renewal reported success but ticket expiry was not extended, falling back to recreation",
+					"old_expiry", ticket.ExpirationTime.Format(time.RFC3339),
+					"current_expiry", renewedTicket.ExpirationTime.Format(time.RFC3339))
+			}
 		} else {
 			log.Warn("Direct renewal failed, attempting ticket recreation", "error", err)
 		}
@@ -634,6 +654,7 @@ func (c *Client) CheckAndRenewTicket(ctx context.Context, ticketInfo *types.Tick
 // recreateTicketWithRetries attempts to recreate a Kerberos ticket with the specified number of retries.
 func (c *Client) recreateTicketWithRetries(ctx context.Context, ticketInfo *types.TicketInfo, numRetries int, isDomainlessUserStandalone bool) error {
 	domainlessUser := ticketInfo.DomainlessUser
+	maxRetries := numRetries + 1 // allow at most one extension beyond the original retry count
 
 	for i := 0; i <= numRetries; i++ {
 		// Try to recreate the ticket using gMSA password
@@ -650,9 +671,12 @@ func (c *Client) recreateTicketWithRetries(ctx context.Context, ticketInfo *type
 
 			// Try alternative methods based on user type
 			if err := c.tryAlternativeTicketCreation(ctx, ticketInfo, domainlessUser, isDomainlessUserStandalone); err == nil {
-				// Success with alternative method
-				log.Info("Renewal successful after recreating user principal or machine principal Kerberos ticket")
-				return nil
+				// User/machine ticket recreated — ensure at least one more GMSA attempt
+				log.Info("Successfully recreated user principal or machine principal Kerberos ticket, retrying GMSA ticket creation")
+				if i == numRetries && numRetries < maxRetries {
+					numRetries++ // allow one final GMSA attempt with fresh credentials
+				}
+				continue
 			}
 		}
 	}
@@ -828,4 +852,65 @@ func (c *Client) GenerateKrbTicketUsingSecretVault(ctx context.Context, domain, 
 		"username", username)
 
 	return nil
+}
+
+// orphanedTicketGracePeriod is how long past the renew_until time before a ticket
+// is considered orphaned and eligible for cleanup (7 days).
+const orphanedTicketGracePeriod = 7 * 24 * time.Hour
+
+// CleanupOrphanedTickets removes lease directories containing tickets that have
+// been expired beyond the grace period. This handles tickets left behind after
+// instance reboots where the ECS agent loses track of running tasks.
+func (c *Client) CleanupOrphanedTickets(krbFilesDir string) {
+	log.Info("Running orphaned ticket cleanup", "directory", krbFilesDir)
+
+	metadataFiles, err := metadata_utils.GetMetadataFilePaths(krbFilesDir)
+	if err != nil {
+		log.Error("Failed to get metadata files for cleanup", "error", err)
+		return
+	}
+
+	if len(metadataFiles) == 0 {
+		return
+	}
+
+	now := time.Now()
+	cleaned := 0
+
+	for _, metadataPath := range metadataFiles {
+		tickets, _, err := getTicketsFromMetadataFunc(c, metadataPath)
+		if err != nil {
+			log.Warn("Failed to read tickets for cleanup check", "path", metadataPath, "error", err)
+			continue
+		}
+
+		// Check if all tickets in this lease are expired beyond grace period
+		allExpired := true
+		for _, ticket := range tickets {
+			if ticket.RenewUntil.IsZero() {
+				allExpired = false
+				break
+			}
+			if now.Before(ticket.RenewUntil.Add(orphanedTicketGracePeriod)) {
+				allExpired = false
+				break
+			}
+		}
+
+		if allExpired && len(tickets) > 0 {
+			// Extract lease directory from metadata path
+			leaseDir := filepath.Dir(metadataPath)
+			log.Info("Removing orphaned lease", "path", leaseDir,
+				"oldest_renew_until", tickets[0].RenewUntil.Format(time.RFC3339))
+			if err := os.RemoveAll(leaseDir); err != nil {
+				log.Error("Failed to remove orphaned lease directory", "path", leaseDir, "error", err)
+			} else {
+				cleaned++
+			}
+		}
+	}
+
+	if cleaned > 0 {
+		log.Info("Orphaned ticket cleanup complete", "removed", cleaned)
+	}
 }

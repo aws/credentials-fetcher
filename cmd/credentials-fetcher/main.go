@@ -18,6 +18,15 @@ import (
 var log = logger.GetInstance()
 
 func main() {
+	// Health check mode — just verify the socket exists and exit
+	if len(os.Args) > 1 && os.Args[1] == "--healthcheck" {
+		socketPath := "/var/credentials-fetcher/socket/credentials_fetcher.sock"
+		if _, err := os.Stat(socketPath); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	log.Info("Starting Credentials Fetcher Daemon", "version", constants.Version)
 
 	// Ensure logger is closed on exit
@@ -46,17 +55,20 @@ func main() {
 	if isSystemd {
 		log.Info("Running under systemd")
 	} else {
-		log.Info("Not running under systemd, watchdog notifications will be simulated")
+		log.Info("Not running under systemd, skipping watchdog")
 	}
 
-	// Create the watchdog
-	wd, err := watchdog.GetInstance()
-	if err != nil {
-		log.Error("Failed to create watchdog", "error", err)
-		os.Exit(1)
+	// Create the watchdog (only used under systemd)
+	var wd *watchdog.Watchdog
+	if isSystemd {
+		var err error
+		wd, err = watchdog.GetInstance()
+		if err != nil {
+			log.Error("Failed to create watchdog", "error", err)
+			os.Exit(1)
+		}
+		log.Info("Watchdog created successfully")
 	}
-
-	log.Info("Watchdog created successfully")
 
 	// Create the gRPC server
 	server := grpc.NewCredentialsFetcherServer(constants.DefaultKrbFilesDir, constants.DefaultAWSSecretName)
@@ -67,9 +79,12 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(constants.NumberofWaitGroups)
 
-	// Start the watchdog in its own goroutine
+	// Start the watchdog in its own goroutine (only under systemd)
 	go func() {
 		defer wg.Done()
+		if !isSystemd {
+			return
+		}
 		log.Info("Starting watchdog goroutine")
 		if err := wd.Start(ctx); err != nil {
 			log.Error("Watchdog error", "error", err)
@@ -107,6 +122,9 @@ func main() {
 		}
 
 		// Continue checking at regular intervals
+		cleanupTicker := time.NewTicker(1 * time.Hour)
+		defer cleanupTicker.Stop()
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -118,6 +136,8 @@ func main() {
 					log.Error("Ticket renewal check failed", "error", err)
 					// Continue running even if a check fails
 				}
+			case <-cleanupTicker.C:
+				krbClient.CleanupOrphanedTickets(constants.DefaultKrbFilesDir)
 			}
 		}
 	}()

@@ -1,10 +1,12 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"sync"
+	"time"
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
 )
@@ -21,7 +23,9 @@ type Logger interface {
 // logger implements the Logger interface
 type logger struct {
 	*slog.Logger
-	logFile *os.File
+	logFile   *os.File
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 var (
@@ -58,24 +62,35 @@ func newLogger() Logger {
 
 	// Setup log file
 	logFile, err := setupLogFile()
-	var writer io.Writer = os.Stdout
+	var writer io.Writer
 
 	if err != nil {
-		// Log error to stdout and continue with stdout-only logging
-		slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})).
-			Error("Failed to setup log file, continuing with stdout-only logging", "error", err)
+		// Log error to stderr and fall back to stderr-only logging
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})).
+			Error("Failed to setup log file, continuing with stderr-only logging", "error", err)
+		writer = os.Stderr
 	} else if logFile != nil {
-		// Create MultiWriter for dual output
-		writer = io.MultiWriter(os.Stdout, logFile)
+		// Write to log file and stderr (stderr is safe for containers; stdout causes pipe deadlock)
+		writer = io.MultiWriter(os.Stderr, logFile)
+	} else {
+		writer = os.Stderr
 	}
 
 	handler := slog.NewTextHandler(writer, &slog.HandlerOptions{
 		Level: logLevel,
 	})
-	return &logger{
+	l := &logger{
 		Logger:  slog.New(handler),
 		logFile: logFile,
+		done:    make(chan struct{}),
 	}
+
+	// Start periodic log rotation check
+	if logFile != nil {
+		go l.logRotationLoop()
+	}
+
+	return l
 }
 
 // setupLogFile creates the log directory and opens the log file
@@ -86,6 +101,9 @@ func setupLogFile() (*os.File, error) {
 		return nil, err
 	}
 
+	// Truncate log file if it exceeds max size (10 MB)
+	truncateLogFileIfNeeded(constants.LogFilePath)
+
 	// Open/create log file with append mode and 0644 permissions
 	logFile, err := os.OpenFile(constants.LogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) // #nosec G302
 	if err != nil {
@@ -93,6 +111,24 @@ func setupLogFile() (*os.File, error) {
 	}
 
 	return logFile, nil
+}
+
+// maxLogFileSize is the maximum log file size before truncation (10 MB)
+const maxLogFileSize = 10 * 1024 * 1024
+
+// truncateLogFileIfNeeded truncates the log file if it exceeds maxLogFileSize.
+// This matches the behavior of the C++ credentials-fetcher (v1.3.8).
+func truncateLogFileIfNeeded(path string) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return // file doesn't exist yet, nothing to truncate
+	}
+	if info.Size() > maxLogFileSize {
+		if err := os.Truncate(path, 0); err != nil {
+			// Log to stderr since the log file itself may be the problem
+			fmt.Fprintf(os.Stderr, "credentials-fetcher: failed to truncate log file %s: %v\n", path, err)
+		}
+	}
 }
 
 func (l *logger) Debug(msg string, args ...any) {
@@ -113,8 +149,27 @@ func (l *logger) Error(msg string, args ...any) {
 
 // Close closes the log file if it's open
 func (l *logger) Close() error {
+	l.closeOnce.Do(func() {
+		if l.done != nil {
+			close(l.done)
+		}
+	})
 	if l.logFile != nil {
 		return l.logFile.Close()
 	}
 	return nil
+}
+
+// logRotationLoop periodically checks log file size and truncates if needed
+func (l *logger) logRotationLoop() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			truncateLogFileIfNeeded(constants.LogFilePath)
+		case <-l.done:
+			return
+		}
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"golang.a2z.com/CredentialsFetcherV2/constants"
 
@@ -76,6 +77,7 @@ type KerberosArnLeaseHandler struct {
 	krbFilesDir   string
 	krbClient     *kerberos.Client
 	shellExecutor cmdexec.Executor
+	renewMu       sync.Mutex // serialize renewal attempts across gRPC calls
 }
 
 // NewKerberosArnLeaseHandler creates a new KerberosArnLeaseHandler
@@ -406,6 +408,9 @@ func (h *KerberosArnLeaseHandler) createKerberosTickets(ctx context.Context, cfg
 			h.cleanupKerberosFiles(krbTicketInfoList)
 			return fmt.Errorf("failed to create gMSA ticket: %v", err)
 		}
+
+		// Update DomainlessUser to include secret ARN for renewal identification
+		krbTicket.DomainlessUser = "awsdomainlessusersecret:" + secretsArn
 
 		log.Info("Successfully created Kerberos ticket for", "user", krbTicket.DomainlessUser)
 

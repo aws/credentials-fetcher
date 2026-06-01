@@ -1307,10 +1307,14 @@ func (m *mockFileInfo) Sys() interface{}   { return nil }
 // TestCleanupKerberosFilesWithFS_MockComplete covers all paths using mocked filesystem
 func TestCleanupKerberosFilesWithFS_MockComplete(t *testing.T) {
 	t.Run("RemoveAll serviceAccountDir error", func(t *testing.T) {
+		removeAllCallCount := 0
 		mockFS := MockFS{
-			RemoveFunc: func(name string) error { return nil },
 			RemoveAllFunc: func(path string) error {
-				if strings.Contains(path, "serviceaccount") {
+				removeAllCallCount++
+				if removeAllCallCount == 1 {
+					return nil // first call removes krbFilePath
+				}
+				if removeAllCallCount == 2 && strings.Contains(path, "serviceaccount") {
 					return errors.New("permission denied")
 				}
 				return nil
@@ -1325,9 +1329,13 @@ func TestCleanupKerberosFilesWithFS_MockComplete(t *testing.T) {
 	})
 
 	t.Run("RemoveAll lease directory error", func(t *testing.T) {
+		removeAllCallCount := 0
 		mockFS := MockFS{
-			RemoveFunc: func(name string) error { return nil },
 			RemoveAllFunc: func(path string) error {
+				removeAllCallCount++
+				if removeAllCallCount == 1 {
+					return nil // first call removes krbFilePath
+				}
 				if strings.Contains(path, "lease") && !strings.Contains(path, "serviceaccount") {
 					return errors.New("permission denied")
 				}
@@ -1344,7 +1352,6 @@ func TestCleanupKerberosFilesWithFS_MockComplete(t *testing.T) {
 
 	t.Run("Stat returns non-NotExist error", func(t *testing.T) {
 		mockFS := MockFS{
-			RemoveFunc: func(name string) error { return nil },
 			StatFunc: func(name string) (os.FileInfo, error) {
 				if strings.Contains(name, "serviceaccount") {
 					return nil, errors.New("permission denied")
@@ -1359,7 +1366,6 @@ func TestCleanupKerberosFilesWithFS_MockComplete(t *testing.T) {
 
 	t.Run("Success path - all removals succeed", func(t *testing.T) {
 		mockFS := MockFS{
-			RemoveFunc:    func(name string) error { return nil },
 			RemoveAllFunc: func(path string) error { return nil },
 			StatFunc: func(name string) (os.FileInfo, error) {
 				return &mockFileInfo{name: "serviceaccount", isDir: true}, nil
@@ -1372,7 +1378,6 @@ func TestCleanupKerberosFilesWithFS_MockComplete(t *testing.T) {
 
 	t.Run("Directory does not exist", func(t *testing.T) {
 		mockFS := MockFS{
-			RemoveFunc: func(name string) error { return nil },
 			StatFunc: func(name string) (os.FileInfo, error) {
 				return nil, os.ErrNotExist
 			},
@@ -1382,16 +1387,16 @@ func TestCleanupKerberosFilesWithFS_MockComplete(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("Remove krb5cc file error", func(t *testing.T) {
+	t.Run("RemoveAll krbFilePath error", func(t *testing.T) {
 		mockFS := MockFS{
-			RemoveFunc: func(name string) error {
+			RemoveAllFunc: func(path string) error {
 				return errors.New("permission denied")
 			},
 		}
 
 		err := CleanupKerberosFilesWithFS(mockFS, "/test/lease/serviceaccount/krb5cc")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to remove Kerberos file")
+		assert.Contains(t, err.Error(), "failed to remove Kerberos path")
 	})
 }
 
