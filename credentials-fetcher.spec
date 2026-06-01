@@ -3,7 +3,7 @@
 
 %global major_version 2
 %global minor_version 0
-%global patch_version 1
+%global patch_version 2
 
 Name: credentials-fetcher
 Version: %{major_version}.%{minor_version}.%{patch_version}
@@ -84,6 +84,7 @@ cp ./configuration/conf/krb5.conf %{buildroot}/usr/sbin/krb5.conf
 rm -rf ${RPM_BUILD_ROOT}
 
 %files
+%license LICENSE.txt
 /usr/sbin/credentials-fetcher
 /usr/sbin/krb5.conf
 %config(noreplace) /etc/credentials-fetcher.conf
@@ -98,6 +99,7 @@ rm -rf ${RPM_BUILD_ROOT}
 %post
 chmod 644 %{_unitdir}/%{SERVICE_NAME}
 /usr/bin/systemctl daemon-reload
+/usr/bin/systemctl enable %{SERVICE_NAME}
 # Since `ecs.service` gets a new dependency on `credentials-fetcher.service`, it stops on the initial reload. Start it back up if enabled
 /usr/bin/systemctl is-enabled --quiet ecs.service 2>/dev/null && /usr/bin/systemctl restart ecs.service || :
 
@@ -118,6 +120,16 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Fri May 29 2026 Muskan Lalit <muskanl@amazon.com>
+- Set DomainlessUser for AddKerberosArnLease to enable renewals in Fargate managed mode
+- Support blue/green username rotation for non-domain-joined mode
+- Eliminate GMSA ticket expiry gap during renewal
+- Add log file rotation at 10MB
+- Remove orphaned tickets after 7 days past renewal
+- Skip Secrets Manager fallback when DomainlessUser is set
+- Fix invalid char blocklist in AD account name and UTF-8 BOM parsing in credential spec 
+- Add Fedora packaging files
+
 * Mon Feb 23 2026 Samiullah Mohammed <samiull@amazon.com> - 2.0.1
 - Update ticket renewal logic to fetch username from secret
 

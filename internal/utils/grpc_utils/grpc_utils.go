@@ -3,6 +3,7 @@ package grpc_utils
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -96,9 +97,19 @@ func ParseCredSpec(credspecData string) (*types.CredentialSpec, error) {
 
 // parseJSON parses the credential spec JSON string into a map
 func parseJSON(credspecData string) (map[string]interface{}, error) {
+	// Strip UTF-8 BOM (EF BB BF) if present — Windows tools commonly emit BOM-prefixed files
+	credspecData = strings.TrimPrefix(credspecData, "\xef\xbb\xbf")
+	// Strip lone 0xEF byte from partial/corrupt BOM sequences
+	credspecData = strings.TrimPrefix(credspecData, "\xef")
+
 	var root map[string]interface{}
 	if err := json.Unmarshal([]byte(credspecData), &root); err != nil {
 		logger.GetInstance().Error("Failed to parse credential spec JSON", "error", err)
+		n := len(credspecData)
+		if n > 32 {
+			n = 32
+		}
+		logger.GetInstance().Error("Credential spec hex prefix", "hex", hex.EncodeToString([]byte(credspecData[:n])))
 		return nil, fmt.Errorf("failed to parse credential spec JSON: %v", err)
 	}
 	return root, nil
@@ -227,7 +238,7 @@ func ValidateAccountName(username string) error {
 
 	// Check for invalid characters
 	for _, char := range username {
-		if strings.ContainsRune(constants.InvalidUsernameChars, char) || char == ' ' {
+		if strings.ContainsRune(constants.InvalidSAMAccountNameChars, char) {
 			log.Error("Username contains invalid character",
 				"username", username,
 				"invalid_char", string(char))
@@ -489,6 +500,30 @@ func ParseCredSpecDomainless(credspecData string, krbTicketInfo *types.TicketInf
 	krbTicketMapping.KrbFilePath = krbTicketInfo.KrbFilePath
 
 	return nil
+}
+
+// ParseBlueGreenUsername parses a username that may contain a blue/green rotation
+// separator (':').  Active Directory forbids ':' in usernames, so the format
+// "oldUser:newUser" is unambiguous.
+//
+// This is used during credential rotation when usernames are changed in
+// AWS Secrets Manager. The caller supplies "oldUser:newUser" so that the
+// service can match existing tickets by the old (blue) username and then
+// recreate them with the new (green) username and password.
+//
+// Returns:
+//   - matchUsername: the username to match existing tickets against (old / "blue")
+//   - activeUsername: the username to use for ticket creation (new / "green")
+//   - isRotation: true when a ':' separator was found
+//
+// When no ':' is present the same value is returned for both fields and
+// isRotation is false (normal, non-rotation renewal).
+func ParseBlueGreenUsername(raw string) (matchUsername, activeUsername string, isRotation bool) {
+	idx := strings.Index(raw, ":")
+	if idx < 0 {
+		return raw, raw, false
+	}
+	return raw[:idx], raw[idx+1:], true
 }
 
 // SecureClearString securely clears a string by overwriting its contents before setting it to empty

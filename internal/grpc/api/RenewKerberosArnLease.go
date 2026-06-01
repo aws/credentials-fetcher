@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
@@ -15,6 +16,9 @@ import (
 
 // RenewKerberosArnLease renews Kerberos tickets using AWS credentials
 func (h *KerberosArnLeaseHandler) RenewKerberosArnLease(ctx context.Context, req *pb.RenewKerberosArnLeaseRequest) (*pb.RenewKerberosArnLeaseResponse, error) {
+	h.renewMu.Lock()
+	defer h.renewMu.Unlock()
+
 	log := logger.GetInstance()
 	log.Info("Processing RenewKerberosArnLease Fargate request")
 
@@ -40,12 +44,56 @@ func (h *KerberosArnLeaseHandler) RenewKerberosArnLease(ctx context.Context, req
 		return response, err
 	}
 
-	// Get and process metadata files
-	err = h.processMetadataFiles(ctx, cfg)
-	if err != nil {
-		response.Status = "failed"
-		return response, err
+	// Get and process metadata files with a timeout to prevent CGO/LDAP hangs.
+	// If the operation hangs beyond 30 seconds, wait for it to finish, then retry once.
+	const maxAttempts = 2
+	const renewTimeout = 30 * time.Second
+
+	type result struct{ err error }
+	var prevDone <-chan result
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		// Wait for previous attempt's goroutine to avoid concurrent processMetadataFiles
+		if prevDone != nil {
+			select {
+			case <-prevDone:
+			case <-time.After(2 * renewTimeout): // Bound wait to prevent indefinite blocking
+				log.Warn("Previous renewal goroutine still running after extended timeout")
+			case <-ctx.Done():
+				response.Status = "failed"
+				return response, ctx.Err()
+			}
+		}
+
+		renewCtx, cancel := context.WithTimeout(ctx, renewTimeout)
+		done := make(chan result, 1)
+		go func() {
+			done <- result{h.processMetadataFiles(renewCtx, cfg)}
+		}()
+
+		select {
+		case r := <-done:
+			cancel()
+			if r.err != nil {
+				response.Status = "failed"
+				return response, r.err
+			}
+			// Success
+			goto renewed
+		case <-renewCtx.Done():
+			cancel()
+			prevDone = done // track so next iteration waits
+			log.Warn("RenewKerberosArnLease timed out, retrying",
+				"attempt", attempt,
+				"max_attempts", maxAttempts)
+		}
 	}
+
+	// All attempts timed out
+	log.Error("RenewKerberosArnLease failed after all retry attempts")
+	response.Status = "failed"
+	return response, fmt.Errorf("renewal timed out after %d attempts", maxAttempts)
+
+renewed:
 
 	response.Status = "successful"
 	return response, nil
@@ -121,7 +169,7 @@ func (h *KerberosArnLeaseHandler) processTicket(ctx context.Context, cfg aws.Con
 	}
 
 	// Get and validate credentials
-	username, password, domain, err := h.getAndValidateCredentials(ctx, cfg, krbTicketArn)
+	username, password, domain, distinguishedName, err := h.getAndValidateCredentials(ctx, cfg, krbTicketArn)
 	if err != nil {
 		return err
 	}
@@ -129,6 +177,7 @@ func (h *KerberosArnLeaseHandler) processTicket(ctx context.Context, cfg aws.Con
 	// Update ticket info with retrieved credentials
 	ticketInfo.DomainlessUser = username
 	ticketInfo.DomainName = domain
+	ticketInfo.DistinguishedName = distinguishedName
 
 	// Renew the Kerberos tickets
 	if err := h.renewKerberosTickets(ticketInfo, username, password, domain); err != nil {
@@ -168,63 +217,69 @@ func (h *KerberosArnLeaseHandler) getAndParseCredSpec(ctx context.Context, cfg a
 }
 
 // getAndValidateCredentials retrieves and validates credentials from Secrets Manager
-func (h *KerberosArnLeaseHandler) getAndValidateCredentials(ctx context.Context, cfg aws.Config, krbTicketArn *types.KerberosTicketArnMapping) (string, string, string, error) {
+func (h *KerberosArnLeaseHandler) getAndValidateCredentials(ctx context.Context, cfg aws.Config, krbTicketArn *types.KerberosTicketArnMapping) (string, string, string, string, error) {
 	log := logger.GetInstance()
 
 	// Get secrets ARN
 	secretsArn := krbTicketArn.CredentialDomainlessUserArn
 	if secretsArn == "" {
 		log.Error("Invalid Secrets Manager ARN")
-		return "", "", "", fmt.Errorf("invalid secrets manager ARN")
+		return "", "", "", "", fmt.Errorf("invalid secrets manager ARN")
 	}
 
 	// Retrieve credentials from Secrets Manager
 	secretMap, err := aws_utils.GetSecretFromSecretsManagerWithConfig(ctx, cfg, secretsArn)
 	if err != nil {
 		log.Error("Failed to retrieve credentials from secrets manager", "error", err)
-		return "", "", "", fmt.Errorf("failed to retrieve credentials from secrets manager: %w", err)
+		return "", "", "", "", fmt.Errorf("failed to retrieve credentials from secrets manager: %w", err)
 	}
 
 	// Extract credentials from the secret
-	username, password, domain, _, err := aws_utils.ExtractCredentialsFromSecret(secretMap)
+	username, password, domain, distinguishedName, err := aws_utils.ExtractCredentialsFromSecret(secretMap)
 	if err != nil {
 		log.Error("Failed to extract credentials from secret", "error", err)
-		return "", "", "", fmt.Errorf("failed to extract credentials from secret: %w", err)
+		return "", "", "", "", fmt.Errorf("failed to extract credentials from secret: %w", err)
 	}
 
 	// Validate domain and username
 	if !aws_utils.IsValidDomain(domain) || aws_utils.ContainsInvalidCharactersInADAccountName(username) {
 		log.Error("Invalid domainName/username")
-		return "", "", "", fmt.Errorf("invalid domainName/username")
+		return "", "", "", "", fmt.Errorf("invalid domainName/username")
 	}
 
 	// Validate credential lengths
 	if !h.validateCredentials(username, password, domain) {
-		return "", "", "", fmt.Errorf("invalid credentials")
+		return "", "", "", "", fmt.Errorf("invalid credentials")
 	}
 
-	return username, password, domain, nil
+	return username, password, domain, distinguishedName, nil
 }
 
 // renewKerberosTickets creates/renews Kerberos tickets for the user and gMSA account
 func (h *KerberosArnLeaseHandler) renewKerberosTickets(ticketInfo *types.TicketInfo, username, password, domain string) error {
 	log := logger.GetInstance()
 
-	// Generate Kerberos ticket using username and password
-	if err := h.krbClient.CreateTicketUsingUsernamePassword(
-		domain,
-		username,
-		password,
-	); err != nil {
-		log.Error("Failed to generate Kerberos ticket for domainless user", "error", err)
-		return fmt.Errorf("failed to generate Kerberos ticket for domainless user: %w", err)
+	const numRetries = 1
+	for i := 0; i <= numRetries; i++ {
+		// Generate Kerberos ticket using username and password (user TGT)
+		if err := h.krbClient.CreateTicketUsingUsernamePassword(
+			domain,
+			username,
+			password,
+		); err != nil {
+			log.Error("Failed to generate Kerberos ticket for domainless user", "error", err, "attempt", i+1)
+			return fmt.Errorf("failed to generate Kerberos ticket for domainless user: %w", err)
+		}
+
+		// Create ticket for gMSA account (LDAP search + ticket creation)
+		if err := h.krbClient.CreateTicketForGMSA(ticketInfo); err != nil {
+			log.Error("Failed to create gMSA ticket, will regenerate user TGT and retry",
+				"error", err, "attempt", i+1, "max_attempts", numRetries+1)
+			continue
+		}
+
+		return nil
 	}
 
-	// Create ticket for gMSA account
-	if err := h.krbClient.CreateTicketForGMSA(ticketInfo); err != nil {
-		log.Error("Failed to create gMSA ticket", "error", err)
-		return fmt.Errorf("failed to create gMSA ticket: %w", err)
-	}
-
-	return nil
+	return fmt.Errorf("failed to create gMSA ticket after %d attempts", numRetries+1)
 }

@@ -1,6 +1,8 @@
 package grpc_utils
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -57,6 +59,14 @@ func TestParseCredSpec(t *testing.T) {
 		assert.Equal(t, "example.com", credSpec.DomainName)
 		assert.Equal(t, "WebApp01", credSpec.ServiceAccountName)
 		assert.Equal(t, "arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret", credSpec.CredentialArn)
+	})
+
+	t.Run("Valid CredSpec with UTF-8 BOM", func(t *testing.T) {
+		bomCredSpec := "\xef\xbb\xbf" + validCredSpec
+		credSpec, err := ParseCredSpec(bomCredSpec)
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", credSpec.DomainName)
+		assert.Equal(t, "WebApp01", credSpec.ServiceAccountName)
 	})
 
 	t.Run("Empty CredSpec", func(t *testing.T) {
@@ -270,6 +280,100 @@ func TestParseCredSpec(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "missing or invalid CredentialArn")
 	})
+
+	// Real-world credspec with periods in gMSA name and non-domain-joined HostAccountConfig
+	periodGmsaCredSpec := `{
+    "CmsPlugins": [
+        "ActiveDirectory"
+    ],
+    "DomainJoinConfig": {
+        "Sid": "S-1-5-21-861567501-616249376-725345543",
+        "MachineAccountName": "AWS.msa.kiosk",
+        "Guid": "c08770b1-09d5-4b64-a409-dc8193361342",
+        "DnsTreeName": "ad.contoso.com",
+        "DnsName": "ad.contoso.com",
+        "NetBiosName": "CONTOSO"
+    },
+    "ActiveDirectoryConfig": {
+        "GroupManagedServiceAccounts": [
+            {
+                "Name": "AWS.msa.kiosk",
+                "Scope": "ad.contoso.com"
+            },
+            {
+                "Name": "AWS.msa.kiosk",
+                "Scope": "CONTOSO"
+            }
+        ],
+        "HostAccountConfig": {
+            "PortableCcgVersion": "1",
+            "PluginGUID": "{859E1386-BDB4-49E8-85C7-3070B13920E1}",
+            "PluginInput": {
+                "CredentialArn": "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws/kiosk/ecs/msa_kiosk"
+            }
+        }
+    }
+}`
+
+	t.Run("Real-world credspec with periods in gMSA name", func(t *testing.T) {
+		credSpec, err := ParseCredSpec(periodGmsaCredSpec)
+		require.NoError(t, err)
+		assert.Equal(t, "ad.contoso.com", credSpec.DomainName)
+		assert.Equal(t, "AWS.msa.kiosk", credSpec.ServiceAccountName)
+		assert.Equal(t, "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws/kiosk/ecs/msa_kiosk", credSpec.CredentialArn)
+	})
+
+	t.Run("Real-world credspec with UTF-8 BOM", func(t *testing.T) {
+		bomCredSpec := "\xef\xbb\xbf" + periodGmsaCredSpec
+		credSpec, err := ParseCredSpec(bomCredSpec)
+		require.NoError(t, err)
+		assert.Equal(t, "ad.contoso.com", credSpec.DomainName)
+		assert.Equal(t, "AWS.msa.kiosk", credSpec.ServiceAccountName)
+		assert.Equal(t, "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws/kiosk/ecs/msa_kiosk", credSpec.CredentialArn)
+	})
+
+	t.Run("contoso_WebApp01_ndj.json with UTF-8 BOM", func(t *testing.T) {
+		// Find repo root by walking up from the test file's package directory
+		repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(filepath.Join(repoRoot, "tests", "assets", "contoso_WebApp01_ndj.json"))
+		require.NoError(t, err)
+
+		bomCredSpec := "\xef\xbb\xbf" + string(data)
+		credSpec, err := ParseCredSpec(bomCredSpec)
+		require.NoError(t, err)
+		assert.Equal(t, "contoso.com", credSpec.DomainName)
+		assert.Equal(t, "svc_test.app", credSpec.ServiceAccountName)
+		assert.Equal(t, "arn:aws:secretsmanager:us-west-2:123456789012:secret:aws/directoryservice/contoso/standarduser-AbCdEf", credSpec.CredentialArn)
+	})
+
+	t.Run("CredSpec with lone 0xEF byte prefix", func(t *testing.T) {
+		loneEF := "\xef" + validCredSpec
+		credSpec, err := ParseCredSpec(loneEF)
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", credSpec.DomainName)
+		assert.Equal(t, "WebApp01", credSpec.ServiceAccountName)
+	})
+
+	t.Run("CredSpec with partial BOM 0xEF 0xBB prefix", func(t *testing.T) {
+		partialBOM := "\xef\xbb" + validCredSpec
+		_, err := ParseCredSpec(partialBOM)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse credential spec JSON")
+	})
+
+	t.Run("CredSpec without any BOM prefix parses normally", func(t *testing.T) {
+		credSpec, err := ParseCredSpec(validCredSpec)
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", credSpec.DomainName)
+	})
+
+	t.Run("Invalid JSON includes hex prefix in error", func(t *testing.T) {
+		_, err := ParseCredSpec("\xef\xbb\xbf{bad json}")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse credential spec JSON")
+	})
 }
 
 func TestValidateAccountName(t *testing.T) {
@@ -381,6 +485,56 @@ func TestValidateAccountName(t *testing.T) {
 		{
 			name:     "Username with invalid character ~",
 			username: "invalid~user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character double quote",
+			username: "invalid\"user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character =",
+			username: "invalid=user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character ,",
+			username: "invalid,user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with period is valid",
+			username: "svc.myapp",
+			wantErr:  false,
+		},
+		{
+			name:     "Username with multiple periods is valid",
+			username: "corp.svc.account",
+			wantErr:  false,
+		},
+		{
+			name:     "Username with hyphen and period is valid",
+			username: "svc.my-app",
+			wantErr:  false,
+		},
+		{
+			name:     "Username with invalid character (",
+			username: "invalid(user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character )",
+			username: "invalid)user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character {",
+			username: "invalid{user",
+			wantErr:  true,
+		},
+		{
+			name:     "Username with invalid character }",
+			username: "invalid}user",
 			wantErr:  true,
 		},
 	}
@@ -618,6 +772,75 @@ _ldap._tcp.dc._msdcs.example.com  service = 0 100 389 dc2.example.com`,
 		t.Run(tt.name, func(t *testing.T) {
 			got := parseFQDNsFromOutput(tt.output)
 			assert.ElementsMatch(t, tt.want, got)
+		})
+	}
+}
+
+func TestParseBlueGreenUsername(t *testing.T) {
+	tests := []struct {
+		name           string
+		raw            string
+		wantMatch      string
+		wantActive     string
+		wantIsRotation bool
+	}{
+		{
+			name:           "Normal username (no rotation)",
+			raw:            "standarduser",
+			wantMatch:      "standarduser",
+			wantActive:     "standarduser",
+			wantIsRotation: false,
+		},
+		{
+			name:           "Blue/green rotation",
+			raw:            "olduser:newuser",
+			wantMatch:      "olduser",
+			wantActive:     "newuser",
+			wantIsRotation: true,
+		},
+		{
+			name:           "Empty old username",
+			raw:            ":newuser",
+			wantMatch:      "",
+			wantActive:     "newuser",
+			wantIsRotation: true,
+		},
+		{
+			name:           "Empty new username",
+			raw:            "olduser:",
+			wantMatch:      "olduser",
+			wantActive:     "",
+			wantIsRotation: true,
+		},
+		{
+			name:           "Multiple colons (only first split)",
+			raw:            "old:new:extra",
+			wantMatch:      "old",
+			wantActive:     "new:extra",
+			wantIsRotation: true,
+		},
+		{
+			name:           "Empty string",
+			raw:            "",
+			wantMatch:      "",
+			wantActive:     "",
+			wantIsRotation: false,
+		},
+		{
+			name:           "Blue/green rotation with real-world naming convention",
+			raw:            "SvcAccountGR:SvcAccountBL",
+			wantMatch:      "SvcAccountGR",
+			wantActive:     "SvcAccountBL",
+			wantIsRotation: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matchUser, activeUser, isRotation := ParseBlueGreenUsername(tt.raw)
+			assert.Equal(t, tt.wantMatch, matchUser, "matchUsername mismatch")
+			assert.Equal(t, tt.wantActive, activeUser, "activeUsername mismatch")
+			assert.Equal(t, tt.wantIsRotation, isRotation, "isRotation mismatch")
 		})
 	}
 }

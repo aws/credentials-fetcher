@@ -146,6 +146,69 @@ func TestCredentialsFetcherServer_AddNonDomainJoinedKerberosLease(t *testing.T) 
 	assert.Nil(t, resp)
 }
 
+func TestCredentialsFetcherServer_AddNonDomainJoinedKerberosLease_BlueGreenUsername(t *testing.T) {
+	// Setup server
+	conn, _, cleanup := setupGrpcServer(t)
+	defer cleanup()
+
+	// Create client
+	client := pb.NewCredentialsFetcherServiceClient(conn)
+
+	t.Run("Customer rotation SvcAccountGR:SvcAccountBL passes validation", func(t *testing.T) {
+		req := &pb.CreateNonDomainJoinedKerberosLeaseRequest{
+			CredspecContents: []string{`{"DomainJoinConfig":{"Sid":"S-1-5-21-123456789-987654321-111222333","MachineAccountName":"gSvcAccount","Guid":"12345678-1234-1234-1234-123456789012","DnsName":"contoso.com","NetBiosName":"CORE"},"ActiveDirectoryConfig":{"GroupManagedServiceAccounts":[{"Name":"gSvcAccount","Scope":"contoso.com"}],"HostAccountConfig":{"PluginGUID":"{859E1386-BDB4-49E8-85C7-3070B13920E1}","PluginInput":{"CredentialArn":"arn:aws:secretsmanager:us-east-1:123456789012:secret:/gmsa/SvcAccount-AbCdEf"},"PortableCcgVersion":"1"}}}`},
+			Username:         "SvcAccountGR:SvcAccountBL",
+			Password:         "test-password",
+			Domain:           "contoso.com",
+		}
+		resp, err := client.AddNonDomainJoinedKerberosLease(context.Background(), req)
+
+		// The request should get past username validation (no "invalid character" error).
+		// It will fail later at Kerberos ticket creation since we have no real KDC,
+		// but the important thing is it does NOT fail with "username contains invalid character: :"
+		if err != nil {
+			assert.NotContains(t, err.Error(), "username contains invalid character")
+			assert.NotContains(t, err.Error(), "invalid username")
+		} else {
+			assert.NotNil(t, resp)
+		}
+	})
+
+	t.Run("Empty new username in blue/green format returns error", func(t *testing.T) {
+		req := &pb.CreateNonDomainJoinedKerberosLeaseRequest{
+			CredspecContents: []string{"credspec"},
+			Username:         "SvcAccountGR:",
+			Password:         "test-password",
+			Domain:           "contoso.com",
+		}
+		resp, err := client.AddNonDomainJoinedKerberosLease(context.Background(), req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "blue/green rotation format requires a non-empty new username")
+		assert.Nil(t, resp)
+	})
+}
+
+func TestCredentialsFetcherServer_RenewNonDomainJoinedKerberosLease_BlueGreenUsername(t *testing.T) {
+	conn, _, cleanup := setupGrpcServer(t)
+	defer cleanup()
+
+	client := pb.NewCredentialsFetcherServiceClient(conn)
+
+	req := &pb.RenewNonDomainJoinedKerberosLeaseRequest{
+		Username: "SvcAccountGR:SvcAccountBL",
+		Password: "test-password",
+		Domain:   "contoso.com",
+	}
+	_, err := client.RenewNonDomainJoinedKerberosLease(context.Background(), req)
+
+	// Should NOT fail with "username contains invalid character" — the colon is parsed out.
+	// Will fail with "no metadata files found" since no tickets exist in the temp dir.
+	assert.Error(t, err)
+	assert.NotContains(t, err.Error(), "username contains invalid character")
+	assert.NotContains(t, err.Error(), "invalid username")
+	assert.Contains(t, err.Error(), "no metadata files found")
+}
+
 func TestCredentialsFetcherServer_RenewNonDomainJoinedKerberosLease(t *testing.T) {
 	// Setup server
 	conn, _, cleanup := setupGrpcServer(t)

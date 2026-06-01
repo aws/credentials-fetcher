@@ -127,8 +127,50 @@ func WriteMetaDataJSON(ticketInfoList []*types.TicketInfo, leaseID string, krbFi
 
 	// Write the JSON to file
 	// #nosec G306
-	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
+	if err := os.WriteFile(filePath, jsonData, 0600); err != nil {
 		return fmt.Errorf("failed to write JSON file: %v", err)
+	}
+
+	return nil
+}
+
+// UpdateMetadataJSON rewrites an existing metadata file in-place with updated ticket info.
+// Used during credential rotation to persist username changes to disk.
+func UpdateMetadataJSON(metadataPath string, ticketInfoList []*types.TicketInfo) error {
+	root := make(map[string]interface{})
+	krbTicketInfoParent := make([]map[string]interface{}, 0, len(ticketInfoList))
+
+	for _, ticketInfo := range ticketInfoList {
+		ticket := map[string]interface{}{
+			"krb_file_path":        ticketInfo.KrbFilePath,
+			"service_account_name": ticketInfo.ServiceAccountName,
+			"domain_name":          ticketInfo.DomainName,
+			"domainless_user":      ticketInfo.DomainlessUser,
+			"distinguished_name":   ticketInfo.DistinguishedName,
+			"credspec_info":        ticketInfo.CredspecInfo,
+		}
+		if ticketInfo.CredentialArn != "" {
+			ticket["credential_arn"] = ticketInfo.CredentialArn
+		}
+		krbTicketInfoParent = append(krbTicketInfoParent, ticket)
+	}
+
+	root["krb_ticket_info"] = krbTicketInfoParent
+
+	jsonData, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata to JSON: %v", err)
+	}
+
+	// Atomic write: write to temp file then rename to avoid corruption on crash.
+	tmpPath := metadataPath + ".tmp"
+	// #nosec G306
+	if err := os.WriteFile(tmpPath, jsonData, 0600); err != nil {
+		return fmt.Errorf("failed to write temporary metadata file: %v", err)
+	}
+	if err := os.Rename(tmpPath, metadataPath); err != nil {
+		_ = os.Remove(tmpPath) // best-effort cleanup
+		return fmt.Errorf("failed to rename metadata file: %v", err)
 	}
 
 	return nil
