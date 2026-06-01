@@ -89,11 +89,15 @@ build-only: build
 
 # Install binary and config files to system (requires sudo)
 .PHONY: cf-install
-cf-install: build
+cf-install:
+	@if [ ! -f "$(BIN_DIR)/$(BINARY_NAME)" ]; then \
+		echo "Error: Binary not found. Run 'make build' first."; \
+		exit 1; \
+	fi
 	@echo "Installing credentials-fetcher to system..."
 	install -m 755 $(BIN_DIR)/$(BINARY_NAME) /usr/sbin/credentials-fetcher
-	install -m 644 ../configuration/bin/credentials-fetcher.service /usr/lib/systemd/system/
-	install -m 644 ../configuration/conf/credentials-fetcher.conf /etc/
+	install -m 644 configuration/bin/credentials-fetcher.service /usr/lib/systemd/system/
+	install -m 644 configuration/conf/credentials-fetcher.conf /etc/
 	@echo "Installation complete. Run 'systemctl daemon-reload' to reload systemd."
 
 # Show help
