@@ -110,7 +110,7 @@ if [ $1 -eq 0 ]; then
     # If the user ran our systemd dependency script, there will be an out-of-package systemd drop-in for ECS agent.
     # Remove this, and also clean up the drop-in directory, but only if it is empty after removing ours.
     if [ -d "/usr/lib/systemd/system/ecs.service.d" ]; then
-        rm /usr/lib/systemd/system/ecs.service.d/require-credentials-fetcher.conf
+        rm /usr/lib/systemd/system/ecs.service.d/ecs-require-credentials-fetcher.conf
         if [ -z "$( ls -A '/usr/lib/systemd/system/ecs.service.d' )" ]; then
             rm -rf /usr/lib/systemd/system/ecs.service.d
         fi
