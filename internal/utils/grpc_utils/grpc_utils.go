@@ -131,8 +131,18 @@ func extractDomainInfo(root map[string]interface{}) (domainName string, netbiosN
 		return "", "", fmt.Errorf("missing or invalid DnsName in credential spec")
 	}
 
-	if netbios, ok := domainJoinConfig["NetbiosName"].(string); ok {
+	if netbios, ok := domainJoinConfig["NetBiosName"].(string); ok {
 		netbiosName = netbios
+	} else {
+		// Case-insensitive fallback for Windows-generated credspecs
+		for k, v := range domainJoinConfig {
+			if strings.EqualFold(k, "netbiosname") {
+				if netbios, ok := v.(string); ok {
+					netbiosName = netbios
+				}
+				break
+			}
+		}
 	}
 
 	return domainName, netbiosName, nil
