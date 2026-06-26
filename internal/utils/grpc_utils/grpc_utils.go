@@ -131,7 +131,7 @@ func extractDomainInfo(root map[string]interface{}) (domainName string, netbiosN
 		return "", "", fmt.Errorf("missing or invalid DnsName in credential spec")
 	}
 
-	if netbios, ok := domainJoinConfig["NetbiosName"].(string); ok {
+	if netbios, ok := domainJoinConfig["NetBiosName"].(string); ok {
 		netbiosName = netbios
 	}
 

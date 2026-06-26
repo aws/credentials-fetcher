@@ -520,7 +520,7 @@ func TestProcessCredentialSpecs(t *testing.T) {
 				`{
 					"DomainJoinConfig": {
 						"DnsName": "example.com",
-						"NetbiosName": "EXAMPLE"
+						"NetBiosName": "EXAMPLE"
 					},
 					"ActiveDirectoryConfig": {
 						"GroupManagedServiceAccounts": [
@@ -534,7 +534,7 @@ func TestProcessCredentialSpecs(t *testing.T) {
 				`{
 					"DomainJoinConfig": {
 						"DnsName": "example.com",
-						"NetbiosName": "EXAMPLE"
+						"NetBiosName": "EXAMPLE"
 					},
 					"ActiveDirectoryConfig": {
 						"GroupManagedServiceAccounts": [
@@ -558,7 +558,7 @@ func TestProcessCredentialSpecs(t *testing.T) {
 				`{
 					"DomainJoinConfig": {
 						"DnsName": "example.com",
-						"NetbiosName": "EXAMPLE"
+						"NetBiosName": "EXAMPLE"
 					},
 					"ActiveDirectoryConfig": {
 						"GroupManagedServiceAccounts": [
@@ -587,7 +587,7 @@ func TestProcessCredentialSpecs(t *testing.T) {
 				`{
 					"DomainJoinConfig": {
 						"DnsName": "example.com",
-						"NetbiosName": "EXAMPLE"
+						"NetBiosName": "EXAMPLE"
 					},
 					"ActiveDirectoryConfig": {
 						"GroupManagedServiceAccounts": [
@@ -601,7 +601,7 @@ func TestProcessCredentialSpecs(t *testing.T) {
 				`{
 					"DomainJoinConfig": {
 						"DnsName": "example.com",
-						"NetbiosName": "EXAMPLE"
+						"NetBiosName": "EXAMPLE"
 					},
 					"ActiveDirectoryConfig": {
 						"GroupManagedServiceAccounts": [

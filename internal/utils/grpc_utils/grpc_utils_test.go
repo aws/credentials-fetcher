@@ -36,7 +36,7 @@ func TestParseCredSpec(t *testing.T) {
 	validCredSpec := `{
 		"DomainJoinConfig": {
 			"DnsName": "example.com",
-			"NetbiosName": "EXAMPLE"
+			"NetBiosName": "EXAMPLE"
 		},
 		"ActiveDirectoryConfig": {
 			"GroupManagedServiceAccounts": [
@@ -100,7 +100,7 @@ func TestParseCredSpec(t *testing.T) {
 	t.Run("Missing DnsName", func(t *testing.T) {
 		badCredSpec := `{
 			"DomainJoinConfig": {
-				"NetbiosName": "EXAMPLE"
+				"NetBiosName": "EXAMPLE"
 			},
 			"ActiveDirectoryConfig": {
 				"GroupManagedServiceAccounts": [
@@ -120,7 +120,7 @@ func TestParseCredSpec(t *testing.T) {
 		badCredSpec := `{
 			"DomainJoinConfig": {
 				"DnsName": "example.com",
-				"NetbiosName": "EXAMPLE"
+				"NetBiosName": "EXAMPLE"
 			}
 		}`
 		_, err := ParseCredSpec(badCredSpec)
@@ -132,7 +132,7 @@ func TestParseCredSpec(t *testing.T) {
 		badCredSpec := `{
 			"DomainJoinConfig": {
 				"DnsName": "example.com",
-				"NetbiosName": "EXAMPLE"
+				"NetBiosName": "EXAMPLE"
 			},
 			"ActiveDirectoryConfig": {}
 		}`
@@ -145,7 +145,7 @@ func TestParseCredSpec(t *testing.T) {
 		badCredSpec := `{
 			"DomainJoinConfig": {
 				"DnsName": "example.com",
-				"NetbiosName": "EXAMPLE"
+				"NetBiosName": "EXAMPLE"
 			},
 			"ActiveDirectoryConfig": {
 				"GroupManagedServiceAccounts": []
@@ -160,7 +160,7 @@ func TestParseCredSpec(t *testing.T) {
 		badCredSpec := `{
 			"DomainJoinConfig": {
 				"DnsName": "example.com",
-				"NetbiosName": "EXAMPLE"
+				"NetBiosName": "EXAMPLE"
 			},
 			"ActiveDirectoryConfig": {
 				"GroupManagedServiceAccounts": [
@@ -179,7 +179,7 @@ func TestParseCredSpec(t *testing.T) {
 		badCredSpec := `{
 			"DomainJoinConfig": {
 				"DnsName": "invalid_domain",
-				"NetbiosName": "EXAMPLE"
+				"NetBiosName": "EXAMPLE"
 			},
 			"ActiveDirectoryConfig": {
 				"GroupManagedServiceAccounts": [
@@ -199,7 +199,7 @@ func TestParseCredSpec(t *testing.T) {
 		badCredSpec := `{
 			"DomainJoinConfig": {
 				"DnsName": "example.com",
-				"NetbiosName": "EXAMPLE"
+				"NetBiosName": "EXAMPLE"
 			},
 			"ActiveDirectoryConfig": {
 				"GroupManagedServiceAccounts": [
@@ -219,7 +219,7 @@ func TestParseCredSpec(t *testing.T) {
 		domainJoinedCredSpec := `{
 			"DomainJoinConfig": {
 				"DnsName": "example.com",
-				"NetbiosName": "EXAMPLE"
+				"NetBiosName": "EXAMPLE"
 			},
 			"ActiveDirectoryConfig": {
 				"GroupManagedServiceAccounts": [
@@ -241,7 +241,7 @@ func TestParseCredSpec(t *testing.T) {
 		badCredSpec := `{
 			"DomainJoinConfig": {
 				"DnsName": "example.com",
-				"NetbiosName": "EXAMPLE"
+				"NetBiosName": "EXAMPLE"
 			},
 			"ActiveDirectoryConfig": {
 				"GroupManagedServiceAccounts": [
@@ -262,7 +262,7 @@ func TestParseCredSpec(t *testing.T) {
 		badCredSpec := `{
 			"DomainJoinConfig": {
 				"DnsName": "example.com",
-				"NetbiosName": "EXAMPLE"
+				"NetBiosName": "EXAMPLE"
 			},
 			"ActiveDirectoryConfig": {
 				"GroupManagedServiceAccounts": [

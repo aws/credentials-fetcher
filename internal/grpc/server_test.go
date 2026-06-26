@@ -108,7 +108,7 @@ func TestCredentialsFetcherServer_AddKerberosLease(t *testing.T) {
 
 	// Test AddKerberosLease
 	req := &pb.CreateKerberosLeaseRequest{
-		CredspecContents: []string{`{"DomainJoinConfig":{"DnsName":"example.com","MachineAccountName":"testmachine","Sid":"S-1-5-21-1234567890-1234567890-1234567890","DnsTreeName":"example.com","Guid":"12345678-1234-1234-1234-123456789012","NetbiosName":"EXAMPLE"},"ActiveDirectoryConfig":{"GroupManagedServiceAccounts":[{"Name":"testaccount","Scope":"example.com"}]},"HostAccountConfig":{"PluginInput":{"CredentialArn":"arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret"}}}`},
+		CredspecContents: []string{`{"DomainJoinConfig":{"DnsName":"example.com","MachineAccountName":"testmachine","Sid":"S-1-5-21-1234567890-1234567890-1234567890","DnsTreeName":"example.com","Guid":"12345678-1234-1234-1234-123456789012","NetBiosName":"EXAMPLE"},"ActiveDirectoryConfig":{"GroupManagedServiceAccounts":[{"Name":"testaccount","Scope":"example.com"}]},"HostAccountConfig":{"PluginInput":{"CredentialArn":"arn:aws:secretsmanager:us-west-2:123456789012:secret:test-secret"}}}`},
 	}
 	resp, err := client.AddKerberosLease(context.Background(), req)
 
