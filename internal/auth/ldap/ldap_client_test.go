@@ -1,17 +1,73 @@
 package ldap
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
 // MockLdapsearchExecutor is a mock implementation of LdapsearchExecutor
 type MockLdapsearchExecutor struct {
 	mock.Mock
+}
+
+func managedPasswordLDAPOutput(current, previous string) []byte {
+	return managedPasswordLDAPOutputWithIntervalAlignment(current, previous, true)
+}
+
+func managedPasswordLDAPOutputWithIntervalAlignment(current, previous string, alignIntervals bool) []byte {
+	encodeUTF16 := func(value string) []byte {
+		encoded := make([]byte, 0, len(value)*2+2)
+		for _, r := range value {
+			encoded = append(encoded, byte(r), byte(r>>8))
+		}
+		return append(encoded, 0, 0)
+	}
+
+	currentBytes := encodeUTF16(current)
+	previousBytes := encodeUTF16(previous)
+	currentOffset := 16
+	previousOffset := 0
+	queryOffset := currentOffset + len(currentBytes)
+	if previous != "" {
+		previousOffset = queryOffset
+		queryOffset += len(previousBytes)
+	}
+	for alignIntervals && queryOffset%8 != 0 {
+		if previous != "" {
+			previousBytes = append(previousBytes, 0, 0)
+		} else {
+			currentBytes = append(currentBytes, 0, 0)
+		}
+		queryOffset += 2
+	}
+	unchangedOffset := queryOffset + 8
+	length := unchangedOffset + 8
+	header := types.ManagedPasswordBlob{
+		Version:                         1,
+		Length:                          uint32(length),
+		CurrentPasswordOffset:           uint16(currentOffset),
+		PreviousPasswordOffset:          uint16(previousOffset),
+		QueryPasswordIntervalOffset:     uint16(queryOffset),
+		UnchangedPasswordIntervalOffset: uint16(unchangedOffset),
+	}
+
+	var blob bytes.Buffer
+	_ = binary.Write(&blob, binary.LittleEndian, header)
+	blob.Write(currentBytes)
+	if previous != "" {
+		blob.Write(previousBytes)
+	}
+	blob.Write(make([]byte, 16))
+	return []byte("msDS-ManagedPassword:: " + base64.StdEncoding.EncodeToString(blob.Bytes()))
 }
 
 func (m *MockLdapsearchExecutor) ExecuteLdapsearchWithFilter(ctx context.Context, baseDN, fqdn, searchFilter string, attributes []string) ([]byte, error) {
@@ -43,9 +99,9 @@ func TestSearchGMSAPassword(t *testing.T) {
 			name:           "Successful password retrieval",
 			dn:             "CN=WebApp01,OU=MYOU,OU=Users,OU=contoso,DC=contoso,DC=com",
 			fqdn:           "contoso.com",
-			mockOutput:     []byte("msDS-ManagedPassword:: AAAAAAAAAAAA"),
+			mockOutput:     managedPasswordLDAPOutput("password", ""),
 			mockError:      nil,
-			expectedOutput: []byte("msDS-ManagedPassword:: AAAAAAAAAAAA"),
+			expectedOutput: []byte("password"),
 			expectedError:  false,
 		},
 		{
@@ -100,6 +156,121 @@ func TestSearchGMSAPassword(t *testing.T) {
 
 			// Verify that the mocks were called as expected
 			mockExecutor.AssertExpectations(t)
+		})
+	}
+}
+
+func TestSearchGMSAPasswords(t *testing.T) {
+	mockExecutor := new(MockLdapsearchExecutor)
+	mockExecutor.On("ExecuteLdapsearchWithFilter", mock.Anything, "CN=test,DC=example,DC=com", "example.com", "(objectClass=msDS-GroupManagedServiceAccount)", []string{"msDS-ManagedPassword", "-N"}).
+		Return(managedPasswordLDAPOutput("password", ""), nil)
+
+	client := NewClient()
+	passwords, err := client.SearchGMSAPasswords(context.Background(), "CN=test,DC=example,DC=com", "example.com", mockExecutor)
+	assert.NoError(t, err)
+	if assert.NotNil(t, passwords) {
+		assert.Equal(t, []byte("password"), passwords.Current)
+	}
+	mockExecutor.AssertExpectations(t)
+}
+
+func TestSearchGMSAPasswordsExtractsCurrentAndPreviousPasswords(t *testing.T) {
+	mockExecutor := new(MockLdapsearchExecutor)
+	mockExecutor.On("ExecuteLdapsearchWithFilter", mock.Anything, "CN=test,DC=example,DC=com", "example.com", "(objectClass=msDS-GroupManagedServiceAccount)", []string{"msDS-ManagedPassword", "-N"}).
+		Return(managedPasswordLDAPOutput("new", "old"), nil)
+
+	passwords, err := NewClient().SearchGMSAPasswords(context.Background(), "CN=test,DC=example,DC=com", "example.com", mockExecutor)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("new"), passwords.Current)
+	assert.Equal(t, []byte("old"), passwords.Previous)
+	mockExecutor.AssertExpectations(t)
+}
+
+func TestSearchGMSAPasswordsRejectsMalformedPreviousPassword(t *testing.T) {
+	output := managedPasswordLDAPOutput("new", "old")
+	encodedBlob := bytes.TrimPrefix(output, []byte("msDS-ManagedPassword:: "))
+	decodedBlob, err := base64.StdEncoding.DecodeString(string(encodedBlob))
+	assert.NoError(t, err)
+
+	var header types.ManagedPasswordBlob
+	err = binary.Read(bytes.NewReader(decodedBlob), binary.LittleEndian, &header)
+	assert.NoError(t, err)
+	for i := int(header.PreviousPasswordOffset); i < int(header.QueryPasswordIntervalOffset); i++ {
+		decodedBlob[i] = 1
+	}
+
+	mockExecutor := new(MockLdapsearchExecutor)
+	mockExecutor.On("ExecuteLdapsearchWithFilter", mock.Anything, "CN=test,DC=example,DC=com", "example.com", "(objectClass=msDS-GroupManagedServiceAccount)", []string{"msDS-ManagedPassword", "-N"}).
+		Return([]byte("msDS-ManagedPassword:: "+base64.StdEncoding.EncodeToString(decodedBlob)), nil)
+
+	passwords, err := NewClient().SearchGMSAPasswords(context.Background(), "CN=test,DC=example,DC=com", "example.com", mockExecutor)
+	assert.Nil(t, passwords)
+	assert.ErrorContains(t, err, "failed to decode previous password")
+	mockExecutor.AssertExpectations(t)
+}
+
+func TestDecodeManagedPasswordFieldRejectsMissingTerminator(t *testing.T) {
+	blob := make([]byte, 20)
+	blob[16] = 1
+	blob[18] = 2
+	_, err := decodeManagedPasswordField(blob, 16, 20, 20)
+	assert.ErrorContains(t, err, "not null-terminated")
+}
+
+func TestDecodeManagedPasswordFieldIgnoresAlignmentPadding(t *testing.T) {
+	blob := make([]byte, 24)
+	copy(blob[16:], []byte{'p', 0, 'w', 0, 0, 0, 0xAA, 0xBB})
+	password, err := decodeManagedPasswordField(blob, 16, 24, 24)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("pw"), password)
+}
+
+func TestSearchGMSAPasswordsAcceptsUnalignedIntervalOffsets(t *testing.T) {
+	output := managedPasswordLDAPOutputWithIntervalAlignment(strings.Repeat("a", 128), strings.Repeat("b", 128), false)
+	encodedBlob := bytes.TrimPrefix(output, []byte("msDS-ManagedPassword:: "))
+	decodedBlob, err := base64.StdEncoding.DecodeString(string(encodedBlob))
+	assert.NoError(t, err)
+
+	var header types.ManagedPasswordBlob
+	err = binary.Read(bytes.NewReader(decodedBlob), binary.LittleEndian, &header)
+	assert.NoError(t, err)
+	assert.NotZero(t, header.QueryPasswordIntervalOffset%8)
+
+	mockExecutor := new(MockLdapsearchExecutor)
+	mockExecutor.On("ExecuteLdapsearchWithFilter", mock.Anything, "CN=test,DC=example,DC=com", "example.com", "(objectClass=msDS-GroupManagedServiceAccount)", []string{"msDS-ManagedPassword", "-N"}).
+		Return(output, nil)
+
+	passwords, err := NewClient().SearchGMSAPasswords(context.Background(), "CN=test,DC=example,DC=com", "example.com", mockExecutor)
+	assert.NoError(t, err)
+	if assert.NotNil(t, passwords) {
+		assert.Equal(t, []byte(strings.Repeat("a", 128)), passwords.Current)
+	}
+	mockExecutor.AssertExpectations(t)
+}
+
+func TestDecodeManagedPasswordFieldReplacesUnpairedSurrogate(t *testing.T) {
+	blob := make([]byte, 24)
+	copy(blob[16:], []byte{'a', 0, 0x05, 0xD8, 'b', 0, 0, 0})
+
+	password, err := decodeManagedPasswordField(blob, 16, 24, 24)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("a\uFFFDb"), password)
+}
+
+func TestDecodeManagedPasswordFieldRejectsInvalidOffsets(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		start, end int
+		blobLength int
+	}{
+		{name: "before header", start: 14, end: 20, blobLength: 24},
+		{name: "empty range", start: 16, end: 16, blobLength: 24},
+		{name: "past declared length", start: 16, end: 26, blobLength: 24},
+		{name: "unaligned", start: 17, end: 22, blobLength: 24},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := decodeManagedPasswordField(make([]byte, 24), test.start, test.end, test.blobLength)
+			assert.Error(t, err)
 		})
 	}
 }

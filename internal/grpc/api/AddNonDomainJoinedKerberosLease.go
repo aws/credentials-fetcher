@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/config_utils"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/debug_utils"
@@ -49,17 +50,27 @@ type KerberosTicketOperations interface {
 	CleanupKerberosFiles(krbFilePath string) error
 }
 
+type nonDomainJoinedKerberosClient interface {
+	CreateTicketUsingUsernamePassword(domain, username, password string) error
+	CreateTicketForGMSA(ticketInfo *types.TicketInfo) error
+	RenewKerberosTicket(ctx context.Context, krbFilePath string) error
+}
+
 // NonDomainJoinedKerberosHandler handles non-domain joined Kerberos operations
 type NonDomainJoinedKerberosHandler struct {
 	krbFilesDir     string
 	awsSMSecretName string
-	krbClient       *kerberos.Client
+	krbClient       nonDomainJoinedKerberosClient
 	ldapClient      *ldap.Client
 	shellExecutor   cmdexec.Executor
 }
 
 // NewNonDomainJoinedKerberosHandler creates a new handler for non-domain joined Kerberos operations
 func NewNonDomainJoinedKerberosHandler(krbFilesDir, awsSMSecretName string, krbClient *kerberos.Client, ldapClient *ldap.Client, shellExecutor cmdexec.Executor) *NonDomainJoinedKerberosHandler {
+	return newNonDomainJoinedKerberosHandler(krbFilesDir, awsSMSecretName, krbClient, ldapClient, shellExecutor)
+}
+
+func newNonDomainJoinedKerberosHandler(krbFilesDir, awsSMSecretName string, krbClient nonDomainJoinedKerberosClient, ldapClient *ldap.Client, shellExecutor cmdexec.Executor) *NonDomainJoinedKerberosHandler {
 	return &NonDomainJoinedKerberosHandler{
 		krbFilesDir:     krbFilesDir,
 		awsSMSecretName: awsSMSecretName,
@@ -258,6 +269,102 @@ func (h *NonDomainJoinedKerberosHandler) CreateKerberosTickets(ctx context.Conte
 	}
 
 	return createdKrbFilePaths, nil
+}
+
+func (h *NonDomainJoinedKerberosHandler) RecreateKerberosTickets(ctx context.Context, domain, username, password string, ticketInfoList []*types.TicketInfo) ([]string, error) {
+	var recreatedKrbFilePaths []string
+	var recreationErrors []string
+	snapshots := make(map[string]fileSnapshot)
+
+	err := h.krbClient.CreateTicketUsingUsernamePassword(domain, username, password)
+	if err != nil {
+		log.Error("Failed to create Kerberos ticket for domainless user during recreation", "error", err)
+		return nil, fmt.Errorf("failed to create Kerberos ticket for domainless user: %v", err)
+	}
+
+	for _, ticketInfo := range ticketInfoList {
+		if err := h.validateRenewalCachePath(ticketInfo.KrbFilePath); err != nil {
+			recreationErrors = append(recreationErrors, fmt.Sprintf("%s: %v", ticketInfo.ServiceAccountName, err))
+			continue
+		}
+		if err := captureFileSnapshot(snapshots, ticketInfo.KrbFilePath); err != nil {
+			recreationErrors = append(recreationErrors, fmt.Sprintf("%s: failed to snapshot cache: %v", ticketInfo.ServiceAccountName, err))
+			continue
+		}
+		if ticketInfo.DistinguishedName == "" {
+			ticketInfo.DistinguishedName = h.GetDistinguishedName(ticketInfo)
+			if ticketInfo.DistinguishedName == "" {
+				log.Warn("Distinguished name lookup returned empty, will rely on downstream LDAP resolution",
+					"service_account", ticketInfo.ServiceAccountName)
+			}
+		}
+
+		err = h.krbClient.CreateTicketForGMSA(ticketInfo)
+		if err != nil {
+			log.Error("Failed to recreate Kerberos ticket for gMSA account",
+				"service_account", ticketInfo.ServiceAccountName,
+				"path", ticketInfo.KrbFilePath,
+				"error", err)
+			recreationErrors = append(recreationErrors, fmt.Sprintf("%s: %v", ticketInfo.ServiceAccountName, err))
+			continue
+		}
+
+		recreatedKrbFilePaths = append(recreatedKrbFilePaths, ticketInfo.KrbFilePath)
+	}
+
+	if len(recreationErrors) > 0 {
+		rollbackErr := restoreFileSnapshots(snapshots)
+		clearFileSnapshots(snapshots)
+		if rollbackErr != nil {
+			return recreatedKrbFilePaths, fmt.Errorf("failed to recreate tickets: %s; rollback failed: %v", strings.Join(recreationErrors, "; "), rollbackErr)
+		}
+		return recreatedKrbFilePaths, fmt.Errorf("failed to recreate tickets: %s", strings.Join(recreationErrors, "; "))
+	}
+
+	clearFileSnapshots(snapshots)
+	return recreatedKrbFilePaths, nil
+}
+
+func (h *NonDomainJoinedKerberosHandler) validateRenewalCachePath(cachePath string) error {
+	root, err := filepath.Abs(h.krbFilesDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve Kerberos root: %v", err)
+	}
+	rootInfo, err := os.Lstat(root)
+	if err != nil {
+		return fmt.Errorf("failed to inspect Kerberos root: %v", err)
+	}
+	if rootInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("configured Kerberos root must not be a symlink: %s", root)
+	}
+	path, err := filepath.Abs(cachePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve Kerberos cache path: %v", err)
+	}
+	relative, err := filepath.Rel(root, path)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("Kerberos cache path escapes configured root: %s", cachePath)
+	}
+	if filepath.Base(path) != "krb5cc" {
+		return fmt.Errorf("Kerberos cache path must end in krb5cc: %s", cachePath)
+	}
+
+	current := root
+	for _, component := range strings.Split(relative, string(filepath.Separator)) {
+		current = filepath.Join(current, component)
+		info, statErr := os.Lstat(current)
+		if statErr != nil {
+			if os.IsNotExist(statErr) {
+				continue
+			}
+			return fmt.Errorf("failed to inspect Kerberos cache path: %v", statErr)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("Kerberos cache path contains symlink: %s", current)
+		}
+	}
+
+	return nil
 }
 
 // SetupKerberosFileForTicket sets up the Kerberos file for a ticket

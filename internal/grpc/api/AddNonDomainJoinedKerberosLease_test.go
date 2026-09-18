@@ -19,6 +19,25 @@ type MockShellExecutor struct {
 	mock.Mock
 }
 
+type mockNonDomainJoinedKerberosClient struct {
+	mock.Mock
+}
+
+func (m *mockNonDomainJoinedKerberosClient) CreateTicketUsingUsernamePassword(domain, username, password string) error {
+	args := m.Called(domain, username, password)
+	return args.Error(0)
+}
+
+func (m *mockNonDomainJoinedKerberosClient) CreateTicketForGMSA(ticketInfo *types.TicketInfo) error {
+	args := m.Called(ticketInfo)
+	return args.Error(0)
+}
+
+func (m *mockNonDomainJoinedKerberosClient) RenewKerberosTicket(ctx context.Context, krbFilePath string) error {
+	args := m.Called(ctx, krbFilePath)
+	return args.Error(0)
+}
+
 func (m *MockShellExecutor) Execute(ctx context.Context, command string, args ...string) ([]byte, error) {
 	mockArgs := m.Called(ctx, command, args)
 	return mockArgs.Get(0).([]byte), mockArgs.Error(1)

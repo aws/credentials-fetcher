@@ -1,6 +1,8 @@
 package krb_utils
 
 import (
+	"errors"
+
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/krb_utils/cgo"
 )
 
@@ -29,3 +31,8 @@ var DefaultKrb5Wrapper Krb5Wrapper = cgo.NewCGOWrapper()
 
 // DefaultKrb5Client is the default implementation using CGO
 var DefaultKrb5Client Krb5Client = NewKrb5Client(DefaultKrb5Wrapper)
+
+func IsPreauthenticationError(err error) bool {
+	var krbErr *cgo.Error
+	return errors.As(err, &krbErr) && krbErr.IsPreauthenticationFailure()
+}

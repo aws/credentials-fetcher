@@ -76,5 +76,9 @@ type ManagedPasswordBlob struct {
 // Constants for password blob processing
 const (
 	BlobRemainingBufSize = 1024 // TBD: Fix this, remaining buf size is variable
-	GMSAPasswordSize     = 256  // TBD: Get from parsed blob
 )
+
+type GMSAPasswords struct {
+	Current  []byte
+	Previous []byte
+}

@@ -188,8 +188,7 @@ func (e *DefaultLdapsearchExecutor) executeLdapsearchAttempt(ctx context.Context
 	return output, nil
 }
 
-// SearchGMSAPassword searches for a gMSA account's password
-func (c *Client) SearchGMSAPassword(ctx context.Context, dn, fqdn string, executor LdapsearchExecutor) ([]byte, error) {
+func (c *Client) SearchGMSAPasswords(ctx context.Context, dn, fqdn string, executor LdapsearchExecutor) (*types.GMSAPasswords, error) {
 	log.Info("Searching for gMSA password",
 		"dn", dn,
 		"fqdn", fqdn)
@@ -208,8 +207,9 @@ func (c *Client) SearchGMSAPassword(ctx context.Context, dn, fqdn string, execut
 		log.Error("Failed to execute ldapsearch command to search managedPassword", "error", err)
 		return nil, fmt.Errorf("failed to execute ldapsearch command: %w", err)
 	}
+	defer grpc_utils.SecureClearBytes(output)
 
-	password, err := extractManagedPassword(output)
+	passwords, err := extractManagedPassword(output)
 	if err != nil {
 		log.Error("Failed to extract managed password",
 			"error", err,
@@ -219,20 +219,28 @@ func (c *Client) SearchGMSAPassword(ctx context.Context, dn, fqdn string, execut
 
 	log.Info("Successfully retrieved gMSA password",
 		"dn", dn,
-		"password_size", len(password))
+		"password_size", len(passwords.Current),
+		"has_previous_password", len(passwords.Previous) > 0)
 
-	return password, nil
+	return passwords, nil
+}
+
+// SearchGMSAPassword searches for a gMSA account's password
+func (c *Client) SearchGMSAPassword(ctx context.Context, dn, fqdn string, executor LdapsearchExecutor) ([]byte, error) {
+	passwords, err := c.SearchGMSAPasswords(ctx, dn, fqdn, executor)
+	if err != nil {
+		return nil, err
+	}
+	if len(passwords.Previous) > 0 {
+		grpc_utils.SecureClearBytes(passwords.Previous)
+	}
+	return passwords.Current, nil
 }
 
 // extractManagedPassword extracts and decodes the msDS-ManagedPassword attribute
-func extractManagedPassword(output []byte) ([]byte, error) {
+func extractManagedPassword(output []byte) (*types.GMSAPasswords, error) {
 	log.Debug("Extracting managed password from LDAP response",
 		"output_size", len(output))
-
-	// For test cases that directly pass the expected output
-	if len(output) <= 8 {
-		return output, nil
-	}
 
 	// Convert output to string for easier processing
 	outputStr := string(output)
@@ -278,11 +286,6 @@ func extractManagedPassword(output []byte) ([]byte, error) {
 	if !passwordFound {
 		log.Error("msDS-ManagedPassword attribute not found in LDAP response")
 
-		// For test cases, if the input looks like a test string, return it
-		if len(output) > 0 && (bytes.Contains(output, []byte("ABCDEF")) || bytes.Contains(output, []byte("AAAAAA"))) {
-			return output, nil
-		}
-
 		return nil, fmt.Errorf("msDS-ManagedPassword attribute not found")
 	}
 
@@ -297,16 +300,12 @@ func extractManagedPassword(output []byte) ([]byte, error) {
 		log.Error("Decoded password blob is empty")
 		return nil, fmt.Errorf("decoded password blob is empty")
 	}
+	defer grpc_utils.SecureClearBytes(decodedBlob)
 
 	// Check if the blob is large enough to contain the header
 	if len(decodedBlob) < binary.Size(types.ManagedPasswordBlob{}) {
 		log.Error("Decoded blob is too small to contain a valid header",
 			"blob_size", len(decodedBlob))
-
-		// For test cases, just return the input if it contains the expected prefix
-		if strings.Contains(string(output), "msDS-ManagedPassword::") {
-			return output, nil
-		}
 
 		return nil, fmt.Errorf("decoded blob is too small: %d bytes", len(decodedBlob))
 	}
@@ -325,12 +324,14 @@ func extractManagedPassword(output []byte) ([]byte, error) {
 			"blob_size", len(decodedBlob),
 			"specified_length", blob.Length)
 
-		// For test cases, just return the input if it contains the expected prefix
-		if strings.Contains(string(output), "msDS-ManagedPassword::") {
-			return output, nil
-		}
-
 		return nil, fmt.Errorf("decoded blob is smaller than specified length: %d < %d", len(decodedBlob), blob.Length)
+	}
+	if blob.Version != 1 || blob.Reserved != 0 {
+		return nil, fmt.Errorf("invalid managed password blob header: version=%d reserved=%d", blob.Version, blob.Reserved)
+	}
+	if int(blob.QueryPasswordIntervalOffset)+8 > int(blob.UnchangedPasswordIntervalOffset) ||
+		int(blob.UnchangedPasswordIntervalOffset)+8 > int(blob.Length) {
+		return nil, fmt.Errorf("invalid managed password interval offsets")
 	}
 
 	// Extract the current password
@@ -339,37 +340,79 @@ func extractManagedPassword(output []byte) ([]byte, error) {
 			"offset", blob.CurrentPasswordOffset,
 			"blob_size", len(decodedBlob))
 
-		// For test cases, just return the input if it contains the expected prefix
-		if strings.Contains(string(output), "msDS-ManagedPassword::") {
-			return output, nil
-		}
-
 		return nil, fmt.Errorf("invalid current password offset: %d", blob.CurrentPasswordOffset)
 	}
 
-	// The current password starts at the offset specified in the blob
-	startOffset := int(blob.CurrentPasswordOffset)
-	endOffset := startOffset + types.GMSAPasswordSize
-	if endOffset > len(decodedBlob) {
-		endOffset = len(decodedBlob)
+	blobLength := int(blob.Length)
+	currentStart := int(blob.CurrentPasswordOffset)
+	currentEnd := int(blob.QueryPasswordIntervalOffset)
+	if blob.PreviousPasswordOffset != 0 {
+		currentEnd = int(blob.PreviousPasswordOffset)
 	}
 
-	currentPassword := decodedBlob[startOffset:endOffset]
-
-	// Convert the password from UTF-16 to UTF-8
-	utf8Password, err := decode.UTF16ToUTF8(currentPassword)
+	utf8Password, err := decodeManagedPasswordField(decodedBlob, currentStart, currentEnd, blobLength)
 	if err != nil {
-		log.Error("Failed to convert password from UTF-16 to UTF-8", "error", err)
-		return currentPassword, nil // Return the raw password as fallback
+		return nil, fmt.Errorf("failed to decode current password: %w", err)
+	}
+
+	var utf8PreviousPassword []byte
+	if blob.PreviousPasswordOffset != 0 {
+		utf8PreviousPassword, err = decodeManagedPasswordField(
+			decodedBlob,
+			int(blob.PreviousPasswordOffset),
+			int(blob.QueryPasswordIntervalOffset),
+			blobLength,
+		)
+		if err != nil {
+			grpc_utils.SecureClearBytes(utf8Password)
+			return nil, fmt.Errorf("failed to decode previous password: %w", err)
+		}
+		log.Info("Successfully extracted previous password from managed password blob",
+			"previous_password_size", len(utf8PreviousPassword))
 	}
 
 	log.Info("Successfully extracted and decoded managed password",
 		"blob_version", blob.Version,
 		"blob_length", blob.Length,
-		"raw_password_size", len(currentPassword),
-		"utf8_password_size", len(utf8Password))
+		"raw_password_size", currentEnd-currentStart,
+		"utf8_password_size", len(utf8Password),
+		"has_previous_password", len(utf8PreviousPassword) > 0)
 
-	return utf8Password, nil
+	return &types.GMSAPasswords{
+		Current:  utf8Password,
+		Previous: utf8PreviousPassword,
+	}, nil
+}
+
+func decodeManagedPasswordField(blob []byte, start, end, blobLength int) ([]byte, error) {
+	if start < binary.Size(types.ManagedPasswordBlob{}) || end <= start || end > blobLength || blobLength > len(blob) {
+		return nil, fmt.Errorf("invalid password field offsets: start=%d end=%d blob_length=%d", start, end, blobLength)
+	}
+	if start%2 != 0 || end%2 != 0 {
+		return nil, fmt.Errorf("password field offsets must be UTF-16 aligned: start=%d end=%d", start, end)
+	}
+
+	field := blob[start:end]
+	terminator := -1
+	for i := 0; i+1 < len(field); i += 2 {
+		if field[i] == 0 && field[i+1] == 0 {
+			terminator = i
+			break
+		}
+	}
+	if terminator < 0 {
+		return nil, fmt.Errorf("password field is not null-terminated")
+	}
+	field = field[:terminator]
+	if len(field) == 0 {
+		return nil, fmt.Errorf("password field is empty")
+	}
+
+	password, err := decode.UTF16ToUTF8(field)
+	if err != nil {
+		return nil, err
+	}
+	return password, nil
 }
 
 // FindDN searches for the distinguished name of a gMSA account using LDAP

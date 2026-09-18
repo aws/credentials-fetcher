@@ -24,6 +24,23 @@ import (
 	"unsafe"
 )
 
+type Error struct {
+	Code    int
+	Message string
+}
+
+func NewPreauthenticationError(message string) error {
+	return &Error{Code: int(C.KRB5KDC_ERR_PREAUTH_FAILED), Message: message}
+}
+
+func (e *Error) Error() string {
+	return fmt.Sprintf("authentication failed: %s", e.Message)
+}
+
+func (e *Error) IsPreauthenticationFailure() bool {
+	return e.Code == int(C.KRB5KDC_ERR_PREAUTH_FAILED)
+}
+
 // Opaque types for C structures
 type (
 	Krb5Context     interface{}
@@ -204,12 +221,15 @@ func (w *cgoKrb5Wrapper) GetInitCredsPassword(ctx Krb5Context, princ Krb5Princip
 
 	var creds C.krb5_creds
 	cPassword := C.CString(password)
-	defer C.free(unsafe.Pointer(cPassword))
+	defer func() {
+		C.memset(unsafe.Pointer(cPassword), 0, C.size_t(len(password)))
+		C.free(unsafe.Pointer(cPassword))
+	}()
 
 	ret := C.krb5_get_init_creds_password(context, &creds, principal,
 		cPassword, nil, nil, 0, nil, options)
 	if ret != 0 {
-		return nil, fmt.Errorf("authentication failed: %s", w.GetErrorMessage(ctx, int(ret)))
+		return nil, &Error{Code: int(ret), Message: w.GetErrorMessage(ctx, int(ret))}
 	}
 
 	return &creds, nil
