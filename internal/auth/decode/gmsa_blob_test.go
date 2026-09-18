@@ -93,10 +93,7 @@ func extractManagedPassword(t *testing.T, blob []byte) ([]byte, error) {
 
 	// The current password starts at the offset specified in the blob
 	startOffset := int(blobHeader.CurrentPasswordOffset)
-	endOffset := startOffset + types.GMSAPasswordSize
-	if endOffset > len(blob) {
-		endOffset = len(blob)
-	}
+	endOffset := int(blobHeader.QueryPasswordIntervalOffset)
 
 	t.Logf("Extracting password from offset %d to %d (length: %d bytes)",
 		startOffset, endOffset, endOffset-startOffset)
