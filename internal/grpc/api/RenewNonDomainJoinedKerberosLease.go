@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/aws_utils"
@@ -23,8 +24,17 @@ type RenewNonDomainJoinedKerberosLeaseInterface interface {
 }
 
 // RenewNonDomainJoinedKerberosLease implements the RenewNonDomainJoinedKerberosLease RPC method
-func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx context.Context, req *pb.RenewNonDomainJoinedKerberosLeaseRequest) (*pb.RenewNonDomainJoinedKerberosLeaseResponse, error) {
+func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx context.Context, req *pb.RenewNonDomainJoinedKerberosLeaseRequest) (response *pb.RenewNonDomainJoinedKerberosLeaseResponse, responseErr error) {
 	log.Info("Received RenewNonDomainJoinedKerberosLease request")
+	snapshots := make(map[string]fileSnapshot)
+	defer func() {
+		if responseErr != nil {
+			if rollbackErr := restoreFileSnapshots(snapshots); rollbackErr != nil {
+				responseErr = fmt.Errorf("%w; rollback failed: %v", responseErr, rollbackErr)
+			}
+		}
+		clearFileSnapshots(snapshots)
+	}()
 
 	// Defer credential clearing to ensure it happens even on early returns
 	defer func() {
@@ -92,6 +102,9 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 			log.Warn("Failed to read metadata file", "path", metadataPath, "error", err)
 			continue // Skip this file and try the next one
 		}
+		if err := captureFileSnapshot(snapshots, metadataPath); err != nil {
+			return nil, fmt.Errorf("failed to snapshot metadata file %s: %v", metadataPath, err)
+		}
 
 		// Filter ticket infos that match the provided (or old/blue) username
 		var matchingTicketInfos []*types.TicketInfo
@@ -122,7 +135,9 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 					continue
 				}
 
-				if username == matchUsername || (isRotation && username == activeUsername) {
+				legacyUsername, matched := matchLegacyUsername(username, matchUsername, activeUsername, isRotation)
+				if matched {
+					ticketInfo.DomainlessUser = legacyUsername
 					matchingTicketInfos = append(matchingTicketInfos, ticketInfo)
 					log.Info("Matched ticket via CredentialArn username", "username", username, "arn", ticketInfo.CredentialArn)
 				}
@@ -155,6 +170,9 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 			log.Info("Blue/green username rotation detected",
 				"match_username", matchUsername, "active_username", activeUsername)
 			for _, ticketInfo := range matchingTicketInfos {
+				if err := h.captureRenewalCacheSnapshot(snapshots, ticketInfo.KrbFilePath); err != nil {
+					return nil, err
+				}
 				if ticketInfo.DomainlessUser == matchUsername {
 					// Update DomainlessUser to the new (green) username so that
 					// subsequent renewals and metadata lookups use the new name.
@@ -181,6 +199,9 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 		} else {
 			// Normal (non-rotation) path: try direct renewal first
 			for _, ticketInfo := range matchingTicketInfos {
+				if err := h.captureRenewalCacheSnapshot(snapshots, ticketInfo.KrbFilePath); err != nil {
+					return nil, err
+				}
 				err = h.krbClient.RenewKerberosTicket(ctx, ticketInfo.KrbFilePath)
 				if err == nil {
 					renewedKrbFilePaths = append(renewedKrbFilePaths, ticketInfo.KrbFilePath)
@@ -194,25 +215,15 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 		}
 	}
 
-	// If we have tickets that need recreation, use CreateKerberosTickets to recreate them
 	if len(ticketsToRecreate) > 0 {
 		log.Info("Attempting to recreate tickets that couldn't be renewed directly", "count", len(ticketsToRecreate))
 
 		// Use the active (green) username for ticket creation
-		recreatedPaths, err := h.CreateKerberosTickets(ctx, req.Domain, activeUsername, req.Password, ticketsToRecreate)
+		recreatedPaths, err := h.RecreateKerberosTickets(ctx, req.Domain, activeUsername, req.Password, ticketsToRecreate)
 		if err != nil {
 			log.Error("Failed to recreate Kerberos tickets", "error", err)
-			// If we have some successfully renewed tickets, return those
-			if len(renewedKrbFilePaths) > 0 {
-				log.Info("Returning partially renewed tickets", "count", len(renewedKrbFilePaths))
-				return &pb.RenewNonDomainJoinedKerberosLeaseResponse{
-					RenewedKerberosFilePaths: renewedKrbFilePaths,
-				}, nil
-			}
 			return nil, fmt.Errorf("failed to recreate Kerberos tickets: %v", err)
 		}
-
-		// Add recreated paths to renewed paths
 		renewedKrbFilePaths = append(renewedKrbFilePaths, recreatedPaths...)
 		log.Info("Successfully recreated Kerberos tickets", "count", len(recreatedPaths))
 
@@ -228,12 +239,8 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 			}
 		}
 		if len(metadataErrors) > 0 {
-			// Return the successfully renewed paths alongside the error
-			// so the caller knows which tickets were actually recreated.
-			return &pb.RenewNonDomainJoinedKerberosLeaseResponse{
-					RenewedKerberosFilePaths: renewedKrbFilePaths,
-				}, fmt.Errorf("metadata persistence failed for %d file(s): %s",
-					len(metadataErrors), strings.Join(metadataErrors, "; "))
+			return nil, fmt.Errorf("metadata persistence failed for %d file(s): %s",
+				len(metadataErrors), strings.Join(metadataErrors, "; "))
 		}
 	}
 
@@ -246,4 +253,88 @@ func (h *NonDomainJoinedKerberosHandler) RenewNonDomainJoinedKerberosLease(ctx c
 	return &pb.RenewNonDomainJoinedKerberosLeaseResponse{
 		RenewedKerberosFilePaths: renewedKrbFilePaths,
 	}, nil
+}
+
+type fileSnapshot struct {
+	data    []byte
+	mode    os.FileMode
+	existed bool
+}
+
+func captureFileSnapshot(snapshots map[string]fileSnapshot, path string) error {
+	if _, ok := snapshots[path]; ok {
+		return nil
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			snapshots[path] = fileSnapshot{}
+			return nil
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to snapshot symlink: %s", path)
+	}
+	data, err := os.ReadFile(path) // #nosec G304 -- validated lease paths are restored on failed renewal
+	if err != nil {
+		return err
+	}
+	snapshots[path] = fileSnapshot{data: data, mode: info.Mode().Perm(), existed: true}
+	return nil
+}
+
+func restoreFileSnapshots(snapshots map[string]fileSnapshot) error {
+	var restorationErrors []string
+	for path, snapshot := range snapshots {
+		if !snapshot.existed {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				log.Error("Failed to remove file created during failed renewal", "path", path, "error", err)
+				restorationErrors = append(restorationErrors, fmt.Sprintf("remove %s: %v", path, err))
+			}
+			continue
+		}
+		if err := os.WriteFile(path, snapshot.data, snapshot.mode); err != nil { // #nosec G304 -- path was captured from validated metadata
+			log.Error("Failed to restore file after renewal error", "path", path, "error", err)
+			restorationErrors = append(restorationErrors, fmt.Sprintf("restore %s: %v", path, err))
+		}
+	}
+	if len(restorationErrors) > 0 {
+		return fmt.Errorf("failed to restore %d file(s): %s", len(restorationErrors), strings.Join(restorationErrors, "; "))
+	}
+	return nil
+}
+
+func clearFileSnapshots(snapshots map[string]fileSnapshot) {
+	for path, snapshot := range snapshots {
+		grpc_utils.SecureClearBytes(snapshot.data)
+		delete(snapshots, path)
+	}
+}
+
+func (h *NonDomainJoinedKerberosHandler) captureRenewalCacheSnapshot(snapshots map[string]fileSnapshot, path string) error {
+	if err := h.validateRenewalCachePath(path); err != nil {
+		return err
+	}
+	if err := captureFileSnapshot(snapshots, path); err != nil {
+		return fmt.Errorf("failed to snapshot Kerberos cache %s: %v", path, err)
+	}
+	return nil
+}
+
+func matchLegacyUsername(secretUsername, matchUsername, activeUsername string, isRotation bool) (string, bool) {
+	secretMatch, secretActive, secretIsRotation := grpc_utils.ParseBlueGreenUsername(secretUsername)
+	if secretIsRotation {
+		if isRotation && secretMatch == matchUsername && secretActive == activeUsername {
+			return matchUsername, true
+		}
+		return "", false
+	}
+	if secretUsername == matchUsername {
+		return matchUsername, true
+	}
+	if isRotation && secretUsername == activeUsername {
+		return activeUsername, true
+	}
+	return "", false
 }

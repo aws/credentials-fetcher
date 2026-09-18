@@ -1,13 +1,223 @@
 package api
 
 import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"golang.a2z.com/CredentialsFetcherV2/internal/auth/kerberos"
+	pb "golang.a2z.com/CredentialsFetcherV2/internal/grpc/proto"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/cmdexec"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/grpc_utils"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/metadata_utils"
+	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
+
+func TestRenewNonDomainJoinedKerberosLeasePreservesBatchOnRecreateFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	leaseOne := filepath.Join(tempDir, "lease-one")
+	leaseTwo := filepath.Join(tempDir, "lease-two")
+	pathOne := filepath.Join(leaseOne, "account-one", "krb5cc")
+	pathTwo := filepath.Join(leaseTwo, "account-two", "krb5cc")
+	assert.NoError(t, os.MkdirAll(filepath.Dir(pathOne), 0755))
+	assert.NoError(t, os.MkdirAll(filepath.Dir(pathTwo), 0755))
+	assert.NoError(t, os.WriteFile(pathOne, []byte("expired-one"), 0600))
+	assert.NoError(t, os.WriteFile(pathTwo, []byte("expired-two"), 0600))
+
+	ticketOne := &types.TicketInfo{KrbFilePath: pathOne, ServiceAccountName: "account-one", DomainName: "example.com", DomainlessUser: "testuser"}
+	ticketTwo := &types.TicketInfo{KrbFilePath: pathTwo, ServiceAccountName: "account-two", DomainName: "example.com", DomainlessUser: "testuser"}
+	assert.NoError(t, metadata_utils.WriteMetaDataJSON([]*types.TicketInfo{ticketOne}, "lease-one", tempDir))
+	assert.NoError(t, metadata_utils.WriteMetaDataJSON([]*types.TicketInfo{ticketTwo}, "lease-two", tempDir))
+
+	client := new(mockNonDomainJoinedKerberosClient)
+	client.On("RenewKerberosTicket", mock.Anything, pathOne).Return(errors.New("ticket expired"))
+	client.On("RenewKerberosTicket", mock.Anything, pathTwo).Return(errors.New("ticket expired"))
+	client.On("CreateTicketUsingUsernamePassword", "example.com", "testuser", "password").Return(nil)
+	client.On("CreateTicketForGMSA", mock.MatchedBy(func(info *types.TicketInfo) bool {
+		if info.ServiceAccountName == "account-one" {
+			return os.WriteFile(info.KrbFilePath, []byte("renewed-one"), 0600) == nil
+		}
+		return false
+	})).Return(nil)
+	client.On("CreateTicketForGMSA", mock.MatchedBy(func(info *types.TicketInfo) bool {
+		return info.ServiceAccountName == "account-two"
+	})).Return(errors.New("preauthentication failed"))
+
+	metadataOneBefore, readErr := os.ReadFile(filepath.Join(leaseOne, "lease-one_metadata.json"))
+	assert.NoError(t, readErr)
+	metadataTwoBefore, readErr := os.ReadFile(filepath.Join(leaseTwo, "lease-two_metadata.json"))
+	assert.NoError(t, readErr)
+
+	handler := newNonDomainJoinedKerberosHandler(tempDir, "", client, nil, cmdexec.NewExecutor())
+	response, err := handler.RenewNonDomainJoinedKerberosLease(context.Background(), &pb.RenewNonDomainJoinedKerberosLeaseRequest{
+		Username: "testuser",
+		Password: "password",
+		Domain:   "example.com",
+	})
+
+	assert.Nil(t, response)
+	assert.ErrorContains(t, err, "account-two")
+	assert.FileExists(t, filepath.Join(leaseOne, "lease-one_metadata.json"))
+	assert.FileExists(t, filepath.Join(leaseTwo, "lease-two_metadata.json"))
+	assert.DirExists(t, filepath.Dir(pathOne))
+	assert.DirExists(t, filepath.Dir(pathTwo))
+	metadataOneAfter, readErr := os.ReadFile(filepath.Join(leaseOne, "lease-one_metadata.json"))
+	assert.NoError(t, readErr)
+	metadataTwoAfter, readErr := os.ReadFile(filepath.Join(leaseTwo, "lease-two_metadata.json"))
+	assert.NoError(t, readErr)
+	assert.Equal(t, metadataOneBefore, metadataOneAfter)
+	assert.Equal(t, metadataTwoBefore, metadataTwoAfter)
+	cacheOneAfter, readErr := os.ReadFile(pathOne)
+	assert.NoError(t, readErr)
+	cacheTwoAfter, readErr := os.ReadFile(pathTwo)
+	assert.NoError(t, readErr)
+	assert.Equal(t, []byte("expired-one"), cacheOneAfter)
+	assert.Equal(t, []byte("expired-two"), cacheTwoAfter)
+	client.AssertExpectations(t)
+}
+
+func TestRenewNonDomainJoinedKerberosLeaseRollsBackDirectRenewalWhenRecreationFails(t *testing.T) {
+	tempDir := t.TempDir()
+	lease := filepath.Join(tempDir, "lease")
+	pathOne := filepath.Join(lease, "account-one", "krb5cc")
+	pathTwo := filepath.Join(lease, "account-two", "krb5cc")
+	assert.NoError(t, os.MkdirAll(filepath.Dir(pathOne), 0755))
+	assert.NoError(t, os.MkdirAll(filepath.Dir(pathTwo), 0755))
+	assert.NoError(t, os.WriteFile(pathOne, []byte("original-one"), 0600))
+	assert.NoError(t, os.WriteFile(pathTwo, []byte("original-two"), 0600))
+
+	tickets := []*types.TicketInfo{
+		{KrbFilePath: pathOne, ServiceAccountName: "account-one", DomainName: "example.com", DomainlessUser: "testuser"},
+		{KrbFilePath: pathTwo, ServiceAccountName: "account-two", DomainName: "example.com", DomainlessUser: "testuser"},
+	}
+	assert.NoError(t, metadata_utils.WriteMetaDataJSON(tickets, "lease", tempDir))
+
+	client := new(mockNonDomainJoinedKerberosClient)
+	client.On("RenewKerberosTicket", mock.Anything, pathOne).Run(func(mock.Arguments) {
+		assert.NoError(t, os.WriteFile(pathOne, []byte("renewed-one"), 0600))
+	}).Return(nil)
+	client.On("RenewKerberosTicket", mock.Anything, pathTwo).Return(errors.New("ticket expired"))
+	client.On("CreateTicketUsingUsernamePassword", "example.com", "testuser", "password").Return(nil)
+	client.On("CreateTicketForGMSA", mock.MatchedBy(func(info *types.TicketInfo) bool {
+		return info.ServiceAccountName == "account-two"
+	})).Return(errors.New("preauthentication failed"))
+
+	handler := newNonDomainJoinedKerberosHandler(tempDir, "", client, nil, cmdexec.NewExecutor())
+	response, err := handler.RenewNonDomainJoinedKerberosLease(context.Background(), &pb.RenewNonDomainJoinedKerberosLeaseRequest{
+		Username: "testuser",
+		Password: "password",
+		Domain:   "example.com",
+	})
+
+	assert.Nil(t, response)
+	assert.ErrorContains(t, err, "preauthentication failed")
+	cacheOne, readErr := os.ReadFile(pathOne)
+	assert.NoError(t, readErr)
+	cacheTwo, readErr := os.ReadFile(pathTwo)
+	assert.NoError(t, readErr)
+	assert.Equal(t, []byte("original-one"), cacheOne)
+	assert.Equal(t, []byte("original-two"), cacheTwo)
+	client.AssertExpectations(t)
+}
+
+func TestMatchLegacyUsernameParsesBlueGreenSecret(t *testing.T) {
+	username, matched := matchLegacyUsername("olduser:newuser", "olduser", "newuser", true)
+	assert.True(t, matched)
+	assert.Equal(t, "olduser", username)
+
+	username, matched = matchLegacyUsername("newuser", "olduser", "newuser", true)
+	assert.True(t, matched)
+	assert.Equal(t, "newuser", username)
+
+	_, matched = matchLegacyUsername("otherold:othernew", "olduser", "newuser", true)
+	assert.False(t, matched)
+}
+
+func TestRestoreFileSnapshotsReturnsRestorationErrors(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "krb5cc")
+	snapshots := map[string]fileSnapshot{
+		path: {data: []byte("original"), mode: 0600, existed: true},
+	}
+	assert.NoError(t, os.Mkdir(path, 0700))
+
+	err := restoreFileSnapshots(snapshots)
+	assert.ErrorContains(t, err, "failed to restore 1 file")
+	assert.ErrorContains(t, err, path)
+}
+
+func TestRecreateKerberosTicketsReturnsCachePath(t *testing.T) {
+	client := new(mockNonDomainJoinedKerberosClient)
+	client.On("CreateTicketUsingUsernamePassword", "example.com", "testuser", "password").Return(nil)
+	client.On("CreateTicketForGMSA", mock.Anything).Return(nil)
+
+	root := t.TempDir()
+	path := filepath.Join(root, "lease", "account", "krb5cc")
+	handler := newNonDomainJoinedKerberosHandler(root, "", client, nil, cmdexec.NewExecutor())
+	paths, err := handler.RecreateKerberosTickets(context.Background(), "example.com", "testuser", "password", []*types.TicketInfo{{
+		KrbFilePath:        path,
+		ServiceAccountName: "account",
+		DomainName:         "example.com",
+	}})
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{path}, paths)
+	client.AssertExpectations(t)
+}
+
+func TestRecreateKerberosTicketsRejectsPathOutsideKerberosRoot(t *testing.T) {
+	client := new(mockNonDomainJoinedKerberosClient)
+	client.On("CreateTicketUsingUsernamePassword", "example.com", "testuser", "password").Return(nil)
+
+	root := t.TempDir()
+	handler := newNonDomainJoinedKerberosHandler(root, "", client, nil, cmdexec.NewExecutor())
+	paths, err := handler.RecreateKerberosTickets(context.Background(), "example.com", "testuser", "password", []*types.TicketInfo{{
+		KrbFilePath:        filepath.Join(filepath.Dir(root), "outside", "account", "krb5cc"),
+		ServiceAccountName: "account",
+		DomainName:         "example.com",
+	}})
+
+	assert.Empty(t, paths)
+	assert.ErrorContains(t, err, "escapes configured root")
+	client.AssertNotCalled(t, "CreateTicketForGMSA", mock.Anything)
+	client.AssertExpectations(t)
+}
+
+func TestRenewNonDomainJoinedKerberosLeasePreservesMetadataWhenAllRecreationsFail(t *testing.T) {
+	root := t.TempDir()
+	lease := filepath.Join(root, "lease")
+	cachePath := filepath.Join(lease, "account", "krb5cc")
+	assert.NoError(t, os.MkdirAll(filepath.Dir(cachePath), 0755))
+	assert.NoError(t, os.WriteFile(cachePath, []byte("expired"), 0600))
+	ticket := &types.TicketInfo{KrbFilePath: cachePath, ServiceAccountName: "account", DomainName: "example.com", DomainlessUser: "testuser"}
+	assert.NoError(t, metadata_utils.WriteMetaDataJSON([]*types.TicketInfo{ticket}, "lease", root))
+	metadataPath := filepath.Join(lease, "lease_metadata.json")
+	metadataBefore, readErr := os.ReadFile(metadataPath)
+	assert.NoError(t, readErr)
+
+	client := new(mockNonDomainJoinedKerberosClient)
+	client.On("RenewKerberosTicket", mock.Anything, cachePath).Return(errors.New("ticket expired"))
+	client.On("CreateTicketUsingUsernamePassword", "example.com", "testuser", "password").Return(nil)
+	client.On("CreateTicketForGMSA", mock.Anything).Return(errors.New("preauthentication failed"))
+	handler := newNonDomainJoinedKerberosHandler(root, "", client, nil, cmdexec.NewExecutor())
+
+	response, err := handler.RenewNonDomainJoinedKerberosLease(context.Background(), &pb.RenewNonDomainJoinedKerberosLeaseRequest{
+		Username: "testuser",
+		Password: "password",
+		Domain:   "example.com",
+	})
+
+	assert.Nil(t, response)
+	assert.ErrorContains(t, err, "preauthentication failed")
+	assert.FileExists(t, cachePath)
+	metadataAfter, readErr := os.ReadFile(metadataPath)
+	assert.NoError(t, readErr)
+	assert.Equal(t, metadataBefore, metadataAfter)
+	client.AssertExpectations(t)
+}
 
 // TestRenewNonDomainJoinedKerberosLease_ValidateCredentials tests the validation of credentials
 func TestRenewNonDomainJoinedKerberosLease_ValidateCredentials(t *testing.T) {
