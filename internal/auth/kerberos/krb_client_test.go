@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/krb_utils"
+	krbcgo "golang.a2z.com/CredentialsFetcherV2/internal/utils/krb_utils/cgo"
 	"golang.a2z.com/CredentialsFetcherV2/internal/utils/types"
 )
 
@@ -653,7 +654,7 @@ func TestCreateKerberosTicket(t *testing.T) {
 			}
 
 			// Call createKerberosTicket
-			err := client.createKerberosTicket(context.Background(), tc.ticketInfo, tc.password)
+			err := client.createKerberosTicket(context.Background(), tc.ticketInfo, &types.GMSAPasswords{Current: tc.password})
 
 			if tc.expectedError {
 				assert.Error(t, err, "Expected an error but got none")
@@ -1340,4 +1341,82 @@ func TestCleanupOrphanedTickets(t *testing.T) {
 	t.Run("Does nothing with non-existent directory", func(t *testing.T) {
 		client.CleanupOrphanedTickets("/tmp/nonexistent-krbdir-xyz")
 	})
+}
+
+func TestCreateKerberosTicket_PreviousPasswordFallback(t *testing.T) {
+	mockKrb5Client := new(MockKrb5Client)
+	ticketInfo := &types.TicketInfo{
+		ServiceAccountName: "gmsa_account",
+		DomainName:         "example.com",
+		KrbFilePath:        "/path/to/krb5cc_gmsa",
+	}
+	expectedPrincipal := "gmsa_account$@EXAMPLE.COM"
+
+	// First call with current password fails
+	mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
+		return config.Principal == expectedPrincipal && config.Password == "current_pwd"
+	})).Return(krbcgo.NewPreauthenticationError("preauthentication failed")).Once()
+
+	// Second call with previous password succeeds
+	mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
+		return config.Principal == expectedPrincipal && config.Password == "prev_pwd"
+	})).Return(nil).Once()
+
+	client := &Client{
+		shellExecutor: new(MockExecutor),
+		krb5Client:    mockKrb5Client,
+	}
+
+	passwords := &types.GMSAPasswords{
+		Current:  []byte("current_pwd"),
+		Previous: []byte("prev_pwd"),
+	}
+
+	err := client.createKerberosTicket(context.Background(), ticketInfo, passwords)
+	assert.NoError(t, err)
+	mockKrb5Client.AssertExpectations(t)
+}
+
+func TestCreateKerberosTicketDoesNotFallbackForNonAuthenticationError(t *testing.T) {
+	mockKrb5Client := new(MockKrb5Client)
+	ticketInfo := &types.TicketInfo{
+		ServiceAccountName: "gmsa_account",
+		DomainName:         "example.com",
+		KrbFilePath:        "/path/to/krb5cc_gmsa",
+	}
+	mockKrb5Client.On("GenerateTicket", mock.Anything).Return(errors.New("cannot contact any KDC")).Once()
+
+	client := &Client{shellExecutor: new(MockExecutor), krb5Client: mockKrb5Client}
+	err := client.createKerberosTicket(context.Background(), ticketInfo, &types.GMSAPasswords{
+		Current:  []byte("current_pwd"),
+		Previous: []byte("prev_pwd"),
+	})
+
+	assert.ErrorContains(t, err, "cannot contact any KDC")
+	mockKrb5Client.AssertExpectations(t)
+}
+
+func TestCreateKerberosTicketReturnsBothPasswordErrors(t *testing.T) {
+	mockKrb5Client := new(MockKrb5Client)
+	ticketInfo := &types.TicketInfo{
+		ServiceAccountName: "gmsa_account",
+		DomainName:         "example.com",
+		KrbFilePath:        "/path/to/krb5cc_gmsa",
+	}
+	mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
+		return config.Password == "current_pwd"
+	})).Return(krbcgo.NewPreauthenticationError("current password rejected")).Once()
+	mockKrb5Client.On("GenerateTicket", mock.MatchedBy(func(config *krb_utils.KinitConfig) bool {
+		return config.Password == "prev_pwd"
+	})).Return(errors.New("previous password rejected")).Once()
+
+	client := &Client{shellExecutor: new(MockExecutor), krb5Client: mockKrb5Client}
+	err := client.createKerberosTicket(context.Background(), ticketInfo, &types.GMSAPasswords{
+		Current:  []byte("current_pwd"),
+		Previous: []byte("prev_pwd"),
+	})
+
+	assert.ErrorContains(t, err, "current password rejected")
+	assert.ErrorContains(t, err, "previous password rejected")
+	mockKrb5Client.AssertExpectations(t)
 }

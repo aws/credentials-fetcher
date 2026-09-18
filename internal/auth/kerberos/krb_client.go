@@ -265,6 +265,7 @@ func (c *Client) CreateTicketUsingUsernamePasswordWithCacheDir(domain, username,
 
 	// Use CGO-based krb_utils instead of shell execution
 	err := c.krb5Client.GenerateTicket(config)
+	config.Password = ""
 	if err != nil {
 		log.Error("Kerberos ticket generation failed",
 			"error", err,
@@ -318,19 +319,23 @@ func (c *Client) CreateTicketForGMSA(ticketInfo *types.TicketInfo) error {
 	}
 
 	// 4. Find the gMSA password
-	password, err := c.findGMSAPassword(ctx, ticketInfo, fqdnList)
+	passwords, err := c.findGMSAPassword(ctx, ticketInfo, fqdnList)
 	if err != nil {
 		return err
 	}
 
 	// Ensure we securely clear the password when we're done
 	defer func() {
-		// Use the SecureClearBytes function to clear the password
-		grpc_utils.SecureClearBytes(password)
+		if passwords != nil {
+			grpc_utils.SecureClearBytes(passwords.Current)
+			if len(passwords.Previous) > 0 {
+				grpc_utils.SecureClearBytes(passwords.Previous)
+			}
+		}
 	}()
 
 	// 5. Create the Kerberos ticket
-	return c.createKerberosTicket(ctx, ticketInfo, password)
+	return c.createKerberosTicket(ctx, ticketInfo, passwords)
 }
 
 // validateGMSATicketInfo validates the required fields in the ticket info
@@ -397,12 +402,12 @@ func (c *Client) ensureDistinguishedName(ctx context.Context, ticketInfo *types.
 }
 
 // findGMSAPassword finds the gMSA password using LDAP queries
-func (c *Client) findGMSAPassword(ctx context.Context, ticketInfo *types.TicketInfo, fqdnList []string) ([]byte, error) {
+func (c *Client) findGMSAPassword(ctx context.Context, ticketInfo *types.TicketInfo, fqdnList []string) (*types.GMSAPasswords, error) {
 	ldapClient := newLdapClientFunc()
 
 	// Try each FQDN until we find the password
 	for _, fqdn := range fqdnList {
-		password, err := ldapClient.SearchGMSAPassword(ctx, ticketInfo.DistinguishedName, fqdn, nil)
+		passwords, err := ldapClient.SearchGMSAPasswords(ctx, ticketInfo.DistinguishedName, fqdn, nil)
 		if err != nil {
 			log.Error("Failed to find gMSA password",
 				"service_account", ticketInfo.ServiceAccountName,
@@ -414,17 +419,20 @@ func (c *Client) findGMSAPassword(ctx context.Context, ticketInfo *types.TicketI
 
 		log.Info("Successfully found gMSA password",
 			"service_account", ticketInfo.ServiceAccountName,
-			"fqdn", fqdn)
+			"fqdn", fqdn,
+			"has_previous_password", len(passwords.Previous) > 0)
 
-		// We'll securely clear the password after it's used in createKerberosTicket
-		return password, nil
+		return passwords, nil
 	}
 
 	return nil, fmt.Errorf("failed to find gMSA password for service account %s", ticketInfo.ServiceAccountName)
 }
 
 // createKerberosTicket creates a Kerberos ticket using CGO-based krb_utils
-func (c *Client) createKerberosTicket(ctx context.Context, ticketInfo *types.TicketInfo, password []byte) error {
+func (c *Client) createKerberosTicket(ctx context.Context, ticketInfo *types.TicketInfo, passwords *types.GMSAPasswords) error {
+	if passwords == nil || len(passwords.Current) == 0 {
+		return fmt.Errorf("current gMSA password is empty")
+	}
 	principal := fmt.Sprintf("%s$@%s", ticketInfo.ServiceAccountName, strings.ToUpper(ticketInfo.DomainName))
 
 	log.Info("Creating Kerberos ticket for gMSA account using CGO",
@@ -434,7 +442,7 @@ func (c *Client) createKerberosTicket(ctx context.Context, ticketInfo *types.Tic
 	// Create KinitConfig for GMSA authentication
 	config := &krb_utils.KinitConfig{
 		Principal:   principal,
-		Password:    string(password), // Convert []byte to string
+		Password:    string(passwords.Current),
 		CCachePath:  ticketInfo.KrbFilePath,
 		Forwardable: true,
 		Verify:      true,
@@ -448,6 +456,26 @@ func (c *Client) createKerberosTicket(ctx context.Context, ticketInfo *types.Tic
 			"error", err,
 			"principal", principal,
 			"krb_file_path", ticketInfo.KrbFilePath)
+
+		if len(passwords.Previous) > 0 && krb_utils.IsPreauthenticationError(err) {
+			log.Warn("Retrying Kerberos ticket generation using previous password fallback",
+				"principal", principal,
+				"krb_file_path", ticketInfo.KrbFilePath)
+			config.Password = string(passwords.Previous)
+			prevErr := c.krb5Client.GenerateTicket(config)
+			config.Password = ""
+			if prevErr == nil {
+				log.Info("Successfully created Kerberos ticket for gMSA account using previous password fallback",
+					"principal", principal,
+					"krb_file_path", ticketInfo.KrbFilePath)
+				return nil
+			}
+			log.Error("Kerberos ticket generation failed with previous password fallback as well",
+				"error", prevErr,
+				"principal", principal)
+			return fmt.Errorf("current password failed: %v; previous password failed: %w", err, prevErr)
+		}
+
 		return c.translateKrbUtilsError(err, "create Kerberos ticket for gMSA")
 	}
 
